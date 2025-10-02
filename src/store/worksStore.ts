@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 
+import { deleteDocument, getCollectionDocs, setDocument } from "@/services/firebase/firestoreService";
 import { generateId } from "@/utils/id";
 
 export const WORK_STATUSES = ["未着手", "作業中", "完了", "保留"] as const;
@@ -28,8 +29,16 @@ export interface Work {
   pages: WorkPage[];
 }
 
+interface WorkDocument extends Omit<Work, "id"> {}
+
 interface WorksState {
   works: Work[];
+  worksLoaded: boolean;
+  loadingWorks: boolean;
+  loadError: string | null;
+  savingWorkMap: Record<string, boolean>;
+  saveErrorMap: Record<string, string>;
+  dirtyWorkMap: Record<string, boolean>;
 }
 
 interface CreateWorkPayload {
@@ -55,8 +64,24 @@ interface RemovePagePayload {
 }
 
 interface RemoveWorkPayload {
+  userId: string;
   workId: string;
 }
+
+interface SaveWorkPayload {
+  userId: string;
+  workId: string;
+}
+
+const mapError = (error: unknown, fallback: string) => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return fallback;
+};
+
+const buildWorkCollectionPath = (userId: string) => `users/${userId}/works`;
+const buildWorkDocumentPath = (userId: string, workId: string) => `${buildWorkCollectionPath(userId)}/${workId}`;
 
 const normalizePositiveInteger = (value: number, fallback: number): number => {
   if (!Number.isFinite(value) || value <= 0) {
@@ -71,14 +96,155 @@ const recalculatePageIndices = (pages: WorkPage[]) => {
   });
 };
 
+const normalizePage = (raw: unknown, fallbackIndex: number): WorkPage | null => {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const data = raw as Record<string, unknown>;
+
+  const id = typeof data.id === "string" && data.id.trim().length > 0 ? data.id : generateId();
+
+  const indexRaw = Number(data.index);
+  const index = Number.isFinite(indexRaw) && indexRaw > 0 ? Math.floor(indexRaw) : fallbackIndex;
+
+  const panelRaw = Number(data.panelCount);
+  const panelCount = Number.isFinite(panelRaw) && panelRaw > 0 ? Math.floor(panelRaw) : 1;
+
+  const stageRaw = Number(data.stageIndex);
+  const stageIndex = Number.isFinite(stageRaw) && stageRaw >= 0 ? Math.floor(stageRaw) : 0;
+
+  return {
+    id,
+    index,
+    panelCount,
+    stageIndex,
+  } satisfies WorkPage;
+};
+
+const mapDocumentToWork = (item: WorkDocument & { id: string }): Work => {
+  const createdAt = typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString();
+  const updatedAt = typeof item.updatedAt === "string" ? item.updatedAt : createdAt;
+
+  const pagesRaw = Array.isArray(item.pages) ? item.pages : [];
+  const pages = pagesRaw
+    .map((entry, index) => normalizePage(entry, index + 1))
+    .filter((entry): entry is WorkPage => entry !== null)
+    .map((entry, index) => ({ ...entry, index: index + 1 }));
+
+  const totalUnits = Number.isFinite(Number(item.totalUnits)) && Number(item.totalUnits) > 0 ? Math.floor(Number(item.totalUnits)) : pages.length;
+  const unitEstimatedHours = Number.isFinite(Number(item.unitEstimatedHours)) && Number(item.unitEstimatedHours) >= 0 ? Number(item.unitEstimatedHours) : 0;
+  const totalEstimatedHours = Number.isFinite(Number(item.totalEstimatedHours)) && Number(item.totalEstimatedHours) >= 0 ? Number(item.totalEstimatedHours) : Number((totalUnits * unitEstimatedHours).toFixed(2));
+  const defaultPanels = Number.isFinite(Number(item.defaultPanelsPerPage)) && Number(item.defaultPanelsPerPage) > 0 ? Math.floor(Number(item.defaultPanelsPerPage)) : 1;
+
+  return {
+    id: item.id,
+    title: typeof item.title === "string" ? item.title : "",
+    status: WORK_STATUSES.includes(item.status as WorkStatus) ? (item.status as WorkStatus) : WORK_STATUSES[0],
+    startDate: typeof item.startDate === "string" ? item.startDate : "",
+    deadline: typeof item.deadline === "string" ? item.deadline : "",
+    createdAt,
+    updatedAt,
+    totalUnits,
+    defaultPanelsPerPage: defaultPanels,
+    primaryGranularityId: typeof item.primaryGranularityId === "string" ? item.primaryGranularityId : null,
+    unitEstimatedHours,
+    totalEstimatedHours,
+    pages,
+  } satisfies Work;
+};
+
+const serializeWork = (work: Work): WorkDocument => ({
+  title: work.title,
+  status: work.status,
+  startDate: work.startDate,
+  deadline: work.deadline,
+  createdAt: work.createdAt,
+  updatedAt: work.updatedAt,
+  totalUnits: work.totalUnits,
+  defaultPanelsPerPage: work.defaultPanelsPerPage,
+  primaryGranularityId: work.primaryGranularityId,
+  unitEstimatedHours: work.unitEstimatedHours,
+  totalEstimatedHours: work.totalEstimatedHours,
+  pages: work.pages.map((page) => ({
+    id: page.id,
+    index: page.index,
+    panelCount: page.panelCount,
+    stageIndex: page.stageIndex,
+  })),
+});
+
 export const useWorksStore = defineStore("works", {
   state: (): WorksState => ({
     works: [],
+    worksLoaded: false,
+    loadingWorks: false,
+    loadError: null,
+    savingWorkMap: {},
+    saveErrorMap: {},
+    dirtyWorkMap: {},
   }),
   getters: {
     getWorkById: (state) => (id: string) => state.works.find((work) => work.id === id),
+    isWorkDirty: (state) => (id: string) => !!state.dirtyWorkMap[id],
+    isSavingWork: (state) => (id: string) => !!state.savingWorkMap[id],
+    getSaveError: (state) => (id: string) => state.saveErrorMap[id] ?? null,
   },
   actions: {
+    markWorkDirty(workId: string) {
+      this.dirtyWorkMap = { ...this.dirtyWorkMap, [workId]: true };
+    },
+    clearWorkDirty(workId: string) {
+      if (!this.dirtyWorkMap[workId]) {
+        return;
+      }
+      const { [workId]: _removed, ...rest } = this.dirtyWorkMap;
+      this.dirtyWorkMap = rest;
+    },
+    setSaving(workId: string, value: boolean) {
+      if (value) {
+        this.savingWorkMap = { ...this.savingWorkMap, [workId]: true };
+      } else if (this.savingWorkMap[workId]) {
+        const { [workId]: _removed, ...rest } = this.savingWorkMap;
+        this.savingWorkMap = rest;
+      }
+    },
+    setSaveError(workId: string, message: string | null) {
+      if (message === null) {
+        if (this.saveErrorMap[workId] !== undefined) {
+          const { [workId]: _removed, ...rest } = this.saveErrorMap;
+          this.saveErrorMap = rest;
+        }
+      } else {
+        this.saveErrorMap = { ...this.saveErrorMap, [workId]: message };
+      }
+    },
+    setWorks(works: Work[]) {
+      this.works = works;
+    },
+    async fetchWorks(userId: string) {
+      if (!userId) {
+        return;
+      }
+
+      this.loadingWorks = true;
+      this.loadError = null;
+
+      try {
+        const documents = await getCollectionDocs<WorkDocument>(buildWorkCollectionPath(userId));
+        const normalized = documents.map((doc) => mapDocumentToWork(doc));
+  this.setWorks(normalized);
+  this.worksLoaded = true;
+  this.dirtyWorkMap = {};
+  this.saveErrorMap = {};
+  this.savingWorkMap = {};
+      } catch (error) {
+        this.loadError = mapError(error, "作品の読み込みに失敗しました。");
+        throw error;
+      } finally {
+        this.loadingWorks = false;
+      }
+    },
     createWork(payload: CreateWorkPayload): Work {
       const now = new Date().toISOString();
       const totalUnits = normalizePositiveInteger(payload.totalUnits, 1);
@@ -109,6 +275,9 @@ export const useWorksStore = defineStore("works", {
       };
 
       this.works.push(work);
+      this.worksLoaded = true;
+      this.markWorkDirty(work.id);
+      this.setSaveError(work.id, null);
       return work;
     },
     updateWork(id: string, patch: Partial<Pick<Work, "title" | "status" | "startDate" | "deadline" | "defaultPanelsPerPage" | "unitEstimatedHours">>) {
@@ -144,6 +313,7 @@ export const useWorksStore = defineStore("works", {
       }
 
       target.updatedAt = new Date().toISOString();
+      this.markWorkDirty(target.id);
     },
     recalculateTotals(workId: string) {
       const target = this.works.find((work) => work.id === workId);
@@ -153,6 +323,7 @@ export const useWorksStore = defineStore("works", {
       target.totalUnits = target.pages.length;
       target.totalEstimatedHours = Number((target.totalUnits * target.unitEstimatedHours).toFixed(2));
       target.updatedAt = new Date().toISOString();
+      this.markWorkDirty(target.id);
     },
     advancePageStage(workId: string, pageId: string, stageCount: number) {
       const target = this.works.find((work) => work.id === workId);
@@ -169,6 +340,7 @@ export const useWorksStore = defineStore("works", {
 
       page.stageIndex = (page.stageIndex + 1) % stageCount;
       target.updatedAt = new Date().toISOString();
+            this.markWorkDirty(target.id);
     },
     setPagePanelCount(workId: string, pageId: string, panelCount: number) {
       const target = this.works.find((work) => work.id === workId);
@@ -182,6 +354,7 @@ export const useWorksStore = defineStore("works", {
 
       page.panelCount = normalizePositiveInteger(panelCount, page.panelCount);
       target.updatedAt = new Date().toISOString();
+      this.markWorkDirty(target.id);
     },
     movePage(payload: MovePagePayload) {
       const target = this.works.find((work) => work.id === payload.workId);
@@ -214,6 +387,7 @@ export const useWorksStore = defineStore("works", {
 
       recalculatePageIndices(target.pages);
       this.recalculateTotals(target.id);
+      this.markWorkDirty(target.id);
     },
     addPage(workId: string, panelCount?: number) {
       const target = this.works.find((work) => work.id === workId);
@@ -247,13 +421,49 @@ export const useWorksStore = defineStore("works", {
       recalculatePageIndices(target.pages);
       this.recalculateTotals(target.id);
     },
-    removeWork(payload: RemoveWorkPayload) {
+    async saveWork(payload: SaveWorkPayload) {
+      if (!payload.userId) {
+        throw new Error("ユーザー情報が取得できませんでした。");
+      }
+
+      const target = this.works.find((work) => work.id === payload.workId);
+      if (!target) {
+        return;
+      }
+
+      this.setSaving(payload.workId, true);
+      this.setSaveError(payload.workId, null);
+
+      target.updatedAt = new Date().toISOString();
+
+      try {
+        await setDocument(buildWorkDocumentPath(payload.userId, payload.workId), serializeWork(target));
+        this.clearWorkDirty(payload.workId);
+      } catch (error) {
+        this.setSaveError(payload.workId, mapError(error, "作品の保存に失敗しました。"));
+        throw error;
+      } finally {
+        this.setSaving(payload.workId, false);
+      }
+    },
+    async removeWork(payload: RemoveWorkPayload) {
+      if (!payload.userId) {
+        throw new Error("ユーザー情報が取得できませんでした。");
+      }
+
       const index = this.works.findIndex((work) => work.id === payload.workId);
       if (index === -1) {
         return;
       }
 
-      this.works.splice(index, 1);
+      try {
+        await deleteDocument(buildWorkDocumentPath(payload.userId, payload.workId));
+      } finally {
+        this.works.splice(index, 1);
+        this.clearWorkDirty(payload.workId);
+        this.setSaving(payload.workId, false);
+        this.setSaveError(payload.workId, null);
+      }
     },
   },
 });

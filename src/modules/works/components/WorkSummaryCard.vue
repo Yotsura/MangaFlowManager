@@ -9,9 +9,14 @@ const props = defineProps<{
   progressPercent: number;
   primaryGranularityLabel: string | null;
   totalPanels: number;
+  saving: boolean;
+  canSave: boolean;
+  saveError: string | null;
+  lastSaveStatus: string | null;
 }>();
 
 const emit = defineEmits<{
+  (event: "request-save"): void;
   (event: "request-delete"): void;
 }>();
 
@@ -27,6 +32,22 @@ const averagePanelsPerPage = computed(() => {
 const unitHours = computed(() => props.work.unitEstimatedHours);
 
 const perPageHours = computed(() => (props.stageCount === 0 ? 0 : unitHours.value));
+
+const saveStatusMessage = computed(() => {
+  if (props.saving) {
+    return "保存中です...";
+  }
+  if (props.saveError) {
+    return props.saveError;
+  }
+  if (props.lastSaveStatus) {
+    return props.lastSaveStatus;
+  }
+  if (!props.canSave) {
+    return "変更はありません。";
+  }
+  return "変更があります。保存してください。";
+});
 
 const formatDate = (value: string) => {
   if (!value) {
@@ -85,9 +106,26 @@ const formatDate = (value: string) => {
       </div>
     </dl>
 
-    <button type="button" class="btn btn-outline-danger w-100 mt-3" @click="emit('request-delete')">
-      作品を削除
-    </button>
+    <div class="summary-card__actions">
+      <div
+        class="summary-card__message"
+        :class="{
+          'text-danger': !!saveError,
+          'text-success': !saveError && !!lastSaveStatus && !saving,
+          'text-muted': !saveError && !lastSaveStatus,
+        }"
+      >
+        {{ saveStatusMessage }}
+      </div>
+
+      <button type="button" class="btn btn-primary" :disabled="saving || !canSave" @click="emit('request-save')">
+        作品を保存
+      </button>
+
+      <button type="button" class="btn btn-outline-danger" @click="emit('request-delete')">
+        作品を削除
+      </button>
+    </div>
   </div>
 </template>
 
@@ -102,5 +140,16 @@ dt {
 
 dd {
   margin-bottom: 0.4rem;
+}
+
+.summary-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.summary-card__message {
+  font-size: 0.8rem;
 }
 </style>

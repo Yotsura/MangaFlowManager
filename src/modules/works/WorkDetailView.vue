@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, useRouter } from "vue-router";
 
@@ -44,6 +44,32 @@ const primaryGranularityLabel = computed(() => {
 
 const userId = computed(() => user.value?.uid ?? null);
 
+const isSavingWork = computed(() => (work.value ? worksStore.isSavingWork(work.value.id) : false));
+const canSaveWork = computed(() => (work.value ? worksStore.isWorkDirty(work.value.id) : false));
+const saveErrorMessage = computed(() => (work.value ? worksStore.getSaveError(work.value.id) : null));
+
+const lastSaveStatus = ref<string | null>(null);
+
+watch(
+  canSaveWork,
+  (pending) => {
+    if (pending) {
+      lastSaveStatus.value = null;
+    }
+  },
+  { immediate: false },
+);
+
+watch(
+  saveErrorMessage,
+  (message) => {
+    if (message) {
+      lastSaveStatus.value = null;
+    }
+  },
+  { immediate: false },
+);
+
 const ensureSettingsLoaded = async () => {
   if (!userId.value) {
     return;
@@ -58,14 +84,26 @@ const ensureSettingsLoaded = async () => {
   }
 };
 
+const ensureWorksLoaded = async () => {
+  if (!userId.value) {
+    return;
+  }
+
+  if (!worksStore.worksLoaded && !worksStore.loadingWorks) {
+    await worksStore.fetchWorks(userId.value);
+  }
+};
+
 onMounted(async () => {
   await authStore.ensureInitialized();
   await ensureSettingsLoaded();
+  await ensureWorksLoaded();
 });
 
 watch(userId, async (next, prev) => {
   if (next && next !== prev) {
     await ensureSettingsLoaded();
+    await worksStore.fetchWorks(next);
   }
 });
 
@@ -86,6 +124,7 @@ watch(
     detailForm.status = next.status;
     detailForm.startDate = next.startDate;
     detailForm.deadline = next.deadline;
+    lastSaveStatus.value = null;
   },
   { immediate: true },
 );
@@ -188,9 +227,41 @@ const requestWorkDeletion = () => {
   if (!confirmed) {
     return;
   }
+  if (!userId.value) {
+    window.alert("ユーザー情報が取得できませんでした。再度ログインしてください。");
+    return;
+  }
 
-  worksStore.removeWork({ workId: work.value.id });
-  router.push({ name: "works" });
+  worksStore
+    .removeWork({ userId: userId.value, workId: work.value.id })
+    .then(() => {
+      router.push({ name: "works" });
+    })
+    .catch((error) => {
+      console.error(error);
+      window.alert("作品の削除に失敗しました。");
+    });
+};
+
+const handleSave = async () => {
+  if (!work.value) {
+    return;
+  }
+
+  if (!userId.value) {
+    window.alert("ユーザー情報が取得できませんでした。再度ログインしてください。");
+    return;
+  }
+
+  lastSaveStatus.value = null;
+
+  try {
+    await worksStore.saveWork({ userId: userId.value, workId: work.value.id });
+    lastSaveStatus.value = "保存しました。";
+  } catch (error) {
+    console.error(error);
+    lastSaveStatus.value = null;
+  }
 };
 
 const goBackToList = () => {
@@ -265,12 +336,9 @@ const formatDate = (value: string) => {
         <div class="col-12 col-xl-8">
           <div class="card shadow-sm h-100">
             <div class="card-body d-flex flex-column">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                  <h2 class="h5 mb-1">ページ進行状況</h2>
-                  <p class="text-muted mb-0">カードをクリックすると次の作業段階へ進みます。</p>
-                </div>
-                <button type="button" class="btn btn-outline-primary" @click="addPage">ページを追加</button>
+              <div class="mb-3">
+                <h2 class="h5 mb-1">ページ進行状況</h2>
+                <p class="text-muted mb-0">カードをクリックすると次の作業段階へ進みます。</p>
               </div>
 
               <PagePanel
@@ -298,6 +366,11 @@ const formatDate = (value: string) => {
                 :progress-percent="overallProgress"
                 :primary-granularity-label="primaryGranularityLabel"
                 :total-panels="totalPanels"
+                :saving="isSavingWork"
+                :can-save="canSaveWork"
+                :save-error="saveErrorMessage"
+                :last-save-status="lastSaveStatus"
+                @request-save="handleSave"
                 @request-delete="requestWorkDeletion"
               />
             </div>

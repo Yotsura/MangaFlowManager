@@ -23,7 +23,7 @@ const {
   granularitiesLoadError,
   stageWorkloadsLoadError,
 } = storeToRefs(settingsStore);
-const { works } = storeToRefs(worksStore);
+const { works, loadingWorks, loadError, worksLoaded } = storeToRefs(worksStore);
 
 const userId = computed(() => user.value?.uid ?? null);
 
@@ -93,14 +93,26 @@ const ensureSettingsLoaded = async () => {
   }
 };
 
+const ensureWorksLoaded = async () => {
+  if (!userId.value) {
+    return;
+  }
+
+  if (!worksLoaded.value && !loadingWorks.value) {
+    await worksStore.fetchWorks(userId.value);
+  }
+};
+
 onMounted(async () => {
   await authStore.ensureInitialized();
   await ensureSettingsLoaded();
+  await ensureWorksLoaded();
 });
 
 watch(userId, async (next, prev) => {
   if (next && next !== prev) {
     await ensureSettingsLoaded();
+    await worksStore.fetchWorks(next);
   }
 });
 
@@ -245,7 +257,7 @@ const navigateToDetail = (id: string) => {
       設定を読み込めませんでした: {{ settingsError }}
     </div>
 
-    <div class="card shadow-sm mb-5">
+  <div class="card shadow-sm mb-5">
       <div class="card-body">
         <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-3">
           <div>
@@ -347,7 +359,13 @@ const navigateToDetail = (id: string) => {
         <span class="badge text-bg-light">{{ works.length }} 件</span>
       </div>
 
-      <div v-if="works.length === 0" class="alert alert-info" role="status">
+      <div v-if="loadingWorks" class="alert alert-info" role="status">
+        作品一覧を読み込み中です...
+      </div>
+
+      <div v-else-if="loadError" class="alert alert-danger" role="alert">{{ loadError }}</div>
+
+      <div v-else-if="works.length === 0" class="alert alert-info" role="status">
         現在登録されている作品はありません。フォームから作品を作成してください。
       </div>
 

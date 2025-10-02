@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, setDoc, type Firestore, type SetOptions } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, type Firestore, type SetOptions } from "firebase/firestore";
 
 import { projectFirestore } from "./firebaseApp";
 
@@ -20,5 +20,7 @@ const getCollectionDocs = async <T>(path: string) => {
 const setDocument = async (path: string, data: Record<string, unknown>, options?: SetOptions) =>
   options ? setDoc(doc(projectFirestore, path), data, options) : setDoc(doc(projectFirestore, path), data);
 
+const deleteDocument = async (path: string) => deleteDoc(doc(projectFirestore, path));
+
 export type { Firestore };
-export { getCollection, getCollectionDocs, getDocument, setDocument };
+export { deleteDocument, getCollection, getCollectionDocs, getDocument, setDocument };
