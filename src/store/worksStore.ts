@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-import { deleteDocument, getCollectionDocs, setDocument } from "@/services/firebase/firestoreService";
+import { deleteDocument, getCollectionDocs, getDocument, setDocument } from "@/services/firebase/firestoreService";
 import { generateId } from "@/utils/id";
 
 export const WORK_STATUSES = ["未着手", "作業中", "完了", "保留"] as const;
@@ -244,6 +244,40 @@ export const useWorksStore = defineStore("works", {
       } finally {
         this.loadingWorks = false;
       }
+    },
+    async fetchWorkById(userId: string, workId: string) {
+      if (!userId || !workId) {
+        return;
+      }
+
+      try {
+        this.loadingWorks = true;
+        const document = await getDocument<WorkDocument>(buildWorkDocumentPath(userId, workId));
+
+        if (document) {
+          const normalizedWork = mapDocumentToWork({ ...document, id: workId });
+
+          // 既存の作品データを更新
+          const index = this.works.findIndex(work => work.id === workId);
+          if (index !== -1) {
+            this.works[index] = normalizedWork;
+          } else {
+            this.works.push(normalizedWork);
+          }
+
+          // dirty状態をクリア
+          this.clearWorkDirty(workId);
+        }
+      } catch (error) {
+        console.error('Failed to fetch work:', error);
+        throw error;
+      } finally {
+        this.loadingWorks = false;
+      }
+    },
+    discardWorkChanges(workId: string) {
+      // dirty状態をクリア
+      this.clearWorkDirty(workId);
     },
     createWork(payload: CreateWorkPayload): Work {
       const now = new Date().toISOString();

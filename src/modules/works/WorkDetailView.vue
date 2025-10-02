@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 
 import PagePanel from "./components/PagePanel.vue";
 import ProgressHeatmap from "./components/ProgressHeatmap.vue";
@@ -99,10 +99,31 @@ const ensureWorksLoaded = async () => {
   }
 };
 
+// 作品データの再読込処理
+const reloadWorkData = async () => {
+  if (!userId.value || !workId) {
+    return;
+  }
+
+  // 特定の作品データを再読込
+  await worksStore.fetchWorkById(userId.value, workId);
+};
+
+// ページ遷移時の未保存変更破棄処理
+onBeforeRouteLeave(() => {
+  if (work.value && canSaveWork.value) {
+    // 未保存の変更を破棄
+    worksStore.discardWorkChanges(work.value.id);
+  }
+});
+
 onMounted(async () => {
   await authStore.ensureInitialized();
   await ensureSettingsLoaded();
   await ensureWorksLoaded();
+
+  // 作品詳細画面を開く際は常にサーバーから最新データを取得
+  await reloadWorkData();
 });
 
 watch(userId, async (next, prev) => {
