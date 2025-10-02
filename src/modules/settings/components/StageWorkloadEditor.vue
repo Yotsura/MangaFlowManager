@@ -305,32 +305,43 @@ const handleSave = async () => {
       <div v-else>
         <div v-if="editableStages.length === 0" class="alert alert-secondary" role="alert">作業段階がまだ登録されていません。下のボタンから追加できます。</div>
 
-        <div v-for="stage in editableStages" :key="stage.id" class="card shadow-sm mb-3">
+        <div v-for="stage in editableStages" :key="stage.id" class="card shadow-sm">
           <div class="card-body">
-            <div class="d-flex flex-column flex-md-row align-items-md-center gap-3 mb-3">
-              <span class="badge text-bg-secondary fs-6">#{{ stage.id }}</span>
-              <div class="flex-grow-1">
-                <input v-model="stage.label" :class="['form-control', { 'is-invalid': showValidation && getStageError(stage.id)?.label }]" type="text" placeholder="例: ネーム" :disabled="isSaving" />
-                <div v-if="showValidation && getStageError(stage.id)?.label" class="invalid-feedback d-block">
+            <div class="stage-line">
+              <span class="badge text-bg-secondary fs-6 stage-index">#{{ stage.id }}</span>
+
+              <div class="stage-name">
+                <input
+                  v-model="stage.label"
+                  :class="['form-control form-control-sm stage-name-input', { 'is-invalid': showValidation && getStageError(stage.id)?.label }]"
+                  type="text"
+                  placeholder="例: ネーム"
+                  :disabled="isSaving"
+                />
+                <div v-if="showValidation && getStageError(stage.id)?.label" class="invalid-feedback d-block stage-name-error">
                   {{ getStageError(stage.id)?.label }}
                 </div>
               </div>
-              <button class="btn btn-outline-danger" type="button" :disabled="isSaving" @click="removeStage(stage.id)">削除</button>
-            </div>
 
-            <div class="row g-3">
-              <div v-for="entry in stage.entries" :key="`${stage.id}-${entry.granularityId}`" class="col-12 col-sm-6 col-lg-4">
-                <label class="form-label mb-1">{{ granularityLabel(entry.granularityId) }}</label>
-                <div class="input-group">
-                  <input v-model="entry.hours"
+              <div v-for="entry in stage.entries" :key="`${stage.id}-${entry.granularityId}`" class="stage-entry">
+                <span class="stage-entry-label text-muted">{{ granularityLabel(entry.granularityId) }}</span>
+                <div class="input-group input-group-sm stage-entry-input">
+                  <input
+                    v-model="entry.hours"
                     :class="['form-control', { 'is-invalid': showValidation && getEntryError(stage.id, entry.granularityId) }]"
-                    type="number" min="0" step="0.1" :disabled="isSaving"/>
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    :disabled="isSaving"
+                  />
                   <span class="input-group-text">h</span>
                 </div>
-                <div v-if="showValidation && getEntryError(stage.id, entry.granularityId)" class="invalid-feedback d-block">
+                <div v-if="showValidation && getEntryError(stage.id, entry.granularityId)" class="invalid-feedback d-block stage-entry-error">
                   {{ getEntryError(stage.id, entry.granularityId) }}
                 </div>
               </div>
+
+              <button class="btn btn-outline-danger stage-remove-btn" type="button" :disabled="isSaving" @click="removeStage(stage.id)">削除</button>
             </div>
           </div>
         </div>
@@ -361,12 +372,66 @@ const handleSave = async () => {
 }
 
 .stage-workload-editor .card-body {
-  padding: 1.5rem;
+  padding: 0.5rem;
 }
 
 .stage-workload-editor .badge {
   min-width: 3rem;
   justify-content: center;
+}
+
+.stage-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.stage-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+}
+
+.stage-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-width: 260px;
+}
+
+.stage-name-input {
+  width: 100%;
+}
+
+.stage-name-error {
+  margin-top: 0.25rem;
+}
+
+.stage-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.stage-entry-label {
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.stage-entry-input {
+  width: 7rem;
+}
+
+.stage-entry-error {
+  flex-basis: 100%;
+  margin-top: 0.25rem;
+}
+
+.stage-remove-btn {
+  margin-left: auto;
 }
 
 @media (max-width: 575.98px) {
