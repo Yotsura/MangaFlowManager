@@ -2,7 +2,7 @@
 import { computed, reactive, watch } from "vue";
 
 import { stageColorFor } from "@/modules/works/utils/stageColor";
-import type { WorkPage } from "@/store/worksStore";
+import type { WorkPage, WorkPanel } from "@/store/worksStore";
 
 const FIRST_ROW_SLOTS = 4;
 const OTHER_ROW_SLOTS = 4;
@@ -22,7 +22,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (event: "advance", pageId: string): void;
+  (event: "advance-panel", payload: { pageId: string; panelId: string }): void;
   (event: "update-panel", payload: { pageId: string; panelCount: number }): void;
   (event: "move-page", payload: { pageId: string; position: string }): void;
   (event: "remove-page", pageId: string): void;
@@ -112,20 +112,31 @@ const pageRows = computed(() => {
   return rows;
 });
 
-const progressRatio = (page: WorkPage) => {
-  if (props.stageCount <= 0) {
+const pageProgressRatio = (page: WorkPage) => {
+  if (props.stageCount <= 0 || page.panels.length === 0) {
     return 0;
   }
-  return Math.min(page.stageIndex + 1, props.stageCount) / props.stageCount;
+
+  const totalProgress = page.panels.reduce((sum, panel) => {
+    return sum + Math.min(panel.stageIndex + 1, props.stageCount);
+  }, 0);
+
+  const maxProgress = page.panels.length * props.stageCount;
+  return totalProgress / maxProgress;
 };
 
-const progressPercent = (page: WorkPage) => Math.round(progressRatio(page) * 100);
+const pageProgressPercent = (page: WorkPage) => Math.round(pageProgressRatio(page) * 100);
 
-const progressStyle = (page: WorkPage) => {
-  const override = props.stageColors?.[page.stageIndex];
-  const { backgroundColor, textColor } = stageColorFor(page.stageIndex, props.stageCount, override);
+const pageProgressStyle = (page: WorkPage) => {
+  // ページ全体の平均的な段階を計算
+  const averageStage = page.panels.length > 0
+    ? Math.floor(page.panels.reduce((sum, panel) => sum + panel.stageIndex, 0) / page.panels.length)
+    : 0;
+
+  const override = props.stageColors?.[averageStage];
+  const { backgroundColor, textColor } = stageColorFor(averageStage, props.stageCount, override);
   return {
-    width: `${progressPercent(page)}%`,
+    width: `${pageProgressPercent(page)}%`,
     backgroundColor,
     color: textColor,
   };
@@ -143,7 +154,17 @@ const submitMove = (pageId: string) => {
   emit("move-page", { pageId, position: moveTargets[pageId] ?? "__end" });
 };
 
-const stageLabelFor = (page: WorkPage) => props.stageLabels[page.stageIndex] ?? "未設定";
+const stageLabelFor = (stageIndex: number) => props.stageLabels[stageIndex] ?? "未設定";
+
+const panelButtonStyle = (panel: WorkPanel) => {
+  const override = props.stageColors?.[panel.stageIndex];
+  const { backgroundColor, textColor } = stageColorFor(panel.stageIndex, props.stageCount, override);
+  return {
+    backgroundColor,
+    color: textColor,
+    borderColor: backgroundColor,
+  };
+};
 
 const cellKey = (cell: RenderCell, index: number) => {
   if (cell.kind === "page") {
@@ -168,18 +189,28 @@ const cellKey = (cell: RenderCell, index: number) => {
           <div class="card-body d-flex flex-column gap-3">
             <div class="d-flex justify-content-between align-items-start gap-2">
               <span class="badge text-bg-secondary">#{{ cell.page.index }}</span>
-              <div class="d-flex gap-2">
-                <button type="button" class="btn btn-sm btn-outline-primary" :disabled="stageCount === 0" @click="emit('advance', cell.page.id)">
-                  {{ stageLabelFor(cell.page) }}
-                </button>
-                <button v-if="isEditMode" type="button" class="btn btn-sm btn-outline-danger" @click="emit('remove-page', cell.page.id)">削除</button>
+              <button v-if="isEditMode" type="button" class="btn btn-sm btn-outline-danger" @click="emit('remove-page', cell.page.id)">削除</button>
+            </div>
+
+            <div class="progress" role="progressbar" :aria-valuenow="pageProgressPercent(cell.page)" aria-valuemin="0" aria-valuemax="100">
+              <div class="progress-bar" :style="pageProgressStyle(cell.page)">
+                {{ pageProgressPercent(cell.page) }}%
               </div>
             </div>
 
-            <div class="progress" role="progressbar" :aria-valuenow="progressPercent(cell.page)" aria-valuemin="0" aria-valuemax="100">
-              <div class="progress-bar" :style="progressStyle(cell.page)">
-                {{ progressPercent(cell.page) }}%
-              </div>
+            <!-- コマごとの進捗ボタン -->
+            <div class="panels-grid">
+              <button
+                v-for="panel in cell.page.panels"
+                :key="panel.id"
+                type="button"
+                class="panel-btn"
+                :style="panelButtonStyle(panel)"
+                :disabled="stageCount === 0"
+                @click="emit('advance-panel', { pageId: cell.page.id, panelId: panel.id })"
+              >
+                <span class="panel-number">{{ panel.index }}</span><span class="panel-stage">{{ stageLabelFor(panel.stageIndex) }}</span>
+              </button>
             </div>
 
             <div v-if="isEditMode" class="page-settings">
@@ -190,7 +221,7 @@ const cellKey = (cell: RenderCell, index: number) => {
                   type="number"
                   min="1"
                   class="form-control form-control-sm"
-                  :value="cell.page.panelCount"
+                  :value="cell.page.panels.length"
                   @change="updatePanelCount(cell.page.id, ($event.target as HTMLInputElement).value)"
                 />
               </div>
@@ -300,6 +331,59 @@ const cellKey = (cell: RenderCell, index: number) => {
   line-height: 0.7rem;
 }
 
+.panels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+  gap: 0.25rem;
+}
+
+.panel-btn {
+  border: 1px solid;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.625rem;
+  line-height: 1.1;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  min-height: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-btn:hover:not(:disabled) {
+  filter: brightness(0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.panel-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.panel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+}
+
+.panel-number {
+  font-weight: 600;
+  font-size: 0.625rem;
+  line-height: 1;
+}
+
+.panel-stage {
+  font-size: 0.55rem;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 
 @media (max-width: 991.98px) {
   .page-row--first {
@@ -309,11 +393,33 @@ const cellKey = (cell: RenderCell, index: number) => {
   .page-row:not(.page-row--first) {
     grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
   }
+
+  .panels-grid {
+    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+    gap: 0.2rem;
+  }
+
+  .panel-btn {
+    min-height: 28px;
+    padding: 0.1rem 0.2rem;
+  }
+
+  .panel-number {
+    font-size: 0.6rem;
+  }
+
+  .panel-stage {
+    font-size: 0.5rem;
+  }
 }
 
 @media (min-width: 1200px) {
   .page-settings {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panels-grid {
+    grid-template-columns: repeat(auto-fill, minmax(55px, 1fr));
   }
 }
 </style>

@@ -6,11 +6,16 @@ import { generateId } from "@/utils/id";
 export const WORK_STATUSES = ["未着手", "作業中", "完了", "保留"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 
+export interface WorkPanel {
+  id: string;
+  index: number;
+  stageIndex: number;
+}
+
 export interface WorkPage {
   id: string;
   index: number;
-  panelCount: number;
-  stageIndex: number;
+  panels: WorkPanel[];
 }
 
 export interface Work {
@@ -96,6 +101,26 @@ const recalculatePageIndices = (pages: WorkPage[]) => {
   });
 };
 
+const normalizePanel = (raw: unknown, fallbackIndex: number): WorkPanel | null => {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const data = raw as Record<string, unknown>;
+
+  const id = typeof data.id === "string" && data.id.trim().length > 0 ? data.id : generateId();
+  const indexRaw = Number(data.index);
+  const index = Number.isFinite(indexRaw) && indexRaw > 0 ? Math.floor(indexRaw) : fallbackIndex;
+  const stageRaw = Number(data.stageIndex);
+  const stageIndex = Number.isFinite(stageRaw) && stageRaw >= 0 ? Math.floor(stageRaw) : 0;
+
+  return {
+    id,
+    index,
+    stageIndex,
+  } satisfies WorkPanel;
+};
+
 const normalizePage = (raw: unknown, fallbackIndex: number): WorkPage | null => {
   if (!raw || typeof raw !== "object") {
     return null;
@@ -104,21 +129,37 @@ const normalizePage = (raw: unknown, fallbackIndex: number): WorkPage | null => 
   const data = raw as Record<string, unknown>;
 
   const id = typeof data.id === "string" && data.id.trim().length > 0 ? data.id : generateId();
-
   const indexRaw = Number(data.index);
   const index = Number.isFinite(indexRaw) && indexRaw > 0 ? Math.floor(indexRaw) : fallbackIndex;
 
-  const panelRaw = Number(data.panelCount);
-  const panelCount = Number.isFinite(panelRaw) && panelRaw > 0 ? Math.floor(panelRaw) : 1;
+  // 旧データ形式との互換性を保つ
+  let panels: WorkPanel[] = [];
 
-  const stageRaw = Number(data.stageIndex);
-  const stageIndex = Number.isFinite(stageRaw) && stageRaw >= 0 ? Math.floor(stageRaw) : 0;
+  if (Array.isArray(data.panels)) {
+    // 新形式: panelsプロパティがある場合
+    panels = data.panels
+      .map((panelRaw, panelIndex) => normalizePanel(panelRaw, panelIndex + 1))
+      .filter((panel): panel is WorkPanel => panel !== null)
+      .map((panel, panelIndex) => ({ ...panel, index: panelIndex + 1 }));
+  } else {
+    // 旧形式: panelCountとstageIndexがある場合
+    const panelRaw = Number(data.panelCount);
+    const panelCount = Number.isFinite(panelRaw) && panelRaw > 0 ? Math.floor(panelRaw) : 1;
+    const stageRaw = Number(data.stageIndex);
+    const stageIndex = Number.isFinite(stageRaw) && stageRaw >= 0 ? Math.floor(stageRaw) : 0;
+
+    // panelCountの数だけパネルを作成（全て同じstageIndex）
+    panels = Array.from({ length: panelCount }, (_, panelIndex) => ({
+      id: generateId(),
+      index: panelIndex + 1,
+      stageIndex,
+    }));
+  }
 
   return {
     id,
     index,
-    panelCount,
-    stageIndex,
+    panels,
   } satisfies WorkPage;
 };
 
@@ -169,8 +210,11 @@ const serializeWork = (work: Work): WorkDocument => ({
   pages: work.pages.map((page) => ({
     id: page.id,
     index: page.index,
-    panelCount: page.panelCount,
-    stageIndex: page.stageIndex,
+    panels: page.panels.map((panel) => ({
+      id: panel.id,
+      index: panel.index,
+      stageIndex: panel.stageIndex,
+    })),
   })),
 });
 
@@ -290,8 +334,11 @@ export const useWorksStore = defineStore("works", {
       const pages: WorkPage[] = Array.from({ length: totalUnits }, (_, index) => ({
         id: generateId(),
         index: index + 1,
-        panelCount: defaultPanels,
-        stageIndex: 0,
+        panels: Array.from({ length: defaultPanels }, (_, panelIndex) => ({
+          id: generateId(),
+          index: panelIndex + 1,
+          stageIndex: 0,
+        })),
       }));
 
       const unitEstimatedHours = Math.max(0, payload.unitEstimatedHours);
@@ -362,7 +409,7 @@ export const useWorksStore = defineStore("works", {
       target.updatedAt = new Date().toISOString();
       this.markWorkDirty(target.id);
     },
-    advancePageStage(workId: string, pageId: string, stageCount: number) {
+    advancePanelStage(workId: string, pageId: string, panelId: string, stageCount: number) {
       const target = this.works.find((work) => work.id === workId);
       if (!target) {
         return;
@@ -371,13 +418,17 @@ export const useWorksStore = defineStore("works", {
       if (!page) {
         return;
       }
+      const panel = page.panels.find((entry) => entry.id === panelId);
+      if (!panel) {
+        return;
+      }
       if (stageCount <= 0) {
         return;
       }
 
-      page.stageIndex = (page.stageIndex + 1) % stageCount;
+      panel.stageIndex = (panel.stageIndex + 1) % stageCount;
       target.updatedAt = new Date().toISOString();
-            this.markWorkDirty(target.id);
+      this.markWorkDirty(target.id);
     },
     setPagePanelCount(workId: string, pageId: string, panelCount: number) {
       const target = this.works.find((work) => work.id === workId);
@@ -389,8 +440,30 @@ export const useWorksStore = defineStore("works", {
         return;
       }
 
-      page.panelCount = normalizePositiveInteger(panelCount, page.panelCount);
+      const normalizedCount = normalizePositiveInteger(panelCount, page.panels.length);
+      const currentCount = page.panels.length;
+
+      if (normalizedCount > currentCount) {
+        // パネルを追加
+        for (let i = currentCount; i < normalizedCount; i++) {
+          page.panels.push({
+            id: generateId(),
+            index: i + 1,
+            stageIndex: 0,
+          });
+        }
+      } else if (normalizedCount < currentCount) {
+        // パネルを削除
+        page.panels = page.panels.slice(0, normalizedCount);
+      }
+
+      // パネルのindexを再計算
+      page.panels.forEach((panel, index) => {
+        panel.index = index + 1;
+      });
+
       target.updatedAt = new Date().toISOString();
+      this.recalculateTotals(target.id);
       this.markWorkDirty(target.id);
     },
     movePage(payload: MovePagePayload) {
@@ -434,11 +507,15 @@ export const useWorksStore = defineStore("works", {
 
       const nextIndex = target.pages.length + 1;
       const defaultPanels = panelCount ? normalizePositiveInteger(panelCount, target.defaultPanelsPerPage) : target.defaultPanelsPerPage;
+
       target.pages.push({
         id: generateId(),
         index: nextIndex,
-        panelCount: defaultPanels,
-        stageIndex: 0,
+        panels: Array.from({ length: defaultPanels }, (_, panelIndex) => ({
+          id: generateId(),
+          index: panelIndex + 1,
+          stageIndex: 0,
+        })),
       });
 
       this.recalculateTotals(target.id);

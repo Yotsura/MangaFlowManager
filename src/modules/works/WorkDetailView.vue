@@ -214,17 +214,24 @@ const overallProgress = computed(() => {
   }
 
   const denominator = stageCount.value;
-  const total = work.value.pages.reduce((acc, page) => {
-    const ratio = Math.min(page.stageIndex + 1, denominator) / denominator;
-    return acc + ratio;
-  }, 0);
-  return Math.round((total / work.value.pages.length) * 100);
+  let totalPanelProgress = 0;
+  let totalPanelCount = 0;
+
+  work.value.pages.forEach(page => {
+    page.panels.forEach(panel => {
+      const ratio = Math.min(panel.stageIndex + 1, denominator) / denominator;
+      totalPanelProgress += ratio;
+      totalPanelCount++;
+    });
+  });
+
+  return totalPanelCount > 0 ? Math.round((totalPanelProgress / totalPanelCount) * 100) : 0;
 });
 
-const totalPanels = computed(() => work.value?.pages.reduce((sum, page) => sum + page.panelCount, 0) ?? 0);
+const totalPanels = computed(() => work.value?.pages.reduce((sum, page) => sum + page.panels.length, 0) ?? 0);
 
-const advanceStage = (pageId: string) => {
-  worksStore.advancePageStage(workId, pageId, stageCount.value);
+const advancePanelStage = (payload: { pageId: string; panelId: string }) => {
+  worksStore.advancePanelStage(workId, payload.pageId, payload.panelId, stageCount.value);
 };
 
 const updatePanelCount = (payload: { pageId: string; panelCount: number }) => {
@@ -412,7 +419,7 @@ const formatDate = (value: string) => {
                 :stage-count="stageCount"
                 :default-panels="work.defaultPanelsPerPage"
                 :is-edit-mode="isEditMode"
-                @advance="advanceStage"
+                @advance-panel="advancePanelStage"
                 @update-panel="updatePanelCount"
                 @move-page="movePage"
                 @remove-page="removePage"
