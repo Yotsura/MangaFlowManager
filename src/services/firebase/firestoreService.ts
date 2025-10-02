@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, type Firestore } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, setDoc, type Firestore, type SetOptions } from "firebase/firestore";
 
 import { projectFirestore } from "./firebaseApp";
 
@@ -17,5 +17,8 @@ const getCollectionDocs = async <T>(path: string) => {
   return snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...(docSnapshot.data() as T) }));
 };
 
+const setDocument = async (path: string, data: Record<string, unknown>, options?: SetOptions) =>
+  options ? setDoc(doc(projectFirestore, path), data, options) : setDoc(doc(projectFirestore, path), data);
+
 export type { Firestore };
-export { getCollection, getCollectionDocs, getDocument };
+export { getCollection, getCollectionDocs, getDocument, setDocument };

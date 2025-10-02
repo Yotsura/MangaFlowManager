@@ -1,7 +1,7 @@
 <template>
   <div class="auth-layout d-flex flex-column min-vh-100">
     <main class="flex-fill d-flex align-items-center justify-content-center">
-      <div class="w-100" style="max-width: 480px">
+      <div class="w-100">
         <slot />
       </div>
     </main>
