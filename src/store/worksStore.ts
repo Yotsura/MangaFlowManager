@@ -19,6 +19,7 @@ export interface WorkGranularity {
   id: string;
   label: string;
   weight: number;
+  defaultCount: number;
 }
 
 // 作品固有の段階工数設定
@@ -733,7 +734,8 @@ export const useWorksStore = defineStore("works", {
       const workGranularities: WorkGranularity[] = payload.granularities.map(g => ({
         id: g.id,
         label: g.label,
-        weight: g.weight
+        weight: g.weight,
+        defaultCount: g.defaultCount
       }));
 
       const workStageWorkloads: WorkStageWorkload[] = payload.stageWorkloads.map(s => ({
@@ -782,8 +784,8 @@ export const useWorksStore = defineStore("works", {
       }
 
       // 作品固有設定または全体設定を使用
-      const workStageWorkloads = work.workStageWorkloads && work.workStageWorkloads.length > 0 
-        ? work.workStageWorkloads 
+      const workStageWorkloads = work.workStageWorkloads && work.workStageWorkloads.length > 0
+        ? work.workStageWorkloads
         : [];
 
       if (work.primaryGranularityId && workStageWorkloads.length > 0) {
@@ -812,14 +814,14 @@ export const useWorksStore = defineStore("works", {
 
         const remainingEstimatedHours = Number((totalEstimatedHours - completedWorkHours).toFixed(2));
 
-        return { 
-          totalEstimatedHours, 
+        return {
+          totalEstimatedHours,
           remainingEstimatedHours: Math.max(0, remainingEstimatedHours)
         };
       } else {
         // 従来の計算方法（工数データがない場合）
-        return { 
-          totalEstimatedHours: Number((work.totalUnits * work.unitEstimatedHours).toFixed(2)), 
+        return {
+          totalEstimatedHours: Number((work.totalUnits * work.unitEstimatedHours).toFixed(2)),
           remainingEstimatedHours: Number((work.totalUnits * work.unitEstimatedHours).toFixed(2))
         };
       }

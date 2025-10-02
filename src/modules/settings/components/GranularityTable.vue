@@ -6,12 +6,13 @@ import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { generateId } from "@/utils/id";
 
-type FieldError = Partial<Record<"label" | "weight", string>>;
+type FieldError = Partial<Record<"label" | "weight" | "defaultCount", string>>;
 
 interface EditableGranularity {
   id: string;
   label: string;
   weight: string;
+  defaultCount: string;
 }
 
 const authStore = useAuthStore();
@@ -27,6 +28,7 @@ const editableRows = ref<EditableGranularity[]>([]);
 const newGranularity = reactive({
   label: "",
   weight: "1",
+  defaultCount: "1",
 });
 
 const saved = ref(false);
@@ -44,11 +46,13 @@ const mapToEditable = (items: typeof granularities.value): EditableGranularity[]
     id: item.id,
     label: item.label,
     weight: item.weight.toString(),
+    defaultCount: item.defaultCount.toString(),
   }));
 
 const resetNewGranularity = () => {
   newGranularity.label = "";
   newGranularity.weight = "1";
+  newGranularity.defaultCount = "1";
   newRowAttempted.value = false;
 };
 
@@ -205,6 +209,7 @@ const submitNewGranularity = () => {
       id: generateId(),
       label: newGranularity.label.trim(),
       weight: Number(newGranularity.weight).toString(),
+      defaultCount: Number(newGranularity.defaultCount).toString(),
     },
   ];
 
@@ -242,6 +247,7 @@ const handleSave = async () => {
     id: row.id,
     label: row.label.trim(),
     weight: Number(row.weight),
+    defaultCount: Number(row.defaultCount),
   }));
 
   try {
@@ -273,14 +279,15 @@ defineExpose({
           <thead>
             <tr>
               <th scope="col" class="w-5">#</th>
-              <th scope="col" class="w-40">作業粒度</th>
+              <th scope="col" class="w-20">作業粒度</th>
               <th scope="col" class="w-5">比重</th>
-              <th scope="col" class="w-50 text-end">操作</th>
+              <th scope="col" class="w-5">デフォルト配置数</th>
+              <th scope="col" class="w-55 text-end text-nowrap">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="editableRows.length === 0">
-              <td colspan="4" class="text-muted text-center py-4">作業粒度がまだ登録されていません。</td>
+              <td colspan="5" class="text-muted text-center py-4">作業粒度がまだ登録されていません。</td>
             </tr>
             <tr v-for="(row, index) in editableRows" :key="row.id">
               <td>
@@ -292,8 +299,11 @@ defineExpose({
               <td>
                 <input v-model="row.weight" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'weight') }]" type="number" min="1" step="1" :disabled="isSaving" />
               </td>
-              <td class="text-end">
-                <button class="btn btn-outline-danger" type="button" :disabled="isSaving" @click="removeRow(row.id)">削除</button>
+              <td>
+                <input v-model="row.defaultCount" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'defaultCount') }]" type="number" min="1" step="1" :disabled="isSaving" />
+              </td>
+              <td class="text-end text-nowrap">
+                <button class="btn btn-outline-danger btn-sm" type="button" :disabled="isSaving" @click="removeRow(row.id)">削除</button>
               </td>
             </tr>
             <tr v-if="isAddingNew" class="table-light">
@@ -312,10 +322,13 @@ defineExpose({
               <td>
                 <input v-model="newGranularity.weight" :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]" type="number" min="1" step="1" :disabled="isSaving" />
               </td>
-              <td class="text-end">
+              <td>
+                <input v-model="newGranularity.defaultCount" :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]" type="number" min="1" step="1" :disabled="isSaving" />
+              </td>
+              <td class="text-end text-nowrap">
                 <div class="d-flex justify-content-end gap-2">
-                  <button class="btn btn-outline-secondary" type="button" :disabled="isSaving" @click="cancelNewGranularity">キャンセル</button>
-                  <button class="btn btn-primary" type="button" :disabled="isSaving" @click="submitNewGranularity">追加</button>
+                  <button class="btn btn-outline-secondary btn-sm" type="button" :disabled="isSaving" @click="cancelNewGranularity">キャンセル</button>
+                  <button class="btn btn-primary btn-sm" type="button" :disabled="isSaving" @click="submitNewGranularity">追加</button>
                 </div>
               </td>
             </tr>

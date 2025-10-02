@@ -18,6 +18,7 @@ interface Granularity {
   id: string;
   label: string;
   weight: number;
+  defaultCount: number; // デフォルト配置数
 }
 
 interface GranularitiesDocument {
@@ -85,6 +86,7 @@ type GranularityIdMigrationMap = Record<string, string>;
 interface GranularityTemplate {
   label: string;
   weight: number;
+  defaultCount: number;
 }
 
 interface StageTemplateEntry {
@@ -101,10 +103,12 @@ const DEFAULT_GRANULARITY_TEMPLATES: GranularityTemplate[] = [
   {
     label: "ページ単位",
     weight: 5,
+    defaultCount: 10, // デフォルト10ページ
   },
   {
     label: "コマ単位",
     weight: 1,
+    defaultCount: 4, // ページあたりデフォルト4コマ
   },
 ];
 
@@ -151,6 +155,7 @@ const createDefaultGranularities = (): Granularity[] =>
     id: generateId(),
     label: template.label,
     weight: template.weight,
+    defaultCount: template.defaultCount,
   }));
 
 const createDefaultStageWorkloads = (granularities: Granularity[]): StageWorkload[] => {
@@ -237,6 +242,7 @@ const normalizeGranularities = (items: unknown): NormalizedGranularitiesResult =
         id: assignedId,
         label,
         weight,
+        defaultCount: typeof raw.defaultCount === 'number' ? raw.defaultCount : 1,
       } satisfies Granularity;
     })
     .filter((item): item is Granularity => item !== null);
@@ -457,6 +463,7 @@ export const useSettingsStore = defineStore("settings", {
             id,
             label: trimmedLabel,
             weight: item.weight,
+            defaultCount: item.defaultCount,
           } satisfies Granularity;
         });
 

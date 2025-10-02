@@ -55,9 +55,9 @@ const initializeGranularityForm = () => {
   const newErrors: Record<string, string | null> = {};
 
   sortedGranularities.value.forEach((granularity, index) => {
-    // 最上位粒度以外にデフォルト値を設定
+    // 最上位粒度以外に粒度設定のデフォルト値を設定
     if (index > 0) {
-      newCounts[granularity.id] = 6;
+      newCounts[granularity.id] = granularity.defaultCount || 1;
     }
     newErrors[granularity.id] = null;
   });
