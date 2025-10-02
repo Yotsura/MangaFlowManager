@@ -34,6 +34,7 @@ const saveAttempted = ref(false);
 const touched = ref(false);
 const isSyncingFromStore = ref(false);
 const newRowAttempted = ref(false);
+const isAddingNew = ref(false);
 
 const isLoading = computed(() => loadingGranularities.value && !granularitiesLoaded.value);
 const isSaving = computed(() => savingGranularities.value);
@@ -83,6 +84,7 @@ watch(
     saveAttempted.value = false;
     touched.value = false;
     newRowAttempted.value = false;
+    isAddingNew.value = false;
     isSyncingFromStore.value = false;
   },
   { immediate: true },
@@ -140,6 +142,8 @@ const rowErrors = computed(() => {
 
 const hasErrors = computed(() => Array.from(rowErrors.value.values()).some((entry) => Object.keys(entry).length > 0));
 
+const canSave = computed(() => !isSaving.value && editableRows.value.length > 0 && !hasErrors.value);
+
 const firstErrorMessage = computed(() => {
   for (const entry of rowErrors.value.values()) {
     const message = entry.label ?? entry.weight;
@@ -150,7 +154,7 @@ const firstErrorMessage = computed(() => {
   return null;
 });
 
-const hasTouchedNewRow = computed(() => newRowAttempted.value || !!newGranularity.label || newGranularity.weight !== "1");
+const hasTouchedNewRow = computed(() => isAddingNew.value && (newRowAttempted.value || !!newGranularity.label || newGranularity.weight !== "1"));
 
 const newRowValidationMessage = computed(() => {
   const trimmedLabel = newGranularity.label.trim();
@@ -174,7 +178,21 @@ const newRowValidationMessage = computed(() => {
   return null;
 });
 
-const addRow = () => {
+const openNewGranularityForm = () => {
+  if (isSaving.value || isAddingNew.value) {
+    return;
+  }
+
+  resetNewGranularity();
+  isAddingNew.value = true;
+};
+
+const cancelNewGranularity = () => {
+  resetNewGranularity();
+  isAddingNew.value = false;
+};
+
+const submitNewGranularity = () => {
   newRowAttempted.value = true;
 
   if (newRowValidationMessage.value) {
@@ -193,6 +211,7 @@ const addRow = () => {
   touched.value = true;
   saved.value = false;
   resetNewGranularity();
+  isAddingNew.value = false;
 };
 
 const removeRow = (id: string) => {
@@ -225,6 +244,12 @@ const handleSave = async () => {
     console.error(error);
   }
 };
+
+defineExpose({
+  save: handleSave,
+  isSaving: () => isSaving.value,
+  canSave: () => canSave.value,
+});
 </script>
 
 <template>
@@ -239,9 +264,9 @@ const handleSave = async () => {
           <thead>
             <tr>
               <th scope="col" class="w-5">#</th>
-              <th scope="col" class="w-50">作業粒度</th>
-              <th scope="col" class="w-25">デフォルト比重</th>
-              <th scope="col" class="w-20 text-end">操作</th>
+              <th scope="col" class="w-40">作業粒度</th>
+              <th scope="col" class="w-5">比重</th>
+              <th scope="col" class="w-50 text-end">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -262,7 +287,7 @@ const handleSave = async () => {
                 <button class="btn btn-outline-danger" type="button" :disabled="isSaving" @click="removeRow(row.id)">削除</button>
               </td>
             </tr>
-            <tr class="table-light">
+            <tr v-if="isAddingNew" class="table-light">
               <td>
                 <span class="fw-semibold text-muted">#{{ editableRows.length + 1 }}</span>
               </td>
@@ -279,27 +304,29 @@ const handleSave = async () => {
                 <input v-model="newGranularity.weight" :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]" type="number" min="1" step="1" :disabled="isSaving" />
               </td>
               <td class="text-end">
-                <button class="btn btn-outline-primary" type="button" :disabled="isSaving" @click="addRow">追加</button>
+                <div class="d-flex justify-content-end gap-2">
+                  <button class="btn btn-outline-secondary" type="button" :disabled="isSaving" @click="cancelNewGranularity">キャンセル</button>
+                  <button class="btn btn-primary" type="button" :disabled="isSaving" @click="submitNewGranularity">追加</button>
+                </div>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div class="d-flex flex-column flex-md-row gap-3 align-items-md-center justify-content-between mt-4">
+      <div class="table-footer d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3 mt-4">
+        <button class="btn btn-outline-secondary" type="button" :disabled="isSaving || isAddingNew" @click="openNewGranularityForm">新規作業粒度追加</button>
+
         <div class="flex-grow-1">
           <p v-if="(saveAttempted || touched) && hasErrors && firstErrorMessage" class="text-danger small mb-0">
             {{ firstErrorMessage }}
           </p>
-          <p v-else-if="hasTouchedNewRow && newRowValidationMessage" class="text-danger small mb-0">
+          <p v-else-if="isAddingNew && hasTouchedNewRow && newRowValidationMessage" class="text-danger small mb-0">
             {{ newRowValidationMessage }}
           </p>
           <p v-else-if="granularitiesSaveError" class="text-danger small mb-0">{{ granularitiesSaveError }}</p>
           <p v-else-if="saved" class="text-success small mb-0">保存しました。</p>
         </div>
-        <button class="btn btn-primary ms-md-auto" type="button" :disabled="isSaving || editableRows.length === 0" @click="handleSave">
-          {{ isSaving ? "保存中..." : "変更を保存" }}
-        </button>
       </div>
     </div>
   </div>
@@ -321,5 +348,9 @@ const handleSave = async () => {
 
 .is-invalid {
   border-color: #dc3545;
+}
+
+.table-footer {
+  justify-content: flex-start;
 }
 </style>

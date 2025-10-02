@@ -104,6 +104,8 @@ watch(
 
 const hasValidationError = computed(() => formState.some((row) => row.enabled && (!row.start || !row.end || row.start >= row.end)));
 
+const canSave = computed(() => !isSaving.value && !hasValidationError.value && !isLoading.value);
+
 const validationMessage = computed(() => (hasValidationError.value ? "開始時刻は終了時刻より前に設定してください。" : null));
 
 const handleSubmit = async () => {
@@ -124,6 +126,12 @@ const handleSubmit = async () => {
     console.error(error);
   }
 };
+
+defineExpose({
+  submit: handleSubmit,
+  isSaving: () => isSaving.value,
+  canSave: () => canSave.value,
+});
 </script>
 
 <template>
@@ -132,36 +140,32 @@ const handleSubmit = async () => {
     <div v-else-if="loadError" class="alert alert-danger" role="alert">
       {{ loadError }}
     </div>
+    <template v-else>
+      <div class="list-group">
+        <div v-for="row in formState" :key="row.key" class="list-group-item list-group-item-action">
+          <div class="d-flex flex-column flex-md-row align-items-md-center gap-3">
+            <div class="form-check">
+              <input :id="`work-hours-${row.key}`" v-model="row.enabled" class="form-check-input" type="checkbox" :disabled="isLoading" />
+              <label class="form-check-label" :for="`work-hours-${row.key}`">{{ row.label }}</label>
+            </div>
 
-    <div class="list-group">
-      <div v-for="row in formState" :key="row.key" class="list-group-item list-group-item-action">
-        <div class="d-flex flex-column flex-md-row align-items-md-center gap-3">
-          <div class="form-check">
-            <input :id="`work-hours-${row.key}`" v-model="row.enabled" class="form-check-input" type="checkbox" :disabled="isLoading" />
-            <label class="form-check-label" :for="`work-hours-${row.key}`">{{ row.label }}</label>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <input v-model="row.start" class="form-control" type="time" :disabled="!row.enabled || isLoading" required />
+              <span class="text-muted">～</span>
+              <input v-model="row.end" class="form-control" type="time" :disabled="!row.enabled || isLoading" required />
+            </div>
           </div>
 
-          <div class="d-flex align-items-center gap-2 flex-wrap">
-            <input v-model="row.start" class="form-control" type="time" :disabled="!row.enabled || isLoading" required />
-            <span class="text-muted">～</span>
-            <input v-model="row.end" class="form-control" type="time" :disabled="!row.enabled || isLoading" required />
-          </div>
+          <p v-if="row.enabled && row.start >= row.end" class="text-danger small mb-0 mt-2">開始時刻は終了時刻より前にしてください。</p>
         </div>
-
-        <p v-if="row.enabled && row.start >= row.end" class="text-danger small mb-0 mt-2">開始時刻は終了時刻より前にしてください。</p>
       </div>
-    </div>
 
-    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mt-4">
-      <div class="flex-grow-1">
+      <div class="form-feedback mt-4">
         <p v-if="validationMessage" class="text-danger small mb-0">{{ validationMessage }}</p>
         <p v-else-if="saveError" class="text-danger small mb-0">{{ saveError }}</p>
         <p v-else-if="saved" class="text-success small mb-0">保存しました。</p>
       </div>
-      <button class="btn btn-primary ms-md-auto" type="submit" :disabled="isSaving || hasValidationError || isLoading">
-        {{ isSaving ? "保存中..." : "保存" }}
-      </button>
-    </div>
+    </template>
   </form>
 </template>
 
@@ -177,5 +181,9 @@ const handleSubmit = async () => {
 
 .form-control[type="time"] {
   width: 130px;
+}
+
+.form-feedback {
+  min-height: 1rem;
 }
 </style>

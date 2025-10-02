@@ -204,6 +204,8 @@ const stageErrors = computed(() => {
 
 const hasErrors = computed(() => stageErrors.value.size > 0);
 
+const canSave = computed(() => !isSaving.value && editableStages.value.length > 0 && granularities.value.length > 0 && !hasErrors.value);
+
 const firstErrorMessage = computed(() => {
   for (const stageError of stageErrors.value.values()) {
     if (stageError.label) {
@@ -291,6 +293,12 @@ const handleSave = async () => {
     console.error(error);
   }
 };
+
+defineExpose({
+  save: handleSave,
+  isSaving: () => isSaving.value,
+  canSave: () => canSave.value,
+});
 </script>
 
 <template>
@@ -305,7 +313,7 @@ const handleSave = async () => {
       <div v-else>
         <div v-if="editableStages.length === 0" class="alert alert-secondary" role="alert">作業段階がまだ登録されていません。下のボタンから追加できます。</div>
 
-        <div v-for="stage in editableStages" :key="stage.id" class="card shadow-sm">
+        <div v-for="stage in editableStages" :key="stage.id" class="card shadow-sm mb-3">
           <div class="card-body">
             <div class="stage-line">
               <span class="badge text-bg-secondary fs-6 stage-index">#{{ stage.id }}</span>
@@ -346,7 +354,7 @@ const handleSave = async () => {
           </div>
         </div>
 
-        <div class="d-flex flex-column flex-md-row align-items-md-center gap-3 mt-4">
+        <div class="editor-footer d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3 mt-4">
           <button class="btn btn-outline-secondary" type="button" :disabled="isSaving || granularities.length === 0" @click="addStage">新規作業段階追加</button>
 
           <div class="flex-grow-1">
@@ -356,10 +364,6 @@ const handleSave = async () => {
             <p v-else-if="stageWorkloadsSaveError" class="text-danger small mb-0">{{ stageWorkloadsSaveError }}</p>
             <p v-else-if="saved" class="text-success small mb-0">保存しました。</p>
           </div>
-
-          <button class="btn btn-primary ms-md-auto" type="button" :disabled="isSaving || editableStages.length === 0" @click="handleSave">
-            {{ isSaving ? "保存中..." : "設定を保存" }}
-          </button>
         </div>
       </div>
     </div>
@@ -371,13 +375,17 @@ const handleSave = async () => {
   border: none;
 }
 
-.stage-workload-editor .card-body {
-  padding: 0.5rem;
-}
-
 .stage-workload-editor .badge {
   min-width: 3rem;
   justify-content: center;
+}
+
+.editor-footer {
+  justify-content: flex-start;
+}
+
+.stage-workload-editor .card-body {
+  padding: 0.5rem;
 }
 
 .stage-line {
