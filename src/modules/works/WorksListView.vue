@@ -22,16 +22,13 @@ const userId = computed(() => user.value?.uid ?? null);
 const creationForm = reactive({
   title: "",
   status: WORK_STATUSES[0] as WorkStatus,
-  totalUnits: 6,
-  defaultPanels: 6,
+  granularityCounts: {} as Record<string, number>, // 粒度IDごとの数量
   startDate: new Date().toISOString().slice(0, 10),
   deadline: "",
 });
 
 const fieldErrors = reactive<Record<string, string | null>>({
   title: null,
-  totalUnits: null,
-  defaultPanels: null,
   startDate: null,
   deadline: null,
 });
@@ -40,12 +37,48 @@ const creationError = ref<string | null>(null);
 const isSubmitting = ref(false);
 const attempted = ref(false);
 
+// 粒度を重みの高い順でソート
+const sortedGranularities = computed(() => {
+  return [...granularities.value].sort((a, b) => b.weight - a.weight);
+});
+
 const topGranularity = computed(() => {
-  if (granularities.value.length === 0) {
-    return null;
+  return sortedGranularities.value[0] ?? null;
+});
+
+// 粒度フィールドのエラー
+const granularityFieldErrors = reactive<Record<string, string | null>>({});
+
+// 粒度設定が変更されたときにフォームを初期化
+const initializeGranularityForm = () => {
+  const newCounts: Record<string, number> = {};
+  const newErrors: Record<string, string | null> = {};
+
+  sortedGranularities.value.forEach((granularity, index) => {
+    // 最上位粒度以外にデフォルト値を設定
+    if (index > 0) {
+      newCounts[granularity.id] = 6;
+    }
+    newErrors[granularity.id] = null;
+  });
+
+  creationForm.granularityCounts = newCounts;
+  Object.keys(granularityFieldErrors).forEach(key => {
+    delete granularityFieldErrors[key];
+  });
+  Object.assign(granularityFieldErrors, newErrors);
+};
+
+// 最上位粒度の数量を取得
+const topGranularityCount = computed({
+  get: () => {
+    if (!topGranularity.value) return 6;
+    return creationForm.granularityCounts[topGranularity.value.id] ?? 6;
+  },
+  set: (value: number) => {
+    if (!topGranularity.value) return;
+    creationForm.granularityCounts[topGranularity.value.id] = value;
   }
-  const sorted = [...granularities.value].sort((a, b) => b.weight - a.weight);
-  return sorted[0] ?? null;
 });
 
 const stageLabels = computed(() => stageWorkloads.value.map((stage) => stage.label));
@@ -66,7 +99,7 @@ const unitEstimatedHours = computed(() => {
   }, 0);
 });
 
-const totalEstimatedHours = computed(() => Number((creationForm.totalUnits * unitEstimatedHours.value).toFixed(2)));
+const totalEstimatedHours = computed(() => Number((topGranularityCount.value * unitEstimatedHours.value).toFixed(2)));
 
 const isSettingsLoading = computed(() => loadingGranularities.value || loadingStageWorkloads.value);
 const settingsError = computed(() => granularitiesLoadError.value ?? stageWorkloadsLoadError.value ?? null);
@@ -94,6 +127,20 @@ const ensureWorksLoaded = async () => {
     await worksStore.fetchWorks(userId.value);
   }
 };
+
+// 粒度設定が変更されたときにフォームを初期化
+watch(granularities, () => {
+  initializeGranularityForm();
+}, { deep: true });
+
+onMounted(async () => {
+  if (!user.value) {
+    await authStore.ensureInitialized();
+  }
+  await ensureSettingsLoaded();
+  await ensureWorksLoaded();
+  initializeGranularityForm();
+});
 
 onMounted(async () => {
   await authStore.ensureInitialized();
@@ -134,15 +181,24 @@ const validate = () => {
     hasError = true;
   }
 
-  if (!Number.isFinite(creationForm.totalUnits) || creationForm.totalUnits <= 0) {
-    fieldErrors.totalUnits = "最上位粒度の数は1以上で入力してください。";
+  // 最上位粒度の数をチェック
+  if (!Number.isFinite(topGranularityCount.value) || topGranularityCount.value <= 0) {
+    if (topGranularity.value) {
+      granularityFieldErrors[topGranularity.value.id] = "1以上で入力してください。";
+    }
     hasError = true;
   }
 
-  if (!Number.isFinite(creationForm.defaultPanels) || creationForm.defaultPanels <= 0) {
-    fieldErrors.defaultPanels = "デフォルトコマ数は1以上で入力してください。";
-    hasError = true;
-  }
+  // 各粒度の数をチェック
+  sortedGranularities.value.slice(1).forEach(granularity => {
+    const count = creationForm.granularityCounts[granularity.id] ?? 0;
+    if (!Number.isFinite(count) || count <= 0) {
+      granularityFieldErrors[granularity.id] = "1以上で入力してください。";
+      hasError = true;
+    } else {
+      granularityFieldErrors[granularity.id] = null;
+    }
+  });
 
   if (!topGranularity.value) {
     creationError.value = "作業粒度設定が未完了のため、作品を作成できません。";
@@ -173,23 +229,28 @@ const handleCreate = () => {
   isSubmitting.value = true;
 
   try {
+    // 粒度に基づいてdefaultCountsを構築
+    const defaultCounts = sortedGranularities.value.slice(1).map(granularity =>
+      creationForm.granularityCounts[granularity.id] ?? 6
+    );
+
     const work = worksStore.createWork({
       title: creationForm.title,
       status: creationForm.status,
       startDate,
       deadline,
-      totalUnits: creationForm.totalUnits,
-      defaultPanelsPerPage: creationForm.defaultPanels,
+      totalUnits: topGranularityCount.value,
+      defaultCounts,
       primaryGranularityId: topGranularity.value.id,
       unitEstimatedHours: unitEstimatedHours.value,
     });
 
+    // フォームをリセット
     creationForm.title = "";
-    creationForm.totalUnits = 6;
-    creationForm.defaultPanels = 6;
     creationForm.startDate = new Date().toISOString().slice(0, 10);
     creationForm.deadline = "";
     creationForm.status = WORK_STATUSES[0];
+    initializeGranularityForm();
     attempted.value = false;
     resetErrors();
 
@@ -230,7 +291,7 @@ const computeWorkProgress = (work: Work) => {
 
   const leafUnits = collectLeafUnits(work.units);
   const totalUnits = leafUnits.length;
-  
+
   if (totalUnits === 0) {
     return 0;
   }
@@ -252,7 +313,7 @@ const computeWorkProgress = (work: Work) => {
 
     const totalWorkHoursPerUnit = cumulativeWorkloads[cumulativeWorkloads.length - 1] || 0;
     const totalWorkHours = totalWorkHoursPerUnit * totalUnits;
-    
+
     if (totalWorkHours === 0) {
       return 0;
     }
@@ -357,33 +418,35 @@ const navigateToDetail = (id: string) => {
             <div v-if="attempted && fieldErrors.deadline" class="invalid-feedback">{{ fieldErrors.deadline }}</div>
           </div>
 
-          <div class="col-12 col-md-3">
-            <label class="form-label" for="work-units">最上位粒度の数</label>
+          <!-- 動的粒度フィールド -->
+          <div v-for="(granularity, index) in sortedGranularities" :key="granularity.id" class="col-12 col-md-3">
+            <label class="form-label" :for="`granularity-${granularity.id}`">
+              {{ index === 0 ? '最上位' : `第${index + 1}階層` }}{{ granularity.label }}の数
+            </label>
             <div class="input-group">
               <input
-                id="work-units"
-                v-model.number="creationForm.totalUnits"
-                :class="['form-control', attempted && fieldErrors.totalUnits ? 'is-invalid' : '']"
+                v-if="index === 0"
+                :id="`granularity-${granularity.id}`"
+                v-model.number="topGranularityCount"
+                :class="['form-control', attempted && granularityFieldErrors[granularity.id] ? 'is-invalid' : '']"
                 type="number"
                 min="1"
                 :disabled="isSubmitting || isSettingsLoading"
               />
-              <span class="input-group-text">{{ topGranularity?.label ?? "単位" }}</span>
+              <input
+                v-else
+                :id="`granularity-${granularity.id}`"
+                v-model.number="creationForm.granularityCounts[granularity.id]"
+                :class="['form-control', attempted && granularityFieldErrors[granularity.id] ? 'is-invalid' : '']"
+                type="number"
+                min="1"
+                :disabled="isSubmitting || isSettingsLoading"
+              />
+              <span class="input-group-text">{{ granularity.label }}</span>
             </div>
-            <div v-if="attempted && fieldErrors.totalUnits" class="invalid-feedback d-block">{{ fieldErrors.totalUnits }}</div>
-          </div>
-
-          <div class="col-12 col-md-3">
-            <label class="form-label" for="work-panels">デフォルトコマ数</label>
-            <input
-              id="work-panels"
-              v-model.number="creationForm.defaultPanels"
-              :class="['form-control', attempted && fieldErrors.defaultPanels ? 'is-invalid' : '']"
-              type="number"
-              min="1"
-              :disabled="isSubmitting || isSettingsLoading"
-            />
-            <div v-if="attempted && fieldErrors.defaultPanels" class="invalid-feedback">{{ fieldErrors.defaultPanels }}</div>
+            <div v-if="attempted && granularityFieldErrors[granularity.id]" class="invalid-feedback d-block">
+              {{ granularityFieldErrors[granularity.id] }}
+            </div>
           </div>
 
           <div class="col-12 col-md-3">

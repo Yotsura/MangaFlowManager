@@ -32,7 +32,7 @@
         <span class="progress-text">
           進捗: {{ progressInfo.progressRate }}%
           <span v-if="progressInfo.totalWorkHours > 0">
-            ({{ progressInfo.completedWorkHours.toFixed(1) }}h / {{ progressInfo.totalWorkHours.toFixed(1) }}h)
+            (推定残り時間: {{ progressInfo.estimatedRemainingTime.toFixed(1) }}h)
           </span>
           <span v-else>
             ({{ progressInfo.completedUnits }}/{{ progressInfo.totalUnits }}ユニット完了)
@@ -85,6 +85,7 @@
             :stage-labels="stageLabels"
             :stage-colors="stageColors"
             :stage-workloads="stageWorkloads"
+            :granularities="granularities"
             :is-edit-mode="isEditMode"
             :saving-unit-ids="savingUnitIds"
             @advance-stage="$emit('advance-stage', $event)"
@@ -118,6 +119,12 @@ import { computed } from "vue";
 import type { WorkUnit } from "@/store/worksStore";
 import LeafUnitButton from './LeafUnitButton.vue';
 
+interface Granularity {
+  id: string;
+  label: string;
+  weight: number;
+}
+
 interface Props {
   unit: WorkUnit;
   level: number;
@@ -125,6 +132,7 @@ interface Props {
   stageLabels: string[];
   stageColors: string[];
   stageWorkloads?: number[]; // 各段階の工数配列
+  granularities?: Granularity[]; // 粒度設定（重みでソート済み）
   isEditMode: boolean;
   savingUnitIds: Set<string>;
 }
@@ -140,14 +148,35 @@ const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 
 // 計算プロパティ
-const isLeafUnit = computed(() => props.unit.stageIndex !== undefined);
+const isLeafUnit = computed(() => {
+  // stageIndexがあり、かつ子要素がない場合のみ最下位ユニット
+  return props.unit.stageIndex !== undefined && (!props.unit.children || props.unit.children.length === 0);
+});
 const hasChildren = computed(() => props.unit.children && props.unit.children.length > 0);
 const isSaving = computed(() => props.savingUnitIds.has(props.unit.id));
 
 const panelTypeLabel = computed(() => {
-  if (props.level === 0) return "ページ";
-  if (isLeafUnit.value) return "コマ";
-  return "グループ";
+  if (!props.granularities || props.granularities.length === 0) {
+    // フォールバック：粒度設定がない場合
+    if (isLeafUnit.value) return "コマ";
+    switch (props.level) {
+      case 0: return "ページ";
+      case 1: return "パネル";
+      case 2: return "グループ";
+      default: return `レベル${props.level}`;
+    }
+  }
+
+  // 粒度設定から適切なラベルを取得
+  if (isLeafUnit.value) {
+    // 最下位粒度（最も重みの低い粒度）
+    const lowestGranularity = props.granularities[props.granularities.length - 1];
+    return lowestGranularity?.label ?? "コマ";
+  } else {
+    // 中間粒度（levelに対応する粒度）
+    const granularity = props.granularities[props.level];
+    return granularity?.label ?? `レベル${props.level}`;
+  }
 });
 
 const allChildrenAreLeaf = computed(() => {
@@ -178,7 +207,8 @@ const progressInfo = computed(() => {
       completedUnits: 0,
       progressRate: 0,
       completedWorkHours: 0,
-      totalWorkHours: 0
+      totalWorkHours: 0,
+      estimatedRemainingTime: 0
     };
   }
 
@@ -207,12 +237,17 @@ const progressInfo = computed(() => {
     const progressRate = totalWorkHours > 0 ? Math.round((completedWorkHours / totalWorkHours) * 100) : 0;
     const completedUnits = leafUnits.filter(unit => (unit.stageIndex ?? 0) >= props.stageCount - 1).length;
 
+    // 推定残り作業時間を計算（1段階上位粒度：ページレベル）
+    const remainingWorkHours = totalWorkHours - completedWorkHours;
+    const estimatedRemainingTime = remainingWorkHours > 0 ? remainingWorkHours : 0;
+
     return {
       totalUnits,
       completedUnits,
       progressRate,
       completedWorkHours,
-      totalWorkHours
+      totalWorkHours,
+      estimatedRemainingTime
     };
   } else {
     // 従来の単純な進捗計算（工数データがない場合）
@@ -224,7 +259,8 @@ const progressInfo = computed(() => {
       completedUnits,
       progressRate,
       completedWorkHours: 0,
-      totalWorkHours: 0
+      totalWorkHours: 0,
+      estimatedRemainingTime: 0
     };
   }
 });
@@ -486,6 +522,15 @@ const handleRemove = () => {
   grid-template-columns: 1fr 1fr !important;
 }
 
+/* 中間階層パネルも2列固定表示 */
+.unit-panel.level-0 .children-grid,
+.unit-panel.level-1 .children-grid,
+.unit-panel.level-2 .children-grid,
+.unit-panel.level-3 .children-grid,
+.unit-panel.level-4 .children-grid {
+  grid-template-columns: 1fr 1fr !important;
+}
+
 
 
 .add-leaf-unit {
@@ -532,6 +577,15 @@ const handleRemove = () => {
     grid-template-columns: 1fr 1fr !important;
   }
 
+  /* モバイルでも中間階層パネル2列固定 */
+  .unit-panel.level-0 .children-grid,
+  .unit-panel.level-1 .children-grid,
+  .unit-panel.level-2 .children-grid,
+  .unit-panel.level-3 .children-grid,
+  .unit-panel.level-4 .children-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
   .leaf-units-grid {
     gap: 0.125rem;
     padding: 0.25rem;
@@ -556,6 +610,15 @@ const handleRemove = () => {
   .unit-panel.level-4 .leaf-units-grid {
     grid-template-columns: 1fr 1fr !important;
   }
+
+  /* 大画面でも中間階層パネル2列固定 */
+  .unit-panel.level-0 .children-grid,
+  .unit-panel.level-1 .children-grid,
+  .unit-panel.level-2 .children-grid,
+  .unit-panel.level-3 .children-grid,
+  .unit-panel.level-4 .children-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
 }
 
 @media (min-width: 1400px) {
@@ -565,6 +628,15 @@ const handleRemove = () => {
   .unit-panel.level-2 > .panel-content > .children-container > .leaf-units-grid,
   .unit-panel.level-3 > .panel-content > .children-container > .leaf-units-grid,
   .unit-panel.level-4 > .panel-content > .children-container > .leaf-units-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* 超大画面でも中間階層パネル2列固定 */
+  .unit-panel.level-0 > .panel-content > .children-container > .children-grid,
+  .unit-panel.level-1 > .panel-content > .children-container > .children-grid,
+  .unit-panel.level-2 > .panel-content > .children-container > .children-grid,
+  .unit-panel.level-3 > .panel-content > .children-container > .children-grid,
+  .unit-panel.level-4 > .panel-content > .children-container > .children-grid {
     grid-template-columns: 1fr 1fr !important;
   }
 }

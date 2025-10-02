@@ -21,6 +21,7 @@
           :stage-labels="stageLabels"
           :stage-colors="stageColors"
           :stage-workloads="stageWorkloads"
+          :granularities="granularities"
           :is-edit-mode="isEditMode"
           :saving-unit-ids="savingUnitIds"
           @advance-stage="handleAdvanceStage"
@@ -42,12 +43,19 @@
 import PanelStyleUnitPanel from "./PanelStyleUnitPanel.vue";
 import type { WorkUnit } from "@/store/worksStore";
 
+interface Granularity {
+  id: string;
+  label: string;
+  weight: number;
+}
+
 interface Props {
   units: WorkUnit[];
   stageCount: number;
   stageLabels: string[];
   stageColors: string[];
   stageWorkloads?: number[];
+  granularities?: Granularity[];
   isEditMode: boolean;
   savingUnitIds: Set<string>;
 }

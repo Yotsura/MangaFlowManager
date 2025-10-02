@@ -45,6 +45,11 @@ const stageWorkloadHours = computed(() => {
   });
 });
 
+// 重みでソートした粒度配列（高い重み→低い重み）
+const sortedGranularities = computed(() => {
+  return [...granularities.value].sort((a, b) => b.weight - a.weight);
+});
+
 const primaryGranularityLabel = computed(() => {
   const id = work.value?.primaryGranularityId;
   if (!id) {
@@ -235,7 +240,7 @@ const overallProgress = computed(() => {
 
   const leafUnits = collectLeafUnits(work.value.units);
   const totalUnits = leafUnits.length;
-  
+
   if (totalUnits === 0) {
     return 0;
   }
@@ -251,7 +256,7 @@ const overallProgress = computed(() => {
 
     const totalWorkHoursPerUnit = cumulativeWorkloads[cumulativeWorkloads.length - 1] || 0;
     const totalWorkHours = totalWorkHoursPerUnit * totalUnits;
-    
+
     if (totalWorkHours === 0) {
       return 0;
     }
@@ -457,6 +462,7 @@ const formatDate = (value: string) => {
                 :stage-labels="stageLabels"
                 :stage-colors="stageColors"
                 :stage-workloads="stageWorkloadHours"
+                :granularities="sortedGranularities"
                 :is-edit-mode="isEditMode"
                 :saving-unit-ids="savingPanelIds"
                 @advance-stage="handleAdvanceUnitStage"

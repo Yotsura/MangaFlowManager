@@ -47,7 +47,7 @@ interface CreateWorkPayload {
   startDate: string;
   deadline: string;
   totalUnits: number;
-  defaultPanelsPerPage: number;
+  defaultCounts: number[]; // 各階層のデフォルト数 [上位→下位]
   primaryGranularityId: string | null;
   unitEstimatedHours: number;
 }
@@ -362,18 +362,37 @@ export const useWorksStore = defineStore("works", {
     createWork(payload: CreateWorkPayload): Work {
       const now = new Date().toISOString();
       const totalUnits = normalizePositiveInteger(payload.totalUnits, 1);
-      const defaultPanels = normalizePositiveInteger(payload.defaultPanelsPerPage, 1);
+      const defaultCounts = payload.defaultCounts.length > 0 ? payload.defaultCounts : [1];
 
-      // 2段階構造（ページ > コマ）でunitsを作成
-      const units: WorkUnit[] = Array.from({ length: totalUnits }, (_, index) => ({
-        id: generateId(),
-        index: index + 1,
-        children: Array.from({ length: defaultPanels }, (_, panelIndex) => ({
-          id: generateId(),
-          index: panelIndex + 1,
-          stageIndex: 0,
-        })),
-      }));
+      // 階層構造を動的に作成
+      const createHierarchy = (counts: number[], depth: number = 0): WorkUnit[] => {
+        if (counts.length === 0) {
+          // 最下位レベル：stageIndexを持つ
+          return [];
+        }
+
+        const currentCount = normalizePositiveInteger(counts[0] ?? 1, 1);
+        const remainingCounts = counts.slice(1);
+
+        return Array.from({ length: currentCount }, (_, index) => {
+          const unit: WorkUnit = {
+            id: generateId(),
+            index: index + 1,
+          };
+
+          if (remainingCounts.length > 0) {
+            // 中間レベル：子要素を持つ
+            unit.children = createHierarchy(remainingCounts, depth + 1);
+          } else {
+            // 最下位レベル：stageIndexを持つ
+            unit.stageIndex = 0;
+          }
+
+          return unit;
+        });
+      };
+
+      const units = createHierarchy([totalUnits, ...defaultCounts]);
 
       const unitEstimatedHours = Math.max(0, payload.unitEstimatedHours);
       const work: Work = {
@@ -385,7 +404,7 @@ export const useWorksStore = defineStore("works", {
         createdAt: now,
         updatedAt: now,
         totalUnits,
-        defaultCounts: [defaultPanels], // ページ単位のデフォルトコマ数
+        defaultCounts, // 各階層のデフォルト数
         primaryGranularityId: payload.primaryGranularityId,
         unitEstimatedHours,
         totalEstimatedHours: Number((totalUnits * unitEstimatedHours).toFixed(2)),
