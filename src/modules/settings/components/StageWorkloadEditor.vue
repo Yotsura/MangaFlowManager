@@ -46,6 +46,7 @@ const saved = ref(false);
 const touched = ref(false);
 const saveAttempted = ref(false);
 const isSyncingFromStore = ref(false);
+const colorInputRefs = new Map<number, HTMLInputElement>();
 
 const isLoading = computed(() => loadingStageWorkloads.value || !stageWorkloadsLoaded.value);
 const isSaving = computed(() => savingStageWorkloads.value);
@@ -163,7 +164,8 @@ const addStage = () => {
   }
 
   const nextId = editableStages.value.length + 1;
-  const color = getDefaultStageColor(nextId - 1, nextId);
+  const totalStages = nextId;
+  const color = getDefaultStageColor(totalStages - 1, totalStages);
   editableStages.value = [
     ...editableStages.value,
     {
@@ -265,6 +267,47 @@ const stageBadgeStyle = (stage: EditableStage) => {
   };
 };
 
+const stageColorCode = (stage: EditableStage) => resolvedStageColor(stage).toUpperCase();
+
+const setColorInputRef = (stageId: number, el: HTMLInputElement | null) => {
+  if (el) {
+    colorInputRefs.set(stageId, el);
+  } else {
+    colorInputRefs.delete(stageId);
+  }
+};
+
+const openColorPicker = (stageId: number) => {
+  if (isSaving.value) {
+    return;
+  }
+  const input = colorInputRefs.get(stageId);
+  if (!input) {
+    return;
+  }
+  const picker = (input as HTMLInputElement & { showPicker?: () => void }).showPicker;
+  if (typeof picker === "function") {
+    picker.call(input);
+  } else {
+    input.click();
+  }
+};
+
+const resetStageColors = () => {
+  if (isSaving.value || editableStages.value.length === 0) {
+    return;
+  }
+
+  const totalStages = editableStages.value.length;
+  editableStages.value = editableStages.value.map((stage, index) => ({
+    ...stage,
+    color: getDefaultStageColor(index, totalStages),
+  }));
+
+  touched.value = true;
+  saved.value = false;
+};
+
 const handleSave = async () => {
   saveAttempted.value = true;
 
@@ -335,6 +378,7 @@ defineExpose({
   save: handleSave,
   isSaving: () => isSaving.value,
   canSave: () => canSave.value,
+  resetColors: resetStageColors,
 });
 </script>
 
@@ -354,20 +398,26 @@ defineExpose({
           <div class="card-body">
             <div class="stage-line">
               <div class="stage-meta">
-                <span class="badge fs-6 stage-index" :style="stageBadgeStyle(stage)">#{{ stage.id }}</span>
-                <div class="stage-color-picker">
-                  <span class="stage-color-label">ヒートマップカラー</span>
-                  <div class="stage-color-input-group">
-                    <input
-                      v-model="stage.color"
-                      type="color"
-                      class="form-control form-control-color stage-color-input"
-                      :disabled="isSaving"
-                      :aria-label="`ステージ${stage.id}のヒートマップカラー`"
-                    />
-                    <span class="stage-color-code">{{ resolvedStageColor(stage).toUpperCase() }}</span>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  class="badge fs-6 stage-index stage-index-button"
+                  :class="{ 'stage-index-button--disabled': isSaving }"
+                  :style="stageBadgeStyle(stage)"
+                  :aria-label="`ステージ${stage.id}のヒートマップカラーを変更`"
+                  :disabled="isSaving"
+                  @click="openColorPicker(stage.id)"
+                >
+                  #{{ stage.id }}
+                </button>
+                <!-- <span class="stage-color-code">{{ stageColorCode(stage) }}</span> -->
+                <input
+                  v-model="stage.color"
+                  type="color"
+                  class="stage-color-input"
+                  :disabled="isSaving"
+                  :aria-label="`ステージ${stage.id}のヒートマップカラー`"
+                  :ref="(el) => setColorInputRef(stage.id, el as HTMLInputElement | null)"
+                />
               </div>
 
               <div class="stage-name">
@@ -427,11 +477,6 @@ defineExpose({
   border: none;
 }
 
-.stage-workload-editor .badge {
-  min-width: 3rem;
-  justify-content: center;
-}
-
 .editor-footer {
   justify-content: flex-start;
 }
@@ -458,45 +503,40 @@ defineExpose({
 .stage-meta {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  min-width: 8rem;
-}
-
-.stage-color-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.stage-color-label {
-  font-size: 0.75rem;
-  color: #6c757d;
-  font-weight: 500;
-}
-
-.stage-color-input-group {
-  display: flex;
+  gap: 0.35rem;
+  min-width: 6rem;
   align-items: center;
-  gap: 0.5rem;
 }
 
-.stage-color-input {
-  width: 2.5rem;
-  height: 2.5rem;
-  padding: 0.25rem;
-  border-radius: 0.5rem;
-  border: 1px solid #ced4da;
-  background-color: #fff;
+.stage-index-button {
+  min-width: 3rem;
+  justify-content: center;
+  cursor: pointer;
+  border: 1px solid transparent;
 }
 
-.stage-color-input:disabled {
-  opacity: 0.65;
+.stage-index-button:focus-visible {
+  outline: 2px solid #495057;
+  outline-offset: 2px;
+}
+
+.stage-index-button--disabled {
+  cursor: not-allowed;
+  opacity: 0.8;
 }
 
 .stage-color-code {
   font-size: 0.75rem;
   font-family: var(--bs-font-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
   color: #495057;
+}
+
+.stage-color-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
 }
 
 .stage-name {

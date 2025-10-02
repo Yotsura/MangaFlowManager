@@ -23,6 +23,7 @@ interface StageWorkloadEditorExposed {
   save: () => void;
   isSaving: () => boolean;
   canSave: () => boolean;
+  resetColors: () => void;
 }
 
 const workHoursRef = ref<WorkHoursFormExposed | null>(null);
@@ -46,6 +47,10 @@ const saveGranularities = () => {
 
 const saveStageWorkloads = () => {
   stageEditorRef.value?.save();
+};
+
+const resetStageColors = () => {
+  stageEditorRef.value?.resetColors();
 };
 </script>
 
@@ -90,9 +95,12 @@ const saveStageWorkloads = () => {
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
               <h2 class="h5 mb-0">作業工数の設定</h2>
-              <button class="btn btn-primary" type="button" :disabled="stageSaving || !stageCanSave" @click="saveStageWorkloads">
-                {{ stageSaving ? "保存中..." : "設定を保存" }}
-              </button>
+              <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-outline-secondary" type="button" :disabled="stageSaving" @click="resetStageColors">色を再設定</button>
+                <button class="btn btn-primary" type="button" :disabled="stageSaving || !stageCanSave" @click="saveStageWorkloads">
+                  {{ stageSaving ? "保存中..." : "設定を保存" }}
+                </button>
+              </div>
             </div>
             <StageWorkloadEditor ref="stageEditorRef" />
           </div>
