@@ -4,11 +4,12 @@ import { storeToRefs } from "pinia";
 
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { generateId } from "@/utils/id";
 
 type FieldError = Partial<Record<"label" | "weight", string>>;
 
 interface EditableGranularity {
-  id: number;
+  id: string;
   label: string;
   weight: string;
 }
@@ -45,8 +46,8 @@ const isLoading = computed(() => loadingGranularities.value && !granularitiesLoa
 const isSaving = computed(() => savingGranularities.value);
 
 const mapToEditable = (items: typeof granularities.value): EditableGranularity[] =>
-  items.map((item, index) => ({
-    id: index + 1,
+  items.map((item) => ({
+    id: item.id,
     label: item.label,
     weight: item.weight.toString(),
   }));
@@ -106,14 +107,14 @@ watch(
   { deep: true },
 );
 
-const setRowError = (map: Map<number, FieldError>, id: number, field: keyof FieldError, message: string) => {
+const setRowError = (map: Map<string, FieldError>, id: string, field: keyof FieldError, message: string) => {
   const entry = map.get(id) ?? {};
   entry[field] = message;
   map.set(id, entry);
 };
 
 const rowErrors = computed(() => {
-  const errors = new Map<number, FieldError>();
+  const errors = new Map<string, FieldError>();
   const labelCounts = new Map<string, number>();
 
   editableRows.value.forEach((row) => {
@@ -192,7 +193,7 @@ const addRow = () => {
   editableRows.value = [
     ...editableRows.value,
     {
-      id: editableRows.value.length + 1,
+      id: generateId(),
       label: newGranularity.label.trim(),
       weight: Number(newGranularity.weight).toString(),
     },
@@ -203,16 +204,13 @@ const addRow = () => {
   resetNewGranularity();
 };
 
-const removeRow = (id: number) => {
-  editableRows.value = editableRows.value.filter((row) => row.id !== id).map((row, index) => ({
-    ...row,
-    id: index + 1,
-  }));
+const removeRow = (id: string) => {
+  editableRows.value = editableRows.value.filter((row) => row.id !== id);
   touched.value = true;
   saved.value = false;
 };
 
-const getFieldError = (id: number, field: keyof FieldError) => rowErrors.value.get(id)?.[field] ?? null;
+const getFieldError = (id: string, field: keyof FieldError) => rowErrors.value.get(id)?.[field] ?? null;
 
 const handleSave = async () => {
   saveAttempted.value = true;
@@ -221,8 +219,8 @@ const handleSave = async () => {
     return;
   }
 
-  const payload = editableRows.value.map((row, index) => ({
-    id: index + 1,
+  const payload = editableRows.value.map((row) => ({
+    id: row.id,
     label: row.label.trim(),
     weight: Number(row.weight),
   }));
@@ -249,7 +247,7 @@ const handleSave = async () => {
         <table class="table align-middle mb-0">
           <thead>
             <tr>
-              <th scope="col" class="w-5">ID</th>
+              <th scope="col" class="w-5">#</th>
               <th scope="col" class="w-50">作業粒度</th>
               <th scope="col" class="w-25">デフォルト比重</th>
               <th scope="col" class="w-20 text-end">操作</th>
@@ -259,9 +257,9 @@ const handleSave = async () => {
             <tr v-if="editableRows.length === 0">
               <td colspan="4" class="text-muted text-center py-4">作業粒度がまだ登録されていません。</td>
             </tr>
-            <tr v-for="row in editableRows" :key="row.id">
+            <tr v-for="(row, index) in editableRows" :key="row.id">
               <td>
-                <span class="fw-semibold text-muted">{{ row.id }}</span>
+                <span class="fw-semibold text-muted">#{{ index + 1 }}</span>
               </td>
               <td>
                 <input
@@ -289,7 +287,7 @@ const handleSave = async () => {
               </td>
             </tr>
             <tr class="table-light">
-              <td><span class="fw-semibold text-muted">{{ editableRows.length + 1 }}</span></td>
+              <td><span class="fw-semibold text-muted">#{{ editableRows.length + 1 }}</span></td>
               <td>
                 <input
                   v-model="newGranularity.label"

@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 
 import { getDocument, setDocument } from "@/services/firebase/firestoreService";
+import { generateId } from "@/utils/id";
 
 interface WorkHourRange {
   day: string;
@@ -13,7 +14,7 @@ interface WorkHoursDocument {
 }
 
 interface Granularity {
-  id: number;
+  id: string;
   label: string;
   weight: number;
 }
@@ -23,7 +24,7 @@ interface GranularitiesDocument {
 }
 
 interface StageWorkloadEntry {
-  granularityId: number;
+  granularityId: string;
   hours: number | null;
 }
 
@@ -50,6 +51,7 @@ interface SettingsState {
   savingGranularities: boolean;
   granularitiesLoadError: string | null;
   granularitiesSaveError: string | null;
+  granularityIdMigrationMap: Record<string, string>;
   stageWorkloads: StageWorkload[];
   stageWorkloadsLoaded: boolean;
   loadingStageWorkloads: boolean;
@@ -62,50 +64,61 @@ const buildDocumentPath = (userId: string) => `users/${userId}/settings/workHour
 const buildGranularityPath = (userId: string) => `users/${userId}/settings/granularities`;
 const buildStageWorkloadPath = (userId: string) => `users/${userId}/settings/stageWorkloads`;
 
-const DEFAULT_GRANULARITIES: Granularity[] = [
+type GranularityIdMigrationMap = Record<string, string>;
+
+interface GranularityTemplate {
+  label: string;
+  weight: number;
+}
+
+interface StageTemplateEntry {
+  granularityIndex: number;
+  hours: number | null;
+}
+
+interface StageTemplate {
+  label: string;
+  entries: StageTemplateEntry[];
+}
+
+const DEFAULT_GRANULARITY_TEMPLATES: GranularityTemplate[] = [
   {
-    id: 1,
     label: "ページ単位",
     weight: 5,
   },
   {
-    id: 2,
     label: "コマ単位",
     weight: 1,
   },
 ];
 
-const DEFAULT_STAGE_WORKLOADS: StageWorkload[] = [
+const DEFAULT_STAGE_TEMPLATES: StageTemplate[] = [
   {
-    id: 1,
     label: "ネーム",
     entries: [
-      { granularityId: 1, hours: 3 },
-      { granularityId: 2, hours: null },
+      { granularityIndex: 0, hours: 3 },
+      { granularityIndex: 1, hours: null },
     ],
   },
   {
-    id: 2,
     label: "下書き",
     entries: [
-      { granularityId: 1, hours: 1 },
-      { granularityId: 2, hours: 0.5 },
+      { granularityIndex: 0, hours: 1 },
+      { granularityIndex: 1, hours: 0.5 },
     ],
   },
   {
-    id: 3,
     label: "ペン入れ",
     entries: [
-      { granularityId: 1, hours: null },
-      { granularityId: 2, hours: 1 },
+      { granularityIndex: 0, hours: null },
+      { granularityIndex: 1, hours: 1 },
     ],
   },
   {
-    id: 4,
     label: "仕上げ",
     entries: [
-      { granularityId: 1, hours: null },
-      { granularityId: 2, hours: 0.5 },
+      { granularityIndex: 0, hours: null },
+      { granularityIndex: 1, hours: 0.5 },
     ],
   },
 ];
@@ -117,16 +130,43 @@ const mapError = (error: unknown) => {
   return "設定の保存処理で問題が発生しました。";
 };
 
-const cloneDefaults = () => DEFAULT_GRANULARITIES.map((item) => ({ ...item }));
-const cloneDefaultStages = () => DEFAULT_STAGE_WORKLOADS.map((stage) => ({
-  ...stage,
-  entries: stage.entries.map((entry) => ({ ...entry })),
-}));
+const createDefaultGranularities = (): Granularity[] =>
+  DEFAULT_GRANULARITY_TEMPLATES.map((template) => ({
+    id: generateId(),
+    label: template.label,
+    weight: template.weight,
+  }));
 
-const normalizeGranularities = (items: unknown): Granularity[] => {
+const createDefaultStageWorkloads = (granularities: Granularity[]): StageWorkload[] =>
+  DEFAULT_STAGE_TEMPLATES.map((template, stageIndex) => ({
+    id: stageIndex + 1,
+    label: template.label,
+    entries: template.entries
+      .map((entry) => {
+        const target = granularities[entry.granularityIndex];
+        if (!target) {
+          return null;
+        }
+        return {
+          granularityId: target.id,
+          hours: entry.hours,
+        } satisfies StageWorkloadEntry;
+      })
+      .filter((item): item is StageWorkloadEntry => item !== null),
+  }));
+
+interface NormalizedGranularitiesResult {
+  items: Granularity[];
+  migrationMap: GranularityIdMigrationMap;
+}
+
+const normalizeGranularities = (items: unknown): NormalizedGranularitiesResult => {
   if (!Array.isArray(items) || items.length === 0) {
-    return [];
+    return { items: [], migrationMap: {} };
   }
+
+  const usedIds = new Set<string>();
+  const migrationMap: GranularityIdMigrationMap = {};
 
   const normalized = items
     .map((entry, index) => {
@@ -135,6 +175,7 @@ const normalizeGranularities = (items: unknown): Granularity[] => {
       }
 
       const raw = entry as Record<string, unknown>;
+
       const label = typeof raw.label === "string"
         ? raw.label
         : typeof raw.unit === "string"
@@ -146,27 +187,63 @@ const normalizeGranularities = (items: unknown): Granularity[] => {
       const weightValue = Number(raw.weight);
       const weight = Number.isFinite(weightValue) && weightValue > 0 ? Math.round(weightValue) : 1;
 
+      const rawIdValue = raw.id ?? raw.key ?? raw.uuid ?? raw.identifier;
+      let originalId: string | null = null;
+
+      if (typeof rawIdValue === "string") {
+        originalId = rawIdValue.trim();
+      } else if (typeof rawIdValue === "number") {
+        originalId = String(rawIdValue);
+      }
+
+      if (!originalId || originalId.length === 0) {
+        originalId = String(index + 1);
+      }
+
+      const isLegacyId = /^\d+$/.test(originalId);
+
+      let assignedId = originalId;
+
+      if (isLegacyId || usedIds.has(assignedId)) {
+        assignedId = generateId();
+        if (originalId) {
+          migrationMap[originalId] = assignedId;
+        }
+      }
+
+      if (usedIds.has(assignedId)) {
+        const fallback = generateId();
+        migrationMap[originalId] = fallback;
+        assignedId = fallback;
+      }
+
+      usedIds.add(assignedId);
+
       return {
-        id: index + 1,
+        id: assignedId,
         label,
         weight,
       } satisfies Granularity;
     })
     .filter((item): item is Granularity => item !== null);
 
-  return normalized.map((item, index) => ({
-    id: index + 1,
-    label: item.label,
-    weight: item.weight,
-  }));
+  return { items: normalized, migrationMap };
 };
 
-const normalizeStageWorkloads = (items: unknown, granularities: Granularity[]): StageWorkload[] => {
+const normalizeStageWorkloads = (
+  items: unknown,
+  granularities: Granularity[],
+  migrationMap: GranularityIdMigrationMap,
+): StageWorkload[] => {
   if (!Array.isArray(items) || items.length === 0) {
     return [];
   }
 
   const knownGranularityIds = new Set(granularities.map((g) => g.id));
+  const fallbackIndexMap = new Map<number, string>();
+  granularities.forEach((granularity, index) => {
+    fallbackIndexMap.set(index + 1, granularity.id);
+  });
 
   const normalized = items
     .map((entry, index) => {
@@ -181,17 +258,33 @@ const normalizeStageWorkloads = (items: unknown, granularities: Granularity[]): 
           ? rawStage.name
           : `ステージ${index + 1}`;
 
+      const rawStageId = rawStage.id;
+      const stageId = Number.isFinite(rawStageId) ? Number(rawStageId) : index + 1;
+
       const entriesRaw = Array.isArray(rawStage.entries) ? rawStage.entries : [];
       const entries: StageWorkloadEntry[] = entriesRaw
         .map((item) => {
           if (!item || typeof item !== "object") {
             return null;
           }
+
           const rawItem = item as Record<string, unknown>;
-          const granularityId = Number(rawItem.granularityId ?? rawItem.id);
-          if (!Number.isInteger(granularityId) || granularityId <= 0 || !knownGranularityIds.has(granularityId)) {
+          const rawGranularityId = rawItem.granularityId ?? rawItem.id;
+
+          let normalizedGranularityId: string | null = null;
+
+          if (typeof rawGranularityId === "string") {
+            const trimmed = rawGranularityId.trim();
+            normalizedGranularityId = migrationMap[trimmed] ?? trimmed;
+          } else if (typeof rawGranularityId === "number") {
+            const key = String(rawGranularityId);
+            normalizedGranularityId = migrationMap[key] ?? fallbackIndexMap.get(rawGranularityId) ?? key;
+          }
+
+          if (!normalizedGranularityId || !knownGranularityIds.has(normalizedGranularityId)) {
             return null;
           }
+
           const hoursValue = rawItem.hours;
           const hoursRaw =
             typeof hoursValue === "number"
@@ -201,15 +294,16 @@ const normalizeStageWorkloads = (items: unknown, granularities: Granularity[]): 
                 : null;
           const normalizedHours =
             hoursRaw !== null && Number.isFinite(hoursRaw) && hoursRaw >= 0 ? Number(hoursRaw.toFixed(2)) : null;
+
           return {
-            granularityId,
+            granularityId: normalizedGranularityId,
             hours: normalizedHours,
           } satisfies StageWorkloadEntry;
         })
         .filter((item): item is StageWorkloadEntry => item !== null);
 
       return {
-        id: index + 1,
+        id: stageId,
         label,
         entries,
       } satisfies StageWorkload;
@@ -250,6 +344,7 @@ export const useSettingsStore = defineStore("settings", {
     savingGranularities: false,
     granularitiesLoadError: null,
     granularitiesSaveError: null,
+  granularityIdMigrationMap: {},
     stageWorkloads: [],
     stageWorkloadsLoaded: false,
     loadingStageWorkloads: false,
@@ -312,13 +407,19 @@ export const useSettingsStore = defineStore("settings", {
 
       try {
         const document = await getDocument<GranularitiesDocument>(buildGranularityPath(userId));
-        const normalized = normalizeGranularities(document?.granularities);
+        const { items, migrationMap } = normalizeGranularities(document?.granularities);
 
-        if (normalized.length > 0) {
-          this.granularities = normalized;
+        if (items.length > 0) {
+          this.granularities = items;
+          this.granularityIdMigrationMap = migrationMap;
         } else {
-          const defaults = cloneDefaults();
+          const defaults = createDefaultGranularities();
           this.granularities = defaults;
+          this.granularityIdMigrationMap = {};
+        }
+
+        if (this.stageWorkloadsLoaded) {
+          this.stageWorkloads = alignStageEntries(this.stageWorkloads, this.granularities);
         }
 
         this.granularitiesLoaded = true;
@@ -338,15 +439,25 @@ export const useSettingsStore = defineStore("settings", {
       this.granularitiesSaveError = null;
 
       try {
-        const sequencedItems = items.map((item, index) => ({
-          id: index + 1,
-          label: item.label,
-          weight: item.weight,
-        }));
+        const normalizedItems = items.map((item) => {
+          const trimmedLabel = item.label.trim();
+          const id = typeof item.id === "string" && item.id.trim().length > 0 ? item.id.trim() : generateId();
 
-        await setDocument(buildGranularityPath(userId), { granularities: sequencedItems });
-        this.granularities = sequencedItems;
+          return {
+            id,
+            label: trimmedLabel,
+            weight: item.weight,
+          } satisfies Granularity;
+        });
+
+        await setDocument(buildGranularityPath(userId), { granularities: normalizedItems });
+        this.granularities = normalizedItems;
         this.granularitiesLoaded = true;
+        this.granularityIdMigrationMap = {};
+
+        if (this.stageWorkloadsLoaded) {
+          this.stageWorkloads = alignStageEntries(this.stageWorkloads, this.granularities);
+        }
       } catch (error) {
         this.granularitiesSaveError = mapError(error);
         throw error;
@@ -368,16 +479,21 @@ export const useSettingsStore = defineStore("settings", {
         }
 
         const document = await getDocument<StageWorkloadDocument>(buildStageWorkloadPath(userId));
-        const normalized = normalizeStageWorkloads(document?.stages, this.granularities);
+        const normalized = normalizeStageWorkloads(
+          document?.stages,
+          this.granularities,
+          this.granularityIdMigrationMap,
+        );
 
         if (normalized.length > 0) {
           this.stageWorkloads = alignStageEntries(normalized, this.granularities);
         } else {
-          const defaults = cloneDefaultStages();
+          const defaults = createDefaultStageWorkloads(this.granularities);
           this.stageWorkloads = alignStageEntries(defaults, this.granularities);
         }
 
         this.stageWorkloadsLoaded = true;
+        this.granularityIdMigrationMap = {};
       } catch (error) {
         this.stageWorkloadsLoadError = mapError(error);
         throw error;

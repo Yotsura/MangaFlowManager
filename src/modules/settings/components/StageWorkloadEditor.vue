@@ -6,7 +6,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 
 interface EditableEntry {
-  granularityId: number;
+  granularityId: string;
   hours: string;
 }
 
@@ -18,7 +18,7 @@ interface EditableStage {
 
 interface StageError {
   label?: string;
-  entryErrors: Map<number, string>;
+  entryErrors: Map<string, string>;
 }
 
 const authStore = useAuthStore();
@@ -48,7 +48,14 @@ const isSyncingFromStore = ref(false);
 const isLoading = computed(() => loadingStageWorkloads.value || !stageWorkloadsLoaded.value);
 const isSaving = computed(() => savingStageWorkloads.value);
 const showValidation = computed(() => saveAttempted.value);
-const weightMap = computed(() => new Map(granularities.value.map((granularity) => [granularity.id, granularity.weight])));
+const weightMap = computed(() => new Map<string, number>(granularities.value.map((granularity) => [granularity.id, granularity.weight])));
+const granularityIndexMap = computed(() => {
+  const map = new Map<string, number>();
+  granularities.value.forEach((granularity, index) => {
+    map.set(granularity.id, index + 1);
+  });
+  return map;
+});
 
 const ensureLoaded = async () => {
   if (!userId.value) {
@@ -166,7 +173,7 @@ const stageErrors = computed(() => {
   const errors = new Map<number, StageError>();
 
   editableStages.value.forEach((stage) => {
-    const entryErrors = new Map<number, string>();
+    const entryErrors = new Map<string, string>();
 
     stage.entries.forEach((entry) => {
       if (entry.hours === "") {
@@ -214,11 +221,18 @@ const firstErrorMessage = computed(() => {
 });
 
 const getStageError = (stageId: number) => stageErrors.value.get(stageId);
-const getEntryError = (stageId: number, granularityId: number) => stageErrors.value.get(stageId)?.entryErrors.get(granularityId) ?? null;
+const getEntryError = (stageId: number, granularityId: string) =>
+  stageErrors.value.get(stageId)?.entryErrors.get(granularityId) ?? null;
 
-const granularityLabel = (granularityId: number) => {
+const granularityLabel = (granularityId: string) => {
   const granularity = granularities.value.find((item) => item.id === granularityId);
-  return granularity ? granularity.label : `粒度${granularityId}`;
+  const index = granularityIndexMap.value.get(granularityId);
+
+  if (!granularity) {
+    return index ? `#${index}` : "未定義の粒度";
+  }
+
+  return index ? `#${index} ${granularity.label}` : granularity.label;
 };
 
 const handleSave = async () => {
