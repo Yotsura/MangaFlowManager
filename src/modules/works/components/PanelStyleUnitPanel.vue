@@ -13,14 +13,7 @@
   />
 
   <!-- 中間ユニットの場合はパネル表示 -->
-  <div
-    v-else
-    class="unit-panel"
-    :class="{
-      'is-saving': isSaving,
-      [`level-${level}`]: true
-    }"
-  >
+  <div v-else class="unit-panel" :class="{ 'is-saving': isSaving, [`level-${level}`]: true }" >
     <!-- パネルヘッダー -->
     <div class="panel-header">
       <div class="panel-info">
@@ -54,14 +47,9 @@
 
           <!-- 葉ユニット追加ボタン -->
           <div v-if="isEditMode" class="add-leaf-unit">
-            <button
-              type="button"
-              class="add-leaf-button"
+            <button type="button" class="add-leaf-button"
               @click="$emit('add-child', { parentId: unit.id })"
-              title="コマを追加"
-            >
-              + コマ
-            </button>
+              title="コマを追加">+ </button>
           </div>
         </div>
 
@@ -85,25 +73,15 @@
 
           <!-- 子ユニット追加ボタン -->
           <div v-if="isEditMode" class="add-child-panel">
-            <button
-              type="button"
-              class="add-child-button"
-              @click="$emit('add-child', { parentId: unit.id })"
-            >
-              +
-            </button>
+            <button type="button" class="add-child-button"
+              @click="$emit('add-child', { parentId: unit.id })">+</button>
           </div>
         </div>
       </div>
 
       <div v-else-if="isEditMode" class="empty-children">
-        <button
-          type="button"
-          class="add-child-button large"
-          @click="$emit('add-child', { parentId: unit.id })"
-        >
-          + 子要素を追加
-        </button>
+        <button type="button" class="add-child-button large"
+          @click="$emit('add-child', { parentId: unit.id })">+</button>
       </div>
 
       <div v-else class="empty-children">

@@ -2,15 +2,6 @@
   <div class="panel-style-unit-editor">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h5 class="mb-0">作品構造</h5>
-      <!-- <div v-if="isEditMode" class="btn-group" role="group">
-        <button
-          type="button"
-          class="btn btn-sm btn-success"
-          @click="addRootUnit"
-        >
-          + ルートユニット追加
-        </button>
-      </div> -->
     </div>
 
     <div class="panels-container">
@@ -20,7 +11,6 @@
           <div v-else class="empty-text">ユニットなし</div>
         </div>
       </div>
-
       <div v-else class="units-grid">
         <PanelStyleUnitPanel
           v-for="unit in units"
