@@ -102,22 +102,16 @@ watch(
   { deep: true },
 );
 
-const hasValidationError = computed(() =>
-  formState.some((row) => row.enabled && (!row.start || !row.end || row.start >= row.end)),
-);
+const hasValidationError = computed(() => formState.some((row) => row.enabled && (!row.start || !row.end || row.start >= row.end)));
 
-const validationMessage = computed(() =>
-  hasValidationError.value ? "開始時刻は終了時刻より前に設定してください。" : null,
-);
+const validationMessage = computed(() => (hasValidationError.value ? "開始時刻は終了時刻より前に設定してください。" : null));
 
 const handleSubmit = async () => {
   if (hasValidationError.value) {
     return;
   }
 
-  const selectedHours = formState
-    .filter((row) => row.enabled)
-    .map((row) => ({ day: row.key, start: row.start, end: row.end }));
+  const selectedHours = formState.filter((row) => row.enabled).map((row) => ({ day: row.key, start: row.start, end: row.end }));
 
   if (!userId.value) {
     return;
@@ -134,9 +128,7 @@ const handleSubmit = async () => {
 
 <template>
   <form class="work-hours-form" @submit.prevent="handleSubmit">
-    <div v-if="isLoading" class="alert alert-info" role="status">
-      作業可能時間を読み込み中です...
-    </div>
+    <div v-if="isLoading" class="alert alert-info" role="status">作業可能時間を読み込み中です...</div>
     <div v-else-if="loadError" class="alert alert-danger" role="alert">
       {{ loadError }}
     </div>
@@ -145,38 +137,18 @@ const handleSubmit = async () => {
       <div v-for="row in formState" :key="row.key" class="list-group-item list-group-item-action">
         <div class="d-flex flex-column flex-md-row align-items-md-center gap-3">
           <div class="form-check">
-            <input
-              :id="`work-hours-${row.key}`"
-              v-model="row.enabled"
-              class="form-check-input"
-              type="checkbox"
-              :disabled="isLoading"
-            />
+            <input :id="`work-hours-${row.key}`" v-model="row.enabled" class="form-check-input" type="checkbox" :disabled="isLoading" />
             <label class="form-check-label" :for="`work-hours-${row.key}`">{{ row.label }}</label>
           </div>
 
           <div class="d-flex align-items-center gap-2 flex-wrap">
-            <input
-              v-model="row.start"
-              class="form-control"
-              type="time"
-              :disabled="!row.enabled || isLoading"
-              required
-            />
+            <input v-model="row.start" class="form-control" type="time" :disabled="!row.enabled || isLoading" required />
             <span class="text-muted">～</span>
-            <input
-              v-model="row.end"
-              class="form-control"
-              type="time"
-              :disabled="!row.enabled || isLoading"
-              required
-            />
+            <input v-model="row.end" class="form-control" type="time" :disabled="!row.enabled || isLoading" required />
           </div>
         </div>
 
-        <p v-if="row.enabled && row.start >= row.end" class="text-danger small mb-0 mt-2">
-          開始時刻は終了時刻より前にしてください。
-        </p>
+        <p v-if="row.enabled && row.start >= row.end" class="text-danger small mb-0 mt-2">開始時刻は終了時刻より前にしてください。</p>
       </div>
     </div>
 

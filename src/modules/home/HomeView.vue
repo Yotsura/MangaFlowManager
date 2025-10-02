@@ -10,7 +10,8 @@ const { displayName } = storeToRefs(authStore);
   <section class="container py-5">
     <div class="mb-4">
       <h1 class="h2 fw-semibold">
-        ようこそ<span v-if="displayName">、{{ displayName }}</span>！
+        ようこそ<span v-if="displayName">、{{ displayName }}</span
+        >！
       </h1>
       <p class="text-muted">Manga Flow Manager のダッシュボードです。</p>
     </div>

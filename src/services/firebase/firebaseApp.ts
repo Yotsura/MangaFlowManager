@@ -41,12 +41,4 @@ const getAnalyticsIfAvailable = async (): Promise<Analytics | null> => {
 
 const applyAuthPersistence = (persistence: Persistence = authPersistence.LOCAL) => setPersistence(projectAuth, persistence);
 
-export {
-  app,
-  projectAuth,
-  projectFirestore,
-  projectGoogleAuth,
-  authPersistence,
-  applyAuthPersistence,
-  getAnalyticsIfAvailable,
-};
+export { app, projectAuth, projectFirestore, projectGoogleAuth, authPersistence, applyAuthPersistence, getAnalyticsIfAvailable };

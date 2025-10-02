@@ -1,14 +1,6 @@
 import { createUserWithEmailAndPassword, onAuthStateChanged as firebaseOnAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut, type NextOrObserver, type User } from "firebase/auth";
 
-import {
-  app,
-  authPersistence,
-  applyAuthPersistence,
-  getAnalyticsIfAvailable,
-  projectAuth,
-  projectFirestore,
-  projectGoogleAuth,
-} from "./firebaseApp";
+import { app, authPersistence, applyAuthPersistence, getAnalyticsIfAvailable, projectAuth, projectFirestore, projectGoogleAuth } from "./firebaseApp";
 
 const signInWithEmail = (email: string, password: string) => signInWithEmailAndPassword(projectAuth, email, password);
 

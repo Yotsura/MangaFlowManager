@@ -18,14 +18,7 @@ const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 
 const { user } = storeToRefs(authStore);
-const {
-  granularities,
-  loadingGranularities,
-  savingGranularities,
-  granularitiesLoaded,
-  granularitiesLoadError,
-  granularitiesSaveError,
-} = storeToRefs(settingsStore);
+const { granularities, loadingGranularities, savingGranularities, granularitiesLoaded, granularitiesLoadError, granularitiesSaveError } = storeToRefs(settingsStore);
 
 const userId = computed(() => user.value?.uid ?? null);
 
@@ -157,9 +150,7 @@ const firstErrorMessage = computed(() => {
   return null;
 });
 
-const hasTouchedNewRow = computed(
-  () => newRowAttempted.value || !!newGranularity.label || newGranularity.weight !== "1",
-);
+const hasTouchedNewRow = computed(() => newRowAttempted.value || !!newGranularity.label || newGranularity.weight !== "1");
 
 const newRowValidationMessage = computed(() => {
   const trimmedLabel = newGranularity.label.trim();
@@ -262,55 +253,33 @@ const handleSave = async () => {
                 <span class="fw-semibold text-muted">#{{ index + 1 }}</span>
               </td>
               <td>
-                <input
-                  v-model="row.label"
-                  :class="['form-control', { 'is-invalid': getFieldError(row.id, 'label') } ]"
-                  type="text"
-                  placeholder="例: ページ単位"
-                  :disabled="isSaving"
-                />
+                <input v-model="row.label" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'label') }]" type="text" placeholder="例: ページ単位" :disabled="isSaving" />
               </td>
               <td>
-                <input
-                  v-model="row.weight"
-                  :class="['form-control', { 'is-invalid': getFieldError(row.id, 'weight') } ]"
-                  type="number"
-                  min="1"
-                  step="1"
-                  :disabled="isSaving"
-                />
+                <input v-model="row.weight" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'weight') }]" type="number" min="1" step="1" :disabled="isSaving" />
               </td>
               <td class="text-end">
-                <button class="btn btn-outline-danger" type="button" :disabled="isSaving" @click="removeRow(row.id)">
-                  削除
-                </button>
+                <button class="btn btn-outline-danger" type="button" :disabled="isSaving" @click="removeRow(row.id)">削除</button>
               </td>
             </tr>
             <tr class="table-light">
-              <td><span class="fw-semibold text-muted">#{{ editableRows.length + 1 }}</span></td>
+              <td>
+                <span class="fw-semibold text-muted">#{{ editableRows.length + 1 }}</span>
+              </td>
               <td>
                 <input
                   v-model="newGranularity.label"
-                  :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage } ]"
+                  :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]"
                   type="text"
                   placeholder="例: カット単位"
                   :disabled="isSaving"
                 />
               </td>
               <td>
-                <input
-                  v-model="newGranularity.weight"
-                  :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage } ]"
-                  type="number"
-                  min="1"
-                  step="1"
-                  :disabled="isSaving"
-                />
+                <input v-model="newGranularity.weight" :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]" type="number" min="1" step="1" :disabled="isSaving" />
               </td>
               <td class="text-end">
-                <button class="btn btn-outline-primary" type="button" :disabled="isSaving" @click="addRow">
-                  追加
-                </button>
+                <button class="btn btn-outline-primary" type="button" :disabled="isSaving" @click="addRow">追加</button>
               </td>
             </tr>
           </tbody>
@@ -319,10 +288,7 @@ const handleSave = async () => {
 
       <div class="d-flex flex-column flex-md-row gap-3 align-items-md-center justify-content-between mt-4">
         <div class="flex-grow-1">
-          <p
-            v-if="(saveAttempted || touched) && hasErrors && firstErrorMessage"
-            class="text-danger small mb-0"
-          >
+          <p v-if="(saveAttempted || touched) && hasErrors && firstErrorMessage" class="text-danger small mb-0">
             {{ firstErrorMessage }}
           </p>
           <p v-else-if="hasTouchedNewRow && newRowValidationMessage" class="text-danger small mb-0">
@@ -331,12 +297,7 @@ const handleSave = async () => {
           <p v-else-if="granularitiesSaveError" class="text-danger small mb-0">{{ granularitiesSaveError }}</p>
           <p v-else-if="saved" class="text-success small mb-0">保存しました。</p>
         </div>
-        <button
-          class="btn btn-primary ms-md-auto"
-          type="button"
-          :disabled="isSaving || editableRows.length === 0"
-          @click="handleSave"
-        >
+        <button class="btn btn-primary ms-md-auto" type="button" :disabled="isSaving || editableRows.length === 0" @click="handleSave">
           {{ isSaving ? "保存中..." : "変更を保存" }}
         </button>
       </div>

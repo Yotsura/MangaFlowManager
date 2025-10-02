@@ -12,8 +12,6 @@
       <button type="button" class="btn btn-primary" disabled>作品を追加</button>
     </div>
 
-    <div class="alert alert-secondary">
-      作品データの管理機能は今後実装予定です。Firestore との連携を予定しています。
-    </div>
+    <div class="alert alert-secondary">作品データの管理機能は今後実装予定です。Firestore との連携を予定しています。</div>
   </section>
 </template>

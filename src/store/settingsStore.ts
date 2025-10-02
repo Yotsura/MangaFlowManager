@@ -176,13 +176,7 @@ const normalizeGranularities = (items: unknown): NormalizedGranularitiesResult =
 
       const raw = entry as Record<string, unknown>;
 
-      const label = typeof raw.label === "string"
-        ? raw.label
-        : typeof raw.unit === "string"
-          ? raw.unit
-          : typeof raw.name === "string"
-            ? raw.name
-            : "";
+      const label = typeof raw.label === "string" ? raw.label : typeof raw.unit === "string" ? raw.unit : typeof raw.name === "string" ? raw.name : "";
 
       const weightValue = Number(raw.weight);
       const weight = Number.isFinite(weightValue) && weightValue > 0 ? Math.round(weightValue) : 1;
@@ -230,11 +224,7 @@ const normalizeGranularities = (items: unknown): NormalizedGranularitiesResult =
   return { items: normalized, migrationMap };
 };
 
-const normalizeStageWorkloads = (
-  items: unknown,
-  granularities: Granularity[],
-  migrationMap: GranularityIdMigrationMap,
-): StageWorkload[] => {
+const normalizeStageWorkloads = (items: unknown, granularities: Granularity[], migrationMap: GranularityIdMigrationMap): StageWorkload[] => {
   if (!Array.isArray(items) || items.length === 0) {
     return [];
   }
@@ -252,11 +242,7 @@ const normalizeStageWorkloads = (
       }
 
       const rawStage = entry as Record<string, unknown>;
-      const label = typeof rawStage.label === "string"
-        ? rawStage.label
-        : typeof rawStage.name === "string"
-          ? rawStage.name
-          : `ステージ${index + 1}`;
+      const label = typeof rawStage.label === "string" ? rawStage.label : typeof rawStage.name === "string" ? rawStage.name : `ステージ${index + 1}`;
 
       const rawStageId = rawStage.id;
       const stageId = Number.isFinite(rawStageId) ? Number(rawStageId) : index + 1;
@@ -286,14 +272,8 @@ const normalizeStageWorkloads = (
           }
 
           const hoursValue = rawItem.hours;
-          const hoursRaw =
-            typeof hoursValue === "number"
-              ? hoursValue
-              : typeof hoursValue === "string"
-                ? Number(hoursValue)
-                : null;
-          const normalizedHours =
-            hoursRaw !== null && Number.isFinite(hoursRaw) && hoursRaw >= 0 ? Number(hoursRaw.toFixed(2)) : null;
+          const hoursRaw = typeof hoursValue === "number" ? hoursValue : typeof hoursValue === "string" ? Number(hoursValue) : null;
+          const normalizedHours = hoursRaw !== null && Number.isFinite(hoursRaw) && hoursRaw >= 0 ? Number(hoursRaw.toFixed(2)) : null;
 
           return {
             granularityId: normalizedGranularityId,
@@ -344,7 +324,7 @@ export const useSettingsStore = defineStore("settings", {
     savingGranularities: false,
     granularitiesLoadError: null,
     granularitiesSaveError: null,
-  granularityIdMigrationMap: {},
+    granularityIdMigrationMap: {},
     stageWorkloads: [],
     stageWorkloadsLoaded: false,
     loadingStageWorkloads: false,
@@ -479,11 +459,7 @@ export const useSettingsStore = defineStore("settings", {
         }
 
         const document = await getDocument<StageWorkloadDocument>(buildStageWorkloadPath(userId));
-        const normalized = normalizeStageWorkloads(
-          document?.stages,
-          this.granularities,
-          this.granularityIdMigrationMap,
-        );
+        const normalized = normalizeStageWorkloads(document?.stages, this.granularities, this.granularityIdMigrationMap);
 
         if (normalized.length > 0) {
           this.stageWorkloads = alignStageEntries(normalized, this.granularities);

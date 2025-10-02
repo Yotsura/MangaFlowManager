@@ -73,9 +73,7 @@ const handleLogout = async () => {
                   <span class="d-block">{{ displayName || "ログイン中" }}</span>
                 </div>
 
-                <button v-if="isAuthenticated" type="button" class="btn btn-outline-light btn-sm" @click="handleLogout">
-                  ログアウト
-                </button>
+                <button v-if="isAuthenticated" type="button" class="btn btn-outline-light btn-sm" @click="handleLogout">ログアウト</button>
               </div>
             </div>
           </div>

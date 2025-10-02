@@ -221,18 +221,11 @@ const firstErrorMessage = computed(() => {
 });
 
 const getStageError = (stageId: number) => stageErrors.value.get(stageId);
-const getEntryError = (stageId: number, granularityId: string) =>
-  stageErrors.value.get(stageId)?.entryErrors.get(granularityId) ?? null;
+const getEntryError = (stageId: number, granularityId: string) => stageErrors.value.get(stageId)?.entryErrors.get(granularityId) ?? null;
 
 const granularityLabel = (granularityId: string) => {
   const granularity = granularities.value.find((item) => item.id === granularityId);
-  const index = granularityIndexMap.value.get(granularityId);
-
-  if (!granularity) {
-    return index ? `#${index}` : "未定義の粒度";
-  }
-
-  return index ? `#${index} ${granularity.label}` : granularity.label;
+  return granularity ? granularity.label : "未定義の粒度";
 };
 
 const handleSave = async () => {
@@ -307,58 +300,34 @@ const handleSave = async () => {
       {{ stageWorkloadsLoadError }}
     </div>
     <div v-else>
-      <div v-if="granularities.length === 0" class="alert alert-warning" role="alert">
-        作業粒度が設定されていません。先に粒度を追加してください。
-      </div>
+      <div v-if="granularities.length === 0" class="alert alert-warning" role="alert">作業粒度が設定されていません。先に粒度を追加してください。</div>
 
       <div v-else>
-        <div v-if="editableStages.length === 0" class="alert alert-secondary" role="alert">
-          作業段階がまだ登録されていません。下のボタンから追加できます。
-        </div>
+        <div v-if="editableStages.length === 0" class="alert alert-secondary" role="alert">作業段階がまだ登録されていません。下のボタンから追加できます。</div>
 
         <div v-for="stage in editableStages" :key="stage.id" class="card shadow-sm mb-3">
           <div class="card-body">
             <div class="d-flex flex-column flex-md-row align-items-md-center gap-3 mb-3">
               <span class="badge text-bg-secondary fs-6">#{{ stage.id }}</span>
               <div class="flex-grow-1">
-                <input
-                  v-model="stage.label"
-                  :class="['form-control', { 'is-invalid': showValidation && getStageError(stage.id)?.label } ]"
-                  type="text"
-                  placeholder="例: ネーム"
-                  :disabled="isSaving"
-                />
+                <input v-model="stage.label" :class="['form-control', { 'is-invalid': showValidation && getStageError(stage.id)?.label }]" type="text" placeholder="例: ネーム" :disabled="isSaving" />
                 <div v-if="showValidation && getStageError(stage.id)?.label" class="invalid-feedback d-block">
                   {{ getStageError(stage.id)?.label }}
                 </div>
               </div>
-              <button class="btn btn-outline-danger" type="button" :disabled="isSaving" @click="removeStage(stage.id)">
-                削除
-              </button>
+              <button class="btn btn-outline-danger" type="button" :disabled="isSaving" @click="removeStage(stage.id)">削除</button>
             </div>
 
             <div class="row g-3">
-              <div
-                v-for="entry in stage.entries"
-                :key="`${stage.id}-${entry.granularityId}`"
-                class="col-12 col-sm-6 col-lg-4"
-              >
+              <div v-for="entry in stage.entries" :key="`${stage.id}-${entry.granularityId}`" class="col-12 col-sm-6 col-lg-4">
                 <label class="form-label mb-1">{{ granularityLabel(entry.granularityId) }}</label>
                 <div class="input-group">
-                  <input
-                    v-model="entry.hours"
-                    :class="['form-control', { 'is-invalid': showValidation && getEntryError(stage.id, entry.granularityId) } ]"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    :disabled="isSaving"
-                  />
+                  <input v-model="entry.hours"
+                    :class="['form-control', { 'is-invalid': showValidation && getEntryError(stage.id, entry.granularityId) }]"
+                    type="number" min="0" step="0.1" :disabled="isSaving"/>
                   <span class="input-group-text">h</span>
                 </div>
-                <div
-                  v-if="showValidation && getEntryError(stage.id, entry.granularityId)"
-                  class="invalid-feedback d-block"
-                >
+                <div v-if="showValidation && getEntryError(stage.id, entry.granularityId)" class="invalid-feedback d-block">
                   {{ getEntryError(stage.id, entry.granularityId) }}
                 </div>
               </div>
@@ -367,32 +336,17 @@ const handleSave = async () => {
         </div>
 
         <div class="d-flex flex-column flex-md-row align-items-md-center gap-3 mt-4">
-          <button
-            class="btn btn-outline-secondary"
-            type="button"
-            :disabled="isSaving || granularities.length === 0"
-            @click="addStage"
-          >
-            新規作業段階追加
-          </button>
+          <button class="btn btn-outline-secondary" type="button" :disabled="isSaving || granularities.length === 0" @click="addStage">新規作業段階追加</button>
 
           <div class="flex-grow-1">
-            <p
-              v-if="showValidation && hasErrors && firstErrorMessage"
-              class="text-danger small mb-0"
-            >
+            <p v-if="showValidation && hasErrors && firstErrorMessage" class="text-danger small mb-0">
               {{ firstErrorMessage }}
             </p>
             <p v-else-if="stageWorkloadsSaveError" class="text-danger small mb-0">{{ stageWorkloadsSaveError }}</p>
             <p v-else-if="saved" class="text-success small mb-0">保存しました。</p>
           </div>
 
-          <button
-            class="btn btn-primary ms-md-auto"
-            type="button"
-            :disabled="isSaving || editableStages.length === 0"
-            @click="handleSave"
-          >
+          <button class="btn btn-primary ms-md-auto" type="button" :disabled="isSaving || editableStages.length === 0" @click="handleSave">
             {{ isSaving ? "保存中..." : "設定を保存" }}
           </button>
         </div>
