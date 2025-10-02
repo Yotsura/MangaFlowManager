@@ -1,0 +1,6 @@
+// Bootstrap customization entry point.
+// Use this file to override Bootstrap variables before importing the library.
+@import "./variables";
+
+// Add Bootstrap after variable overrides.
+@import "bootstrap/scss/bootstrap";

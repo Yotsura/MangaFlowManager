@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 
-import { useAuthStore } from "@/stores/auth";
+import { useAuthStore } from "@/store/authStore";
 
 const router = useRouter();
 const route = useRoute();
@@ -92,7 +92,7 @@ const clearMessages = () => {
         <div class="col-12 col-md-8 col-lg-5">
           <div class="card shadow-sm border-0">
             <div class="card-body p-4 p-md-5">
-              <h1 class="h4 mb-3 text-center">MangaFlow Manager</h1>
+              <h1 class="h4 mb-3 text-center">Manga Flow Manager</h1>
               <p class="text-muted text-center mb-4">
                 {{ isRegisterMode ? "アカウントを作成" : "サインイン" }}
               </p>
@@ -100,20 +100,17 @@ const clearMessages = () => {
               <form @submit.prevent="submit" @keydown.enter="clearMessages">
                 <div class="mb-3">
                   <label for="email" class="form-label">メールアドレス</label>
-                  <input id="email" v-model="form.email" type="email" class="form-control"
-                    placeholder="you@example.com" autocomplete="email" required />
+                  <input id="email" v-model="form.email" type="email" class="form-control" placeholder="you@example.com" autocomplete="email" required />
                 </div>
 
                 <div class="mb-3">
                   <label for="password" class="form-label">パスワード</label>
-                  <input id="password" v-model="form.password" type="password" class="form-control"
-                    placeholder="8文字以上" autocomplete="current-password" minlength="6" required />
+                  <input id="password" v-model="form.password" type="password" class="form-control" placeholder="8文字以上" autocomplete="current-password" minlength="6" required />
                 </div>
 
                 <div v-if="isRegisterMode" class="mb-3">
                   <label for="confirmPassword" class="form-label">パスワード（確認）</label>
-                  <input id="confirmPassword" v-model="form.confirmPassword" type="password"
-                    class="form-control" autocomplete="new-password" minlength="6" required />
+                  <input id="confirmPassword" v-model="form.confirmPassword" type="password" class="form-control" autocomplete="new-password" minlength="6" required />
                 </div>
 
                 <div v-if="localError || lastError" class="alert alert-danger" role="alert">

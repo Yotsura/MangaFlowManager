@@ -53,6 +53,25 @@ firebase emulators:start --only auth,firestore
 - 認証済みユーザーのみホームやその他の画面へアクセスでき、未認証の場合は自動的にログインページへリダイレクトされます。
 - ログアウトはヘッダー右上のボタンから行えます。
 
+## ディレクトリ構成（抜粋）
+
+```
+src/
+├─ layouts/                  # 画面全体のレイアウト（Auth / Default）
+├─ modules/                  # 機能モジュール単位の画面とUI部品
+│  ├─ auth/                  # 認証画面とフォーム
+│  ├─ home/                  # ダッシュボード
+│  ├─ calendar/              # カレンダー関連（工数計算など）
+│  ├─ works/                 # 作品一覧・詳細・ページ進捗
+│  └─ settings/              # 作業時間・粒度・工数の設定
+├─ store/                    # Pinia ストア（auth / works / calendar / settings）
+├─ services/firebase/        # Firebase 初期化と API ラッパー
+├─ composables/              # Composition API ベースの再利用ロジック
+├─ utils/                    # ユーティリティ（日時・工数計算など）
+├─ styles/                   # Bootstrap カスタマイズとテーマ変数
+└─ types/                    # Firestore モデル・アプリ固有の型
+```
+
 ## Project Setup
 
 ```sh

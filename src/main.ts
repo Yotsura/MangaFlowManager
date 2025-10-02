@@ -1,5 +1,5 @@
 import "./assets/main.css";
-import "bootstrap/dist/css/bootstrap.min.css";
+import "@/styles/bootstrap.scss";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 
 import { createApp } from "vue";
@@ -7,7 +7,7 @@ import { createPinia } from "pinia";
 
 import App from "./App.vue";
 import router from "./router";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthStore } from "@/store/authStore";
 
 const bootstrap = async () => {
   const app = createApp(App);
