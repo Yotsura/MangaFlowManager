@@ -1,5 +1,11 @@
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
+const HEX_COLOR_REGEX = /^#?([0-9a-fA-F]{6})$/;
+
+const toHex = (value: number) => value.toString(16).padStart(2, "0");
+
+const rgbToHex = (r: number, g: number, b: number) => `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+
 const hslToRgb = (h: number, s: number, l: number): [number, number, number] => {
   if (s === 0) {
     return [l, l, l];
@@ -25,18 +31,60 @@ const hslToRgb = (h: number, s: number, l: number): [number, number, number] => 
   return [r, g, b];
 };
 
-const contrastTextFromHsl = (hue: number, saturation: number, lightness: number) => {
-  const [r, g, b] = hslToRgb(hue / 360, saturation / 100, lightness / 100);
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance > 0.6 ? "#212529" : "#ffffff";
+const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
+  const match = HEX_COLOR_REGEX.exec(hex);
+  if (!match) {
+    return { r: 222, g: 226, b: 230 };
+  }
+
+  const value = match[1];
+  if (!value) {
+    return { r: 222, g: 226, b: 230 };
+  }
+
+  const normalized = value.toLowerCase();
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+
+  return { r, g, b };
 };
 
-export const stageColorFor = (stageIndex: number, stageCount: number) => {
+const relativeLuminance = (r: number, g: number, b: number) => {
+  const normalizeComponent = (component: number) => {
+    const normalized = component / 255;
+    return normalized <= 0.03928 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4);
+  };
+
+  const rn = normalizeComponent(r);
+  const gn = normalizeComponent(g);
+  const bn = normalizeComponent(b);
+
+  return 0.2126 * rn + 0.7152 * gn + 0.0722 * bn;
+};
+
+const sanitizeHex = (value: string | null | undefined) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const match = HEX_COLOR_REGEX.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  const group = match[1];
+  if (!group) {
+    return null;
+  }
+  return `#${group.toLowerCase()}`;
+};
+
+const FALLBACK_NEUTRAL_COLOR = "#dee2e6";
+const DARK_TEXT = "#212529";
+const LIGHT_TEXT = "#ffffff";
+
+export const getDefaultStageColor = (stageIndex: number, stageCount: number): string => {
   if (stageCount <= 0 || stageIndex < 0) {
-    return {
-      backgroundColor: "#dee2e6",
-      textColor: "#495057",
-    };
+    return FALLBACK_NEUTRAL_COLOR;
   }
 
   const maxIndex = Math.max(stageCount - 1, 1);
@@ -44,16 +92,35 @@ export const stageColorFor = (stageIndex: number, stageCount: number) => {
   const ratio = maxIndex === 0 ? 1 : boundedIndex / maxIndex;
 
   const hue = 0 + (120 - 0) * ratio;
-  const saturation = 70;
-  const lightness = 52;
+  const saturation = 0.7;
+  const lightness = 0.52;
+
+  const [r, g, b] = hslToRgb(hue / 360, saturation, lightness);
+
+  return rgbToHex(Math.round(r * 255), Math.round(g * 255), Math.round(b * 255));
+};
+
+export const normalizeStageColorValue = (value: string | null | undefined, stageIndex: number, stageCount: number): string => {
+  const sanitized = sanitizeHex(value);
+  if (sanitized) {
+    return sanitized;
+  }
+  return getDefaultStageColor(stageIndex, stageCount);
+};
+
+export const stageColorFor = (stageIndex: number, stageCount: number, overrideColor?: string) => {
+  const backgroundColor = normalizeStageColorValue(overrideColor, stageIndex, stageCount);
+  const { r, g, b } = hexToRgb(backgroundColor);
+  const luminance = relativeLuminance(r, g, b);
+  const textColor = luminance > 0.6 ? DARK_TEXT : LIGHT_TEXT;
 
   return {
-    backgroundColor: `hsl(${Math.round(hue)}deg, ${saturation}%, ${lightness}%)`,
-    textColor: contrastTextFromHsl(hue, saturation, lightness),
+    backgroundColor,
+    textColor,
   };
 };
 
-export const stageBorderColorFor = (stageIndex: number, stageCount: number) => {
-  const { backgroundColor } = stageColorFor(stageIndex, stageCount);
+export const stageBorderColorFor = (stageIndex: number, stageCount: number, overrideColor?: string) => {
+  const { backgroundColor } = stageColorFor(stageIndex, stageCount, overrideColor);
   return backgroundColor;
 };

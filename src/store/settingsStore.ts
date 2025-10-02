@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 
+import { getDefaultStageColor, normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { getDocument, setDocument } from "@/services/firebase/firestoreService";
 import { generateId } from "@/utils/id";
 
@@ -31,11 +32,26 @@ interface StageWorkloadEntry {
 interface StageWorkload {
   id: number;
   label: string;
+  color: string;
   entries: StageWorkloadEntry[];
 }
 
+interface StageWorkloadCandidate {
+  id: number;
+  label: string;
+  color: string | null;
+  entries: StageWorkloadEntry[];
+}
+
+interface StageWorkloadDocumentStage {
+  id?: number;
+  label?: string;
+  color?: string;
+  entries?: unknown;
+}
+
 interface StageWorkloadDocument {
-  stages: StageWorkload[];
+  stages: StageWorkloadDocumentStage[];
 }
 
 interface SettingsState {
@@ -137,10 +153,13 @@ const createDefaultGranularities = (): Granularity[] =>
     weight: template.weight,
   }));
 
-const createDefaultStageWorkloads = (granularities: Granularity[]): StageWorkload[] =>
-  DEFAULT_STAGE_TEMPLATES.map((template, stageIndex) => ({
+const createDefaultStageWorkloads = (granularities: Granularity[]): StageWorkload[] => {
+  const totalStages = DEFAULT_STAGE_TEMPLATES.length;
+
+  return DEFAULT_STAGE_TEMPLATES.map((template, stageIndex) => ({
     id: stageIndex + 1,
     label: template.label,
+    color: getDefaultStageColor(stageIndex, totalStages),
     entries: template.entries
       .map((entry) => {
         const target = granularities[entry.granularityIndex];
@@ -154,6 +173,7 @@ const createDefaultStageWorkloads = (granularities: Granularity[]): StageWorkloa
       })
       .filter((item): item is StageWorkloadEntry => item !== null),
   }));
+};
 
 interface NormalizedGranularitiesResult {
   items: Granularity[];
@@ -247,6 +267,8 @@ const normalizeStageWorkloads = (items: unknown, granularities: Granularity[], m
       const rawStageId = rawStage.id;
       const stageId = Number.isFinite(rawStageId) ? Number(rawStageId) : index + 1;
 
+      const colorValue = typeof rawStage.color === "string" ? rawStage.color : null;
+
       const entriesRaw = Array.isArray(rawStage.entries) ? rawStage.entries : [];
       const entries: StageWorkloadEntry[] = entriesRaw
         .map((item) => {
@@ -285,22 +307,29 @@ const normalizeStageWorkloads = (items: unknown, granularities: Granularity[], m
       return {
         id: stageId,
         label,
+        color: colorValue,
         entries,
-      } satisfies StageWorkload;
+      } as StageWorkloadCandidate;
     })
-    .filter((item): item is StageWorkload => item !== null);
+    .filter((item): item is StageWorkloadCandidate => item !== null);
+
+  const totalStages = normalized.length;
 
   return normalized.map((stage, index) => ({
     id: index + 1,
     label: stage.label,
+    color: normalizeStageColorValue(stage.color, index, totalStages),
     entries: stage.entries,
   }));
 };
 
-const alignStageEntries = (stages: StageWorkload[], granularities: Granularity[]): StageWorkload[] =>
-  stages.map((stage, index) => ({
+const alignStageEntries = (stages: StageWorkload[], granularities: Granularity[]): StageWorkload[] => {
+  const totalStages = stages.length;
+
+  return stages.map((stage, index) => ({
     id: index + 1,
     label: stage.label,
+    color: normalizeStageColorValue(stage.color, index, totalStages),
     entries: granularities.map((granularity) => {
       const existing = stage.entries.find((entry) => entry.granularityId === granularity.id);
       return {
@@ -309,6 +338,7 @@ const alignStageEntries = (stages: StageWorkload[], granularities: Granularity[]
       } satisfies StageWorkloadEntry;
     }),
   }));
+};
 
 export const useSettingsStore = defineStore("settings", {
   state: (): SettingsState => ({

@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 
+import { getDefaultStageColor, normalizeStageColorValue, stageColorFor } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 
@@ -13,6 +14,7 @@ interface EditableEntry {
 interface EditableStage {
   id: number;
   label: string;
+  color: string;
   entries: EditableEntry[];
 }
 
@@ -95,13 +97,27 @@ const formatHours = (value: number | null | undefined) => {
 };
 
 const syncEditableStages = () => {
-  if (!stageWorkloadsLoaded.value || granularities.value.length === 0) {
+  if (!stageWorkloadsLoaded.value) {
     return;
   }
+
+  if (granularities.value.length === 0) {
+    isSyncingFromStore.value = true;
+    editableStages.value = [];
+    touched.value = false;
+    saveAttempted.value = false;
+    nextTick(() => {
+      isSyncingFromStore.value = false;
+    });
+    return;
+  }
+
+  const totalStages = stageWorkloads.value.length;
 
   const mapped: EditableStage[] = stageWorkloads.value.map((stage, index) => ({
     id: index + 1,
     label: stage.label,
+    color: normalizeStageColorValue(stage.color, index, totalStages),
     entries: granularities.value.map((granularity) => {
       const entry = stage.entries.find((item) => item.granularityId === granularity.id);
       return {
@@ -120,9 +136,13 @@ const syncEditableStages = () => {
   });
 };
 
-watch([stageWorkloads, granularities], () => {
-  syncEditableStages();
-});
+watch(
+  [stageWorkloads, granularities, stageWorkloadsLoaded],
+  () => {
+    syncEditableStages();
+  },
+  { deep: true, immediate: true },
+);
 
 watch(
   editableStages,
@@ -143,11 +163,13 @@ const addStage = () => {
   }
 
   const nextId = editableStages.value.length + 1;
+  const color = getDefaultStageColor(nextId - 1, nextId);
   editableStages.value = [
     ...editableStages.value,
     {
       id: nextId,
       label: "",
+      color,
       entries: granularities.value.map((granularity) => ({
         granularityId: granularity.id,
         hours: "",
@@ -230,6 +252,19 @@ const granularityLabel = (granularityId: string) => {
   return granularity ? granularity.label : "未定義の粒度";
 };
 
+const stageCountForColor = () => Math.max(editableStages.value.length || stageWorkloads.value.length || 1, 1);
+
+const resolvedStageColor = (stage: EditableStage) => normalizeStageColorValue(stage.color, stage.id - 1, stageCountForColor());
+
+const stageBadgeStyle = (stage: EditableStage) => {
+  const { backgroundColor, textColor } = stageColorFor(stage.id - 1, stageCountForColor(), stage.color);
+  return {
+    backgroundColor,
+    color: textColor,
+    borderColor: backgroundColor,
+  };
+};
+
 const handleSave = async () => {
   saveAttempted.value = true;
 
@@ -241,9 +276,11 @@ const handleSave = async () => {
     return;
   }
 
+  const totalStages = editableStages.value.length;
   const payload = editableStages.value.map((stage, index) => ({
     id: index + 1,
     label: stage.label.trim(),
+    color: normalizeStageColorValue(stage.color, index, totalStages),
     entries: stage.entries.map((entry) => ({
       granularityId: entry.granularityId,
       hours: entry.hours === "" ? null : Number(entry.hours),
@@ -316,7 +353,22 @@ defineExpose({
         <div v-for="stage in editableStages" :key="stage.id" class="card shadow-sm mb-3">
           <div class="card-body">
             <div class="stage-line">
-              <span class="badge text-bg-secondary fs-6 stage-index">#{{ stage.id }}</span>
+              <div class="stage-meta">
+                <span class="badge fs-6 stage-index" :style="stageBadgeStyle(stage)">#{{ stage.id }}</span>
+                <div class="stage-color-picker">
+                  <span class="stage-color-label">ヒートマップカラー</span>
+                  <div class="stage-color-input-group">
+                    <input
+                      v-model="stage.color"
+                      type="color"
+                      class="form-control form-control-color stage-color-input"
+                      :disabled="isSaving"
+                      :aria-label="`ステージ${stage.id}のヒートマップカラー`"
+                    />
+                    <span class="stage-color-code">{{ resolvedStageColor(stage).toUpperCase() }}</span>
+                  </div>
+                </div>
+              </div>
 
               <div class="stage-name">
                 <input
@@ -391,7 +443,7 @@ defineExpose({
 .stage-line {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem 1rem;
 }
 
@@ -400,6 +452,51 @@ defineExpose({
   align-items: center;
   justify-content: center;
   min-height: 2rem;
+  border: 1px solid transparent;
+}
+
+.stage-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 8rem;
+}
+
+.stage-color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stage-color-label {
+  font-size: 0.75rem;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.stage-color-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stage-color-input {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid #ced4da;
+  background-color: #fff;
+}
+
+.stage-color-input:disabled {
+  opacity: 0.65;
+}
+
+.stage-color-code {
+  font-size: 0.75rem;
+  font-family: var(--bs-font-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+  color: #495057;
 }
 
 .stage-name {

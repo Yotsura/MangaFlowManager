@@ -16,6 +16,7 @@ const props = defineProps<{
   pages: WorkPage[];
   stageLabels: string[];
   stageCount: number;
+  stageColors?: string[];
   defaultPanels: number;
 }>();
 
@@ -120,7 +121,8 @@ const progressRatio = (page: WorkPage) => {
 const progressPercent = (page: WorkPage) => Math.round(progressRatio(page) * 100);
 
 const progressStyle = (page: WorkPage) => {
-  const { backgroundColor, textColor } = stageColorFor(page.stageIndex, props.stageCount);
+  const override = props.stageColors?.[page.stageIndex];
+  const { backgroundColor, textColor } = stageColorFor(page.stageIndex, props.stageCount, override);
   return {
     width: `${progressPercent(page)}%`,
     backgroundColor,

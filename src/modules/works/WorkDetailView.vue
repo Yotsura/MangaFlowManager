@@ -7,6 +7,7 @@ import PagePanel from "./components/PagePanel.vue";
 import ProgressHeatmap from "./components/ProgressHeatmap.vue";
 import WorkSummaryCard from "./components/WorkSummaryCard.vue";
 
+import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { WORK_STATUSES, useWorksStore, type WorkStatus } from "@/store/worksStore";
@@ -32,6 +33,10 @@ const {
 const work = computed(() => worksStore.getWorkById(workId));
 
 const stageLabels = computed(() => stageWorkloads.value.map((stage) => stage.label));
+const stageColors = computed(() => {
+  const total = stageWorkloads.value.length;
+  return stageWorkloads.value.map((stage, index) => normalizeStageColorValue(stage.color, index, total));
+});
 const stageCount = computed(() => stageLabels.value.length);
 
 const primaryGranularityLabel = computed(() => {
@@ -344,6 +349,7 @@ const formatDate = (value: string) => {
               <PagePanel
                 :pages="work.pages"
                 :stage-labels="stageLabels"
+                :stage-colors="stageColors"
                 :stage-count="stageCount"
                 :default-panels="work.defaultPanelsPerPage"
                 @advance="advanceStage"
@@ -382,7 +388,7 @@ const formatDate = (value: string) => {
                 <h2 class="h5 mb-0">進捗ヒートマップ</h2>
                 <span class="badge text-bg-light">更新: {{ formatDate(work.updatedAt) }}</span>
               </div>
-              <ProgressHeatmap :pages="work.pages" :stage-count="stageCount" :stage-labels="stageLabels" />
+              <ProgressHeatmap :pages="work.pages" :stage-count="stageCount" :stage-labels="stageLabels" :stage-colors="stageColors" />
             </div>
           </div>
         </div>

@@ -8,12 +8,14 @@ const props = defineProps<{
   pages: WorkPage[];
   stageCount: number;
   stageLabels: string[];
+  stageColors?: string[];
 }>();
 
 const sortedPages = computed(() => [...props.pages].sort((a, b) => a.index - b.index));
 
 const cellStyle = (page: WorkPage) => {
-  const { backgroundColor, textColor } = stageColorFor(page.stageIndex, props.stageCount);
+  const override = props.stageColors?.[page.stageIndex];
+  const { backgroundColor, textColor } = stageColorFor(page.stageIndex, props.stageCount, override);
   return {
     backgroundColor,
     color: textColor,
