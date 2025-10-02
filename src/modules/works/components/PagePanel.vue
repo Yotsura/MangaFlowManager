@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
 
+import { stageColorFor } from "@/modules/works/utils/stageColor";
 import type { WorkPage } from "@/store/worksStore";
 
 const FIRST_ROW_SLOTS = 4;
@@ -118,21 +119,13 @@ const progressRatio = (page: WorkPage) => {
 
 const progressPercent = (page: WorkPage) => Math.round(progressRatio(page) * 100);
 
-const heatmapClass = (page: WorkPage) => {
-  const ratio = progressRatio(page);
-  if (ratio === 0) {
-    return "heatmap-none";
-  }
-  if (ratio < 0.34) {
-    return "heatmap-low";
-  }
-  if (ratio < 0.67) {
-    return "heatmap-mid";
-  }
-  if (ratio < 1) {
-    return "heatmap-high";
-  }
-  return "heatmap-complete";
+const progressStyle = (page: WorkPage) => {
+  const { backgroundColor, textColor } = stageColorFor(page.stageIndex, props.stageCount);
+  return {
+    width: `${progressPercent(page)}%`,
+    backgroundColor,
+    color: textColor,
+  };
 };
 
 const updatePanelCount = (pageId: string, value: string) => {
@@ -181,7 +174,7 @@ const cellKey = (cell: RenderCell, index: number) => {
             </div>
 
             <div class="progress" role="progressbar" :aria-valuenow="progressPercent(cell.page)" aria-valuemin="0" aria-valuemax="100">
-              <div class="progress-bar" :class="heatmapClass(cell.page)" :style="{ width: `${progressPercent(cell.page)}%` }">
+              <div class="progress-bar" :style="progressStyle(cell.page)">
                 {{ progressPercent(cell.page) }}%
               </div>
             </div>
@@ -304,30 +297,6 @@ const cellKey = (cell: RenderCell, index: number) => {
   line-height: 0.7rem;
 }
 
-.heatmap-none {
-  background-color: #dee2e6;
-  color: #495057;
-}
-
-.heatmap-low {
-  background-color: #f8d7da;
-  color: #842029;
-}
-
-.heatmap-mid {
-  background-color: #fff3cd;
-  color: #856404;
-}
-
-.heatmap-high {
-  background-color: #cfe2ff;
-  color: #084298;
-}
-
-.heatmap-complete {
-  background-color: #d1e7dd;
-  color: #0f5132;
-}
 
 @media (max-width: 991.98px) {
   .page-row--first {
