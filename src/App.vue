@@ -1,85 +1,110 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from './components/HelloWorld.vue'
+import { storeToRefs } from "pinia";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+
+import { useAuthStore } from "@/stores/auth";
+
+const authStore = useAuthStore();
+const { initializing, isAuthenticated, displayName } = storeToRefs(authStore);
+const route = useRoute();
+const router = useRouter();
+
+const handleLogout = async () => {
+  try {
+    await authStore.logout();
+    if (route.name !== "login") {
+      await router.push({ name: "login" });
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const isLoginRoute = () => route.name === "login";
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
+  <div class="app d-flex flex-column min-vh-100">
+    <header class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+      <div class="container-fluid">
+        <RouterLink class="navbar-brand" to="/">MangaFlow Manager</RouterLink>
 
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
 
-      <nav>
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
-      </nav>
-    </div>
-  </header>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0" v-if="isAuthenticated">
+            <li class="nav-item">
+              <RouterLink class="nav-link" to="/">ホーム</RouterLink>
+            </li>
+            <li class="nav-item">
+              <RouterLink class="nav-link" to="/about">アプリについて</RouterLink>
+            </li>
+          </ul>
 
-  <RouterView />
+          <div class="d-flex align-items-center gap-3 ms-auto">
+            <div v-if="isAuthenticated" class="text-end text-light small">
+              <span class="d-block">{{ displayName || "ログイン中" }}</span>
+            </div>
+
+            <button
+              v-if="isAuthenticated"
+              type="button"
+              class="btn btn-outline-light btn-sm"
+              @click="handleLogout"
+            >
+              ログアウト
+            </button>
+
+            <RouterLink
+              v-else-if="!isLoginRoute()"
+              class="btn btn-outline-light btn-sm"
+              to="/login"
+            >
+              ログイン
+            </RouterLink>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-fill">
+      <section v-if="initializing" class="py-5 text-center">
+        <div class="spinner-border text-primary mb-3" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted">認証状態を確認しています...</p>
+      </section>
+
+      <RouterView v-else />
+    </main>
+
+    <footer class="bg-light py-3 mt-auto border-top">
+      <div class="container text-center text-muted small">
+        © {{ new Date().getFullYear() }} MangaFlow Manager
+      </div>
+    </footer>
+  </div>
 </template>
 
 <style scoped>
-header {
-  line-height: 1.5;
-  max-height: 100vh;
+.app {
+  background-color: #f8f9fa;
 }
 
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
-}
-
-nav {
-  width: 100%;
-  font-size: 12px;
-  text-align: center;
-  margin-top: 2rem;
-}
-
-nav a.router-link-exact-active {
-  color: var(--color-text);
-}
-
-nav a.router-link-exact-active:hover {
-  background-color: transparent;
-}
-
-nav a {
-  display: inline-block;
-  padding: 0 1rem;
-  border-left: 1px solid var(--color-border);
-}
-
-nav a:first-of-type {
-  border: 0;
-}
-
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-  }
-
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  nav {
-    text-align: left;
-    margin-left: -1rem;
-    font-size: 1rem;
-
-    padding: 1rem 0;
-    margin-top: 1rem;
+@media (min-width: 992px) {
+  .navbar .navbar-nav .nav-link {
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 }
 </style>
