@@ -54,6 +54,23 @@ const canSaveWork = computed(() => (work.value ? worksStore.isWorkDirty(work.val
 const saveErrorMessage = computed(() => (work.value ? worksStore.getSaveError(work.value.id) : null));
 
 const lastSaveStatus = ref<string | null>(null);
+const isEditMode = ref(false);
+
+const toggleEditMode = () => {
+  isEditMode.value = !isEditMode.value;
+
+  // 編集モードを出る際に未保存の変更を破棄
+  if (!isEditMode.value && work.value && canSaveWork.value) {
+    worksStore.discardWorkChanges(work.value.id);
+    // フォームを元の値に戻す
+    if (work.value) {
+      detailForm.title = work.value.title;
+      detailForm.status = work.value.status;
+      detailForm.startDate = work.value.startDate;
+      detailForm.deadline = work.value.deadline;
+    }
+  }
+};
 
 watch(
   canSaveWork,
@@ -158,7 +175,7 @@ watch(
 watch(
   () => detailForm.title,
   (value) => {
-    if (work.value && value !== work.value.title) {
+    if (isEditMode.value && work.value && value !== work.value.title) {
       worksStore.updateWork(work.value.id, { title: value });
     }
   },
@@ -167,7 +184,7 @@ watch(
 watch(
   () => detailForm.status,
   (value) => {
-    if (work.value && value !== work.value.status) {
+    if (isEditMode.value && work.value && value !== work.value.status) {
       worksStore.updateWork(work.value.id, { status: value });
     }
   },
@@ -176,7 +193,7 @@ watch(
 watch(
   () => detailForm.startDate,
   (value) => {
-    if (work.value && value !== work.value.startDate) {
+    if (isEditMode.value && work.value && value !== work.value.startDate) {
       worksStore.updateWork(work.value.id, { startDate: value });
     }
   },
@@ -185,7 +202,7 @@ watch(
 watch(
   () => detailForm.deadline,
   (value) => {
-    if (work.value && value !== work.value.deadline) {
+    if (isEditMode.value && work.value && value !== work.value.deadline) {
       worksStore.updateWork(work.value.id, { deadline: value });
     }
   },
@@ -332,21 +349,42 @@ const formatDate = (value: string) => {
               <div class="row g-3">
                 <div class="col-12 col-md-6 col-xl-4">
                   <label class="form-label" for="detail-title">タイトル</label>
-                  <input id="detail-title" v-model="detailForm.title" type="text" class="form-control" placeholder="作品タイトル" />
+                  <input
+                    id="detail-title"
+                    v-model="detailForm.title"
+                    type="text"
+                    class="form-control"
+                    placeholder="作品タイトル"
+                    :readonly="!isEditMode"
+                  />
                 </div>
                 <div class="col-12 col-md-3 col-xl-2">
                   <label class="form-label" for="detail-status">ステータス</label>
-                  <select id="detail-status" v-model="detailForm.status" class="form-select">
+                  <select id="detail-status" v-model="detailForm.status" class="form-select" :disabled="!isEditMode">
                     <option v-for="option in WORK_STATUSES" :key="option" :value="option">{{ option }}</option>
                   </select>
                 </div>
                 <div class="col-12 col-md-3 col-xl-2">
                   <label class="form-label" for="detail-start">開始日</label>
-                  <input id="detail-start" v-model="detailForm.startDate" type="date" class="form-control" :max="detailForm.deadline || undefined" />
+                  <input
+                    id="detail-start"
+                    v-model="detailForm.startDate"
+                    type="date"
+                    class="form-control"
+                    :max="detailForm.deadline || undefined"
+                    :readonly="!isEditMode"
+                  />
                 </div>
                 <div class="col-12 col-md-3 col-xl-2">
                   <label class="form-label" for="detail-deadline">締め切り</label>
-                  <input id="detail-deadline" v-model="detailForm.deadline" type="date" class="form-control" :min="detailForm.startDate || undefined" />
+                  <input
+                    id="detail-deadline"
+                    v-model="detailForm.deadline"
+                    type="date"
+                    class="form-control"
+                    :min="detailForm.startDate || undefined"
+                    :readonly="!isEditMode"
+                  />
                 </div>
                 <div class="col-12 col-md-6 col-xl-2">
                   <label class="form-label">推定総工数</label>
@@ -373,6 +411,7 @@ const formatDate = (value: string) => {
                 :stage-colors="stageColors"
                 :stage-count="stageCount"
                 :default-panels="work.defaultPanelsPerPage"
+                :is-edit-mode="isEditMode"
                 @advance="advanceStage"
                 @update-panel="updatePanelCount"
                 @move-page="movePage"
@@ -397,8 +436,10 @@ const formatDate = (value: string) => {
                 :can-save="canSaveWork"
                 :save-error="saveErrorMessage"
                 :last-save-status="lastSaveStatus"
+                :is-edit-mode="isEditMode"
                 @request-save="handleSave"
                 @request-delete="requestWorkDeletion"
+                @toggle-edit-mode="toggleEditMode"
               />
             </div>
           </div>

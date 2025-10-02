@@ -18,6 +18,7 @@ const props = defineProps<{
   stageCount: number;
   stageColors?: string[];
   defaultPanels: number;
+  isEditMode?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -171,7 +172,7 @@ const cellKey = (cell: RenderCell, index: number) => {
                 <button type="button" class="btn btn-sm btn-outline-primary" :disabled="stageCount === 0" @click="emit('advance', cell.page.id)">
                   {{ stageLabelFor(cell.page) }}
                 </button>
-                <button type="button" class="btn btn-sm btn-outline-danger" @click="emit('remove-page', cell.page.id)">削除</button>
+                <button v-if="isEditMode" type="button" class="btn btn-sm btn-outline-danger" @click="emit('remove-page', cell.page.id)">削除</button>
               </div>
             </div>
 
@@ -181,7 +182,7 @@ const cellKey = (cell: RenderCell, index: number) => {
               </div>
             </div>
 
-            <div class="page-settings">
+            <div v-if="isEditMode" class="page-settings">
               <div>
                 <label class="form-label form-label-sm" :for="`panel-count-${cell.page.id}`">コマ数</label>
                 <input
@@ -220,7 +221,7 @@ const cellKey = (cell: RenderCell, index: number) => {
           </div>
         </div>
 
-        <button v-else-if="cell.kind === 'adder'" type="button" class="page-card add-card card border-dashed" @click="emit('add-page')">
+        <button v-else-if="cell.kind === 'adder' && isEditMode" type="button" class="page-card add-card card border-dashed" @click="emit('add-page')">
           <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted">
             <span class="display-6 mb-2">＋</span>
             <span>ページを追加</span>

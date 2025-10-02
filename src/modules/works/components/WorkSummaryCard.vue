@@ -13,11 +13,13 @@ const props = defineProps<{
   canSave: boolean;
   saveError: string | null;
   lastSaveStatus: string | null;
+  isEditMode: boolean;
 }>();
 
 const emit = defineEmits<{
   (event: "request-save"): void;
   (event: "request-delete"): void;
+  (event: "toggle-edit-mode"): void;
 }>();
 
 const totalPages = computed(() => props.work.pages.length);
@@ -107,7 +109,7 @@ const formatDate = (value: string) => {
     </dl>
 
     <div class="summary-card__actions">
-      <div
+      <div v-if="isEditMode"
         class="summary-card__message"
         :class="{
           'text-danger': !!saveError,
@@ -118,13 +120,23 @@ const formatDate = (value: string) => {
         {{ saveStatusMessage }}
       </div>
 
-      <button type="button" class="btn btn-primary" :disabled="saving || !canSave" @click="emit('request-save')">
-        作品を保存
+      <button v-if="!isEditMode" type="button" class="btn btn-primary" @click="emit('toggle-edit-mode')">
+        作品を編集する
       </button>
 
-      <button type="button" class="btn btn-outline-danger" @click="emit('request-delete')">
-        作品を削除
-      </button>
+      <template v-if="isEditMode">
+        <button type="button" class="btn btn-primary" :disabled="saving || !canSave" @click="emit('request-save')">
+          作品を保存
+        </button>
+
+        <button type="button" class="btn btn-outline-danger" @click="emit('request-delete')">
+          作品を削除
+        </button>
+
+        <button type="button" class="btn btn-secondary" @click="emit('toggle-edit-mode')">
+          編集をキャンセル
+        </button>
+      </template>
     </div>
   </div>
 </template>
