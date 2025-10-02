@@ -22,13 +22,13 @@ const emit = defineEmits<{
   (event: "toggle-edit-mode"): void;
 }>();
 
-const totalPages = computed(() => props.work.pages.length);
+const totalUnits = computed(() => props.work.totalUnits);
 
 const averagePanelsPerPage = computed(() => {
-  if (!totalPages.value) {
+  if (!totalUnits.value) {
     return 0;
   }
-  return props.totalPanels / totalPages.value;
+  return props.totalPanels / totalUnits.value;
 });
 
 const unitHours = computed(() => props.work.unitEstimatedHours);
@@ -84,7 +84,7 @@ const formatDate = (value: string) => {
       </div>
       <div class="col-6">
         <dt class="text-muted small">ページ数</dt>
-        <dd class="mb-0">{{ totalPages }}</dd>
+        <dd class="mb-0">{{ totalUnits }}</dd>
       </div>
       <div class="col-6">
         <dt class="text-muted small">総コマ数</dt>
@@ -109,7 +109,8 @@ const formatDate = (value: string) => {
     </dl>
 
     <div class="summary-card__actions">
-      <div v-if="isEditMode"
+      <div
+        v-if="isEditMode"
         class="summary-card__message"
         :class="{
           'text-danger': !!saveError,
@@ -120,22 +121,14 @@ const formatDate = (value: string) => {
         {{ saveStatusMessage }}
       </div>
 
-      <button v-if="!isEditMode" type="button" class="btn btn-primary" @click="emit('toggle-edit-mode')">
-        作品を編集する
-      </button>
+      <button v-if="!isEditMode" type="button" class="btn btn-primary" @click="emit('toggle-edit-mode')">作品を編集する</button>
 
       <template v-if="isEditMode">
-        <button type="button" class="btn btn-primary" :disabled="saving || !canSave" @click="emit('request-save')">
-          作品を保存
-        </button>
+        <button type="button" class="btn btn-primary" :disabled="saving || !canSave" @click="emit('request-save')">作品を保存</button>
 
-        <button type="button" class="btn btn-outline-danger" @click="emit('request-delete')">
-          作品を削除
-        </button>
+        <button type="button" class="btn btn-outline-danger" @click="emit('request-delete')">作品を削除</button>
 
-        <button type="button" class="btn btn-secondary" @click="emit('toggle-edit-mode')">
-          編集をキャンセル
-        </button>
+        <button type="button" class="btn btn-secondary" @click="emit('toggle-edit-mode')">編集をキャンセル</button>
       </template>
     </div>
   </div>

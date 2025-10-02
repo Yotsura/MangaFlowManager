@@ -3,14 +3,15 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 
-import PagePanel from "./components/PagePanel.vue";
+// import PagePanel from "./components/PagePanel.vue"; // 一時的に無効化
+import PanelStyleUnitEditor from "./components/PanelStyleUnitEditor.vue";
 import ProgressHeatmap from "./components/ProgressHeatmap.vue";
 import WorkSummaryCard from "./components/WorkSummaryCard.vue";
 
 import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import { WORK_STATUSES, useWorksStore, type WorkStatus } from "@/store/worksStore";
+import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkUnit } from "@/store/worksStore";
 
 const route = useRoute();
 const router = useRouter();
@@ -21,14 +22,7 @@ const settingsStore = useSettingsStore();
 const worksStore = useWorksStore();
 
 const { user } = storeToRefs(authStore);
-const {
-  granularities,
-  granularitiesLoaded,
-  loadingGranularities,
-  stageWorkloads,
-  stageWorkloadsLoaded,
-  loadingStageWorkloads,
-} = storeToRefs(settingsStore);
+const { granularities, granularitiesLoaded, loadingGranularities, stageWorkloads, stageWorkloadsLoaded, loadingStageWorkloads } = storeToRefs(settingsStore);
 
 const work = computed(() => worksStore.getWorkById(workId));
 
@@ -209,97 +203,89 @@ watch(
   },
 );
 
+// 最下位レベルのユニット（stageIndexを持つもの）を再帰的に収集
+const collectLeafUnits = (units: WorkUnit[]): WorkUnit[] => {
+  const result: WorkUnit[] = [];
+  for (const unit of units) {
+    if (unit.stageIndex !== undefined) {
+      result.push(unit);
+    } else if (unit.children) {
+      result.push(...collectLeafUnits(unit.children));
+    }
+  }
+  return result;
+};
+
 const overallProgress = computed(() => {
-  if (!work.value || stageCount.value === 0 || work.value.pages.length === 0) {
+  if (!work.value || stageCount.value === 0 || work.value.units.length === 0) {
     return 0;
   }
 
   const denominator = stageCount.value;
-  let totalPanelProgress = 0;
-  let totalPanelCount = 0;
+  const leafUnits = collectLeafUnits(work.value.units);
 
-  work.value.pages.forEach(page => {
-    page.panels.forEach(panel => {
-      const ratio = Math.min(panel.stageIndex + 1, denominator) / denominator;
-      totalPanelProgress += ratio;
-      totalPanelCount++;
-    });
+  if (leafUnits.length === 0) {
+    return 0;
+  }
+
+  let totalProgress = 0;
+  leafUnits.forEach((unit) => {
+    const ratio = Math.min((unit.stageIndex ?? 0) + 1, denominator) / denominator;
+    totalProgress += ratio;
   });
 
-  return totalPanelCount > 0 ? Math.round((totalPanelProgress / totalPanelCount) * 100) : 0;
+  return Math.round((totalProgress / leafUnits.length) * 100);
 });
 
-const totalPanels = computed(() => work.value?.pages.reduce((sum, page) => sum + page.panels.length, 0) ?? 0);
+const totalPanels = computed(() => work.value?.totalUnits ?? 0);
 
-const advancePanelStage = async (payload: { pageId: string; panelId: string }) => {
+// 新しい階層ユニット操作のイベントハンドラー
+const handleAdvanceUnitStage = async (payload: { unitId: string }) => {
   if (!userId.value) {
     return;
   }
 
   // 保存中状態を追加
-  savingPanelIds.value.add(payload.panelId);
+  savingPanelIds.value.add(payload.unitId);
 
   try {
-    // コマの段階を進める
-    worksStore.advancePanelStage(workId, payload.pageId, payload.panelId, stageCount.value);
+    // ユニットの段階を進める
+    worksStore.advanceUnitStage(workId, payload.unitId, stageCount.value);
 
     // 即座に保存
     await worksStore.saveWork({ userId: userId.value, workId });
 
-    // 成功時のフィードバック（オプション）
-    lastSaveStatus.value = `コマ ${payload.panelId} の進捗を保存しました`;
-    setTimeout(() => {
-      if (lastSaveStatus.value?.includes(payload.panelId)) {
-        lastSaveStatus.value = null;
-      }
-    }, 2000);
-
-  } catch (error) {
-    console.error('コマ進捗の保存に失敗しました:', error);
-    // エラー表示
-    lastSaveStatus.value = 'コマ進捗の保存に失敗しました';
+    // 成功時のフィードバック
+    lastSaveStatus.value = `ユニット ${payload.unitId} の進捗を保存しました`;
     setTimeout(() => {
       lastSaveStatus.value = null;
     }, 3000);
-
+  } catch (error) {
+    console.error("ユニット進捗の保存に失敗:", error);
+    lastSaveStatus.value = "進捗の保存に失敗しました";
+    setTimeout(() => {
+      lastSaveStatus.value = null;
+    }, 5000);
   } finally {
     // 保存中状態を削除
-    savingPanelIds.value.delete(payload.panelId);
+    savingPanelIds.value.delete(payload.unitId);
   }
 };
 
-const updatePanelCount = (payload: { pageId: string; panelCount: number }) => {
-  worksStore.setPagePanelCount(workId, payload.pageId, payload.panelCount);
+const handleAddRootUnit = () => {
+  worksStore.addRootUnit(workId);
 };
 
-const movePage = (payload: { pageId: string; position: string }) => {
-  if (payload.position === payload.pageId) {
-    return;
-  }
-
-  let afterPageId: string | null;
-
-  if (payload.position === "__start") {
-    afterPageId = null;
-  } else if (payload.position === "__end") {
-    afterPageId = "__end";
-  } else {
-    afterPageId = payload.position;
-  }
-
-  worksStore.movePage({
-    workId,
-    pageId: payload.pageId,
-    afterPageId: afterPageId === "__end" ? "" : afterPageId,
-  });
+const handleAddChildUnit = (payload: { parentId: string }) => {
+  worksStore.addChildUnit(workId, payload.parentId);
 };
 
-const addPage = () => {
-  worksStore.addPage(workId);
+const handleRemoveUnit = (payload: { unitId: string }) => {
+  worksStore.removeUnit(workId, payload.unitId);
 };
 
-const removePage = (pageId: string) => {
-  worksStore.removePage({ workId, pageId });
+const handleUpdateChildrenCount = (payload: { unitId: string; count: number }) => {
+  worksStore.setUnitChildrenCount(workId, payload.unitId, payload.count);
 };
 
 const requestWorkDeletion = () => {
@@ -381,8 +367,12 @@ const formatDate = (value: string) => {
           <p class="text-muted mb-0">ID: {{ work.id }}</p>
         </div>
         <div class="text-lg-end">
-          <p class="mb-0 text-muted small">最上位粒度: <strong>{{ primaryGranularityLabel ?? "未設定" }}</strong></p>
-          <p class="mb-0 text-muted small">ページ数: <strong>{{ work.pages.length }}</strong> / 総コマ数: <strong>{{ totalPanels }}</strong></p>
+          <p class="mb-0 text-muted small">
+            最上位粒度: <strong>{{ primaryGranularityLabel ?? "未設定" }}</strong>
+          </p>
+          <p class="mb-0 text-muted small">
+            ユニット数: <strong>{{ work.units.length }}</strong> / 総要素数: <strong>{{ totalPanels }}</strong>
+          </p>
         </div>
       </header>
 
@@ -393,14 +383,7 @@ const formatDate = (value: string) => {
               <div class="row g-3">
                 <div class="col-12 col-md-6 col-xl-4">
                   <label class="form-label" for="detail-title">タイトル</label>
-                  <input
-                    id="detail-title"
-                    v-model="detailForm.title"
-                    type="text"
-                    class="form-control"
-                    placeholder="作品タイトル"
-                    :readonly="!isEditMode"
-                  />
+                  <input id="detail-title" v-model="detailForm.title" type="text" class="form-control" placeholder="作品タイトル" :readonly="!isEditMode" />
                 </div>
                 <div class="col-12 col-md-3 col-xl-2">
                   <label class="form-label" for="detail-status">ステータス</label>
@@ -410,25 +393,11 @@ const formatDate = (value: string) => {
                 </div>
                 <div class="col-12 col-md-3 col-xl-2">
                   <label class="form-label" for="detail-start">開始日</label>
-                  <input
-                    id="detail-start"
-                    v-model="detailForm.startDate"
-                    type="date"
-                    class="form-control"
-                    :max="detailForm.deadline || undefined"
-                    :readonly="!isEditMode"
-                  />
+                  <input id="detail-start" v-model="detailForm.startDate" type="date" class="form-control" :max="detailForm.deadline || undefined" :readonly="!isEditMode" />
                 </div>
                 <div class="col-12 col-md-3 col-xl-2">
                   <label class="form-label" for="detail-deadline">締め切り</label>
-                  <input
-                    id="detail-deadline"
-                    v-model="detailForm.deadline"
-                    type="date"
-                    class="form-control"
-                    :min="detailForm.startDate || undefined"
-                    :readonly="!isEditMode"
-                  />
+                  <input id="detail-deadline" v-model="detailForm.deadline" type="date" class="form-control" :min="detailForm.startDate || undefined" :readonly="!isEditMode" />
                 </div>
                 <div class="col-12 col-md-6 col-xl-2">
                   <label class="form-label">推定総工数</label>
@@ -445,23 +414,21 @@ const formatDate = (value: string) => {
           <div class="card shadow-sm h-100">
             <div class="card-body d-flex flex-column">
               <div class="mb-3">
-                <h2 class="h5 mb-1">ページ進行状況</h2>
-                <p class="text-muted mb-0">カードをクリックすると次の作業段階へ進みます。</p>
+                <h2 class="h5 mb-1">作品構造管理</h2>
+                <p class="text-muted mb-0">階層構造でユニットを管理できます。要素をクリックして作業段階を進めましょう。</p>
               </div>
-
-              <PagePanel
-                :pages="work.pages"
+              <PanelStyleUnitEditor
+                :units="work.units"
+                :stage-count="stageCount"
                 :stage-labels="stageLabels"
                 :stage-colors="stageColors"
-                :stage-count="stageCount"
-                :default-panels="work.defaultPanelsPerPage"
                 :is-edit-mode="isEditMode"
-                :saving-panel-ids="savingPanelIds"
-                @advance-panel="advancePanelStage"
-                @update-panel="updatePanelCount"
-                @move-page="movePage"
-                @remove-page="removePage"
-                @add-page="addPage"
+                :saving-unit-ids="savingPanelIds"
+                @advance-stage="handleAdvanceUnitStage"
+                @add-root-unit="handleAddRootUnit"
+                @add-child="handleAddChildUnit"
+                @remove-unit="handleRemoveUnit"
+                @update-children-count="handleUpdateChildrenCount"
               />
             </div>
           </div>
@@ -495,7 +462,7 @@ const formatDate = (value: string) => {
                 <h2 class="h5 mb-0">進捗ヒートマップ</h2>
                 <span class="badge text-bg-light">更新: {{ formatDate(work.updatedAt) }}</span>
               </div>
-              <ProgressHeatmap :pages="work.pages" :stage-count="stageCount" :stage-labels="stageLabels" :stage-colors="stageColors" />
+              <ProgressHeatmap :units="work.units" :stage-count="stageCount" :stage-labels="stageLabels" :stage-colors="stageColors" />
             </div>
           </div>
         </div>

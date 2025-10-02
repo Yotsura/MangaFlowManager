@@ -2,38 +2,52 @@
 import { computed } from "vue";
 
 import { stageColorFor } from "@/modules/works/utils/stageColor";
-import type { WorkPage } from "@/store/worksStore";
+import type { WorkUnit } from "@/store/worksStore";
 
 const props = defineProps<{
-  pages: WorkPage[];
+  units: WorkUnit[];
   stageCount: number;
   stageLabels: string[];
   stageColors?: string[];
 }>();
 
-const sortedPages = computed(() => [...props.pages].sort((a, b) => a.index - b.index));
+// 最下位レベルのユニット（stageIndexを持つもの）を再帰的に収集
+const collectLeafUnits = (units: WorkUnit[]): WorkUnit[] => {
+  const result: WorkUnit[] = [];
+  for (const unit of units) {
+    if (unit.stageIndex !== undefined) {
+      result.push(unit);
+    } else if (unit.children) {
+      result.push(...collectLeafUnits(unit.children));
+    }
+  }
+  return result;
+};
 
-const cellStyle = (page: WorkPage) => {
-  const override = props.stageColors?.[page.stageIndex];
-  const { backgroundColor, textColor } = stageColorFor(page.stageIndex, props.stageCount, override);
+const sortedUnits = computed(() => collectLeafUnits(props.units).sort((a, b) => a.index - b.index));
+
+const cellStyle = (unit: WorkUnit) => {
+  const stageIndex = unit.stageIndex ?? 0;
+  const override = props.stageColors?.[stageIndex];
+  const { backgroundColor, textColor } = stageColorFor(stageIndex, props.stageCount, override);
   return {
     backgroundColor,
     color: textColor,
   };
 };
 
-const stageLabelFor = (page: WorkPage) => props.stageLabels[page.stageIndex] ?? "未設定";
+const stageLabelFor = (unit: WorkUnit) => props.stageLabels[unit.stageIndex ?? 0] ?? "未設定";
 </script>
 
 <template>
   <div class="heatmap-wrapper" role="grid" aria-label="ページ進捗のヒートマップ">
-    <template v-if="sortedPages.length">
-      <div v-for="page in sortedPages" :key="page.id" class="heatmap-cell" :style="cellStyle(page)" role="gridcell">
-        <span class="cell-index">#{{ page.index }}</span>
-        <span class="cell-stage">{{ stageLabelFor(page) }}</span>
+    <template v-if="sortedUnits.length">
+      <div v-for="unit in sortedUnits" :key="unit.id" class="heatmap-cell" :style="cellStyle(unit)" role="gridcell">
+        <span class="cell-index">#{{ unit.index }}</span>
+        <span class="cell-stage">{{ stageLabelFor(unit) }}</span>
       </div>
     </template>
-    <p v-else class="text-muted mb-0">ページが登録されていません。</p>
+    <p v-else class="text-muted mb-0">ユニットが登録されていません。</p>
   </div>
 </template>
 

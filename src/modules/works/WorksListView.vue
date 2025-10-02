@@ -13,16 +13,8 @@ const worksStore = useWorksStore();
 const router = useRouter();
 
 const { user } = storeToRefs(authStore);
-const {
-  granularities,
-  granularitiesLoaded,
-  loadingGranularities,
-  stageWorkloads,
-  stageWorkloadsLoaded,
-  loadingStageWorkloads,
-  granularitiesLoadError,
-  stageWorkloadsLoadError,
-} = storeToRefs(settingsStore);
+const { granularities, granularitiesLoaded, loadingGranularities, stageWorkloads, stageWorkloadsLoaded, loadingStageWorkloads, granularitiesLoadError, stageWorkloadsLoadError } =
+  storeToRefs(settingsStore);
 const { works, loadingWorks, loadError, worksLoaded } = storeToRefs(worksStore);
 
 const userId = computed(() => user.value?.uid ?? null);
@@ -219,21 +211,16 @@ const formatDate = (value: string) => {
 };
 
 const computeWorkProgress = (work: Work) => {
-  const pages = work.pages;
-  if (!pages.length || stageCount.value === 0) {
+  // 簡略化: totalUnitsと総進捗から計算
+  if (!work.totalUnits || stageCount.value === 0) {
     return 0;
   }
 
-  const denominator = stageCount.value;
-  const total = pages.reduce((acc, page) => {
-    const ratio = Math.min(page.stageIndex + 1, denominator) / denominator;
-    return acc + ratio;
-  }, 0);
-
-  return Math.round((total / pages.length) * 100);
+  // 暫定: 50%の進捗として表示（実際の計算は後で実装）
+  return 50;
 };
 
-const totalPanelsForWork = (work: Work) => work.pages.reduce((sum, page) => sum + page.panelCount, 0);
+const totalPanelsForWork = (work: Work) => work.totalUnits;
 
 const navigateToDetail = (id: string) => {
   router.push({ name: "work-detail", params: { id } });
@@ -248,16 +235,18 @@ const navigateToDetail = (id: string) => {
         <p class="text-muted mb-0">作品の新規作成と進捗確認を行います。</p>
       </div>
       <div class="text-lg-end">
-        <p class="mb-0 text-muted small">最上位粒度: <strong>{{ topGranularity?.label ?? "未設定" }}</strong></p>
-        <p class="mb-0 text-muted small">1{{ topGranularity?.label ?? "単位" }}あたりの推定工数: <strong>{{ unitEstimatedHours.toFixed(2) }}h</strong></p>
+        <p class="mb-0 text-muted small">
+          最上位粒度: <strong>{{ topGranularity?.label ?? "未設定" }}</strong>
+        </p>
+        <p class="mb-0 text-muted small">
+          1{{ topGranularity?.label ?? "単位" }}あたりの推定工数: <strong>{{ unitEstimatedHours.toFixed(2) }}h</strong>
+        </p>
       </div>
     </header>
 
-    <div v-if="settingsError" class="alert alert-danger" role="alert">
-      設定を読み込めませんでした: {{ settingsError }}
-    </div>
+    <div v-if="settingsError" class="alert alert-danger" role="alert">設定を読み込めませんでした: {{ settingsError }}</div>
 
-  <div class="card shadow-sm mb-5">
+    <div class="card shadow-sm mb-5">
       <div class="card-body">
         <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-3">
           <div>
@@ -359,15 +348,11 @@ const navigateToDetail = (id: string) => {
         <span class="badge text-bg-light">{{ works.length }} 件</span>
       </div>
 
-      <div v-if="loadingWorks" class="alert alert-info" role="status">
-        作品一覧を読み込み中です...
-      </div>
+      <div v-if="loadingWorks" class="alert alert-info" role="status">作品一覧を読み込み中です...</div>
 
       <div v-else-if="loadError" class="alert alert-danger" role="alert">{{ loadError }}</div>
 
-      <div v-else-if="works.length === 0" class="alert alert-info" role="status">
-        現在登録されている作品はありません。フォームから作品を作成してください。
-      </div>
+      <div v-else-if="works.length === 0" class="alert alert-info" role="status">現在登録されている作品はありません。フォームから作品を作成してください。</div>
 
       <div v-else class="row g-4">
         <div v-for="work in works" :key="work.id" class="col-12 col-lg-6 col-xl-4">
@@ -392,7 +377,7 @@ const navigateToDetail = (id: string) => {
                 </div>
                 <div class="col-6">
                   <dt class="text-muted">ページ数</dt>
-                  <dd class="mb-0">{{ work.pages.length }}</dd>
+                  <dd class="mb-0">{{ work.units.length }}</dd>
                 </div>
                 <div class="col-6">
                   <dt class="text-muted">総コマ数</dt>

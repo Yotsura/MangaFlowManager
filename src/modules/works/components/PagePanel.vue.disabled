@@ -2,7 +2,7 @@
 import { computed, reactive, watch } from "vue";
 
 import { stageColorFor } from "@/modules/works/utils/stageColor";
-import type { WorkPage, WorkPanel } from "@/store/worksStore";
+import type { WorkUnit } from "@/store/worksStore";
 
 const FIRST_ROW_SLOTS = 4;
 const OTHER_ROW_SLOTS = 4;

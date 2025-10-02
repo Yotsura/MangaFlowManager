@@ -6,16 +6,11 @@ import { generateId } from "@/utils/id";
 export const WORK_STATUSES = ["未着手", "作業中", "完了", "保留"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 
-export interface WorkPanel {
+export interface WorkUnit {
   id: string;
   index: number;
-  stageIndex: number;
-}
-
-export interface WorkPage {
-  id: string;
-  index: number;
-  panels: WorkPanel[];
+  children?: WorkUnit[]; // 最下位以外は持つ
+  stageIndex?: number; // 最下位のみ持つ
 }
 
 export interface Work {
@@ -27,11 +22,11 @@ export interface Work {
   createdAt: string;
   updatedAt: string;
   totalUnits: number;
-  defaultPanelsPerPage: number;
+  defaultCounts: number[]; // 各粒度レベルのデフォルト数 [上位→下位]
   primaryGranularityId: string | null;
   unitEstimatedHours: number;
   totalEstimatedHours: number;
-  pages: WorkPage[];
+  units: WorkUnit[]; // 最上位粒度の配列
 }
 
 type WorkDocument = Omit<Work, "id">;
@@ -55,17 +50,6 @@ interface CreateWorkPayload {
   defaultPanelsPerPage: number;
   primaryGranularityId: string | null;
   unitEstimatedHours: number;
-}
-
-interface MovePagePayload {
-  workId: string;
-  pageId: string;
-  afterPageId: string | null;
-}
-
-interface RemovePagePayload {
-  workId: string;
-  pageId: string;
 }
 
 interface RemoveWorkPayload {
@@ -95,33 +79,31 @@ const normalizePositiveInteger = (value: number, fallback: number): number => {
   return Math.floor(value);
 };
 
-const recalculatePageIndices = (pages: WorkPage[]) => {
-  pages.forEach((page, index) => {
-    page.index = index + 1;
+const recalculateUnitIndices = (units: WorkUnit[]) => {
+  units.forEach((unit, index) => {
+    unit.index = index + 1;
+    if (unit.children) {
+      recalculateUnitIndices(unit.children);
+    }
   });
 };
 
-const normalizePanel = (raw: unknown, fallbackIndex: number): WorkPanel | null => {
-  if (!raw || typeof raw !== "object") {
-    return null;
+const findUnitInHierarchy = (units: WorkUnit[], unitId: string): WorkUnit | null => {
+  for (const unit of units) {
+    if (unit.id === unitId) {
+      return unit;
+    }
+    if (unit.children) {
+      const found = findUnitInHierarchy(unit.children, unitId);
+      if (found) {
+        return found;
+      }
+    }
   }
-
-  const data = raw as Record<string, unknown>;
-
-  const id = typeof data.id === "string" && data.id.trim().length > 0 ? data.id : generateId();
-  const indexRaw = Number(data.index);
-  const index = Number.isFinite(indexRaw) && indexRaw > 0 ? Math.floor(indexRaw) : fallbackIndex;
-  const stageRaw = Number(data.stageIndex);
-  const stageIndex = Number.isFinite(stageRaw) && stageRaw >= 0 ? Math.floor(stageRaw) : 0;
-
-  return {
-    id,
-    index,
-    stageIndex,
-  } satisfies WorkPanel;
+  return null;
 };
 
-const normalizePage = (raw: unknown, fallbackIndex: number): WorkPage | null => {
+const normalizeUnit = (raw: unknown, fallbackIndex: number, isLeafLevel?: boolean): WorkUnit | null => {
   if (!raw || typeof raw !== "object") {
     return null;
   }
@@ -132,51 +114,93 @@ const normalizePage = (raw: unknown, fallbackIndex: number): WorkPage | null => 
   const indexRaw = Number(data.index);
   const index = Number.isFinite(indexRaw) && indexRaw > 0 ? Math.floor(indexRaw) : fallbackIndex;
 
-  // 旧データ形式との互換性を保つ
-  let panels: WorkPanel[] = [];
+  // stageIndexの有無で最下位粒度かどうかを自動判定
+  const hasStageIndex = data.stageIndex !== undefined && data.stageIndex !== null;
+  const hasChildren = Array.isArray(data.children) && data.children.length > 0;
 
-  if (Array.isArray(data.panels)) {
-    // 新形式: panelsプロパティがある場合
-    panels = data.panels
-      .map((panelRaw, panelIndex) => normalizePanel(panelRaw, panelIndex + 1))
-      .filter((panel): panel is WorkPanel => panel !== null)
-      .map((panel, panelIndex) => ({ ...panel, index: panelIndex + 1 }));
-  } else {
-    // 旧形式: panelCountとstageIndexがある場合
-    const panelRaw = Number(data.panelCount);
-    const panelCount = Number.isFinite(panelRaw) && panelRaw > 0 ? Math.floor(panelRaw) : 1;
+  // isLeafLevelが明示的に指定されていない場合は自動判定
+  const actualIsLeaf = isLeafLevel !== undefined ? isLeafLevel : hasStageIndex && !hasChildren;
+
+  if (actualIsLeaf || hasStageIndex) {
+    // 最下位粒度: stageIndexを持つ
     const stageRaw = Number(data.stageIndex);
     const stageIndex = Number.isFinite(stageRaw) && stageRaw >= 0 ? Math.floor(stageRaw) : 0;
 
-    // panelCountの数だけパネルを作成（全て同じstageIndex）
-    panels = Array.from({ length: panelCount }, (_, panelIndex) => ({
-      id: generateId(),
-      index: panelIndex + 1,
+    return {
+      id,
+      index,
       stageIndex,
-    }));
+    } satisfies WorkUnit;
+  } else {
+    // 中間粒度: childrenを持つ
+    let children: WorkUnit[] = [];
+
+    if (Array.isArray(data.children)) {
+      children = data.children
+        .map((childRaw, childIndex) => normalizeUnit(childRaw, childIndex + 1))
+        .filter((child): child is WorkUnit => child !== null)
+        .map((child, childIndex) => ({ ...child, index: childIndex + 1 }));
+    }
+
+    return {
+      id,
+      index,
+      children,
+    } satisfies WorkUnit;
   }
-
-  return {
-    id,
-    index,
-    panels,
-  } satisfies WorkPage;
 };
-
 const mapDocumentToWork = (item: WorkDocument & { id: string }): Work => {
   const createdAt = typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString();
   const updatedAt = typeof item.updatedAt === "string" ? item.updatedAt : createdAt;
 
-  const pagesRaw = Array.isArray(item.pages) ? item.pages : [];
-  const pages = pagesRaw
-    .map((entry, index) => normalizePage(entry, index + 1))
-    .filter((entry): entry is WorkPage => entry !== null)
-    .map((entry, index) => ({ ...entry, index: index + 1 }));
+  // 新形式のunitsまたは旧形式のpagesを処理
+  let units: WorkUnit[] = [];
+  let defaultCounts: number[] = [];
 
-  const totalUnits = Number.isFinite(Number(item.totalUnits)) && Number(item.totalUnits) > 0 ? Math.floor(Number(item.totalUnits)) : pages.length;
+  if (Array.isArray((item as any).units)) {
+    // 新形式: unitsプロパティがある場合
+    units = (item as any).units
+      .map((unitRaw: unknown, index: number) => normalizeUnit(unitRaw, index + 1))
+      .filter((unit: WorkUnit | null): unit is WorkUnit => unit !== null)
+      .map((unit: WorkUnit, index: number) => ({ ...unit, index: index + 1 }));
+
+    defaultCounts = Array.isArray((item as any).defaultCounts) ? (item as any).defaultCounts : [1];
+  } else if (Array.isArray((item as any).pages)) {
+    // 旧形式からの移行: pagesをunitsに変換
+    const pagesRaw = (item as any).pages;
+    units = pagesRaw
+      .map((pageRaw: any, index: number) => {
+        // 旧形式のpageをunit構造に変換
+        return normalizeUnit(
+          {
+            id: pageRaw.id || generateId(),
+            index: index + 1,
+            children: Array.isArray(pageRaw.panels)
+              ? pageRaw.panels.map((panel: any, panelIndex: number) => ({
+                  id: panel.id || generateId(),
+                  index: panelIndex + 1,
+                  stageIndex: panel.stageIndex || 0,
+                }))
+              : Array.from({ length: pageRaw.panelCount || 1 }, (_, panelIndex) => ({
+                  id: generateId(),
+                  index: panelIndex + 1,
+                  stageIndex: pageRaw.stageIndex || 0,
+                })),
+          },
+          index + 1,
+          false,
+        );
+      })
+      .filter((unit: WorkUnit | null): unit is WorkUnit => unit !== null);
+
+    const defaultPanels = Number.isFinite(Number((item as any).defaultPanelsPerPage)) && Number((item as any).defaultPanelsPerPage) > 0 ? Math.floor(Number((item as any).defaultPanelsPerPage)) : 1;
+    defaultCounts = [defaultPanels];
+  }
+
+  const totalUnits = Number.isFinite(Number(item.totalUnits)) && Number(item.totalUnits) > 0 ? Math.floor(Number(item.totalUnits)) : units.length;
   const unitEstimatedHours = Number.isFinite(Number(item.unitEstimatedHours)) && Number(item.unitEstimatedHours) >= 0 ? Number(item.unitEstimatedHours) : 0;
-  const totalEstimatedHours = Number.isFinite(Number(item.totalEstimatedHours)) && Number(item.totalEstimatedHours) >= 0 ? Number(item.totalEstimatedHours) : Number((totalUnits * unitEstimatedHours).toFixed(2));
-  const defaultPanels = Number.isFinite(Number(item.defaultPanelsPerPage)) && Number(item.defaultPanelsPerPage) > 0 ? Math.floor(Number(item.defaultPanelsPerPage)) : 1;
+  const totalEstimatedHours =
+    Number.isFinite(Number(item.totalEstimatedHours)) && Number(item.totalEstimatedHours) >= 0 ? Number(item.totalEstimatedHours) : Number((totalUnits * unitEstimatedHours).toFixed(2));
 
   return {
     id: item.id,
@@ -187,12 +211,29 @@ const mapDocumentToWork = (item: WorkDocument & { id: string }): Work => {
     createdAt,
     updatedAt,
     totalUnits,
-    defaultPanelsPerPage: defaultPanels,
+    defaultCounts,
     primaryGranularityId: typeof item.primaryGranularityId === "string" ? item.primaryGranularityId : null,
     unitEstimatedHours,
     totalEstimatedHours,
-    pages,
-  } satisfies Work;
+    units,
+  };
+};
+
+const serializeWorkUnit = (unit: WorkUnit): any => {
+  const result: any = {
+    id: unit.id,
+    index: unit.index,
+  };
+
+  if (unit.stageIndex !== undefined) {
+    // 最下位粒度
+    result.stageIndex = unit.stageIndex;
+  } else if (unit.children) {
+    // 中間粒度
+    result.children = unit.children.map(serializeWorkUnit);
+  }
+
+  return result;
 };
 
 const serializeWork = (work: Work): WorkDocument => ({
@@ -203,19 +244,11 @@ const serializeWork = (work: Work): WorkDocument => ({
   createdAt: work.createdAt,
   updatedAt: work.updatedAt,
   totalUnits: work.totalUnits,
-  defaultPanelsPerPage: work.defaultPanelsPerPage,
+  defaultCounts: work.defaultCounts,
   primaryGranularityId: work.primaryGranularityId,
   unitEstimatedHours: work.unitEstimatedHours,
   totalEstimatedHours: work.totalEstimatedHours,
-  pages: work.pages.map((page) => ({
-    id: page.id,
-    index: page.index,
-    panels: page.panels.map((panel) => ({
-      id: panel.id,
-      index: panel.index,
-      stageIndex: panel.stageIndex,
-    })),
-  })),
+  units: work.units.map(serializeWorkUnit),
 });
 
 export const useWorksStore = defineStore("works", {
@@ -280,11 +313,11 @@ export const useWorksStore = defineStore("works", {
       try {
         const documents = await getCollectionDocs<WorkDocument>(buildWorkCollectionPath(userId));
         const normalized = documents.map((doc) => mapDocumentToWork(doc));
-  this.setWorks(normalized);
-  this.worksLoaded = true;
-  this.dirtyWorkMap = {};
-  this.saveErrorMap = {};
-  this.savingWorkMap = {};
+        this.setWorks(normalized);
+        this.worksLoaded = true;
+        this.dirtyWorkMap = {};
+        this.saveErrorMap = {};
+        this.savingWorkMap = {};
       } catch (error) {
         this.loadError = mapError(error, "作品の読み込みに失敗しました。");
         throw error;
@@ -305,7 +338,7 @@ export const useWorksStore = defineStore("works", {
           const normalizedWork = mapDocumentToWork({ ...document, id: workId });
 
           // 既存の作品データを更新
-          const index = this.works.findIndex(work => work.id === workId);
+          const index = this.works.findIndex((work) => work.id === workId);
           if (index !== -1) {
             this.works[index] = normalizedWork;
           } else {
@@ -316,7 +349,7 @@ export const useWorksStore = defineStore("works", {
           this.clearWorkDirty(workId);
         }
       } catch (error) {
-        console.error('Failed to fetch work:', error);
+        console.error("Failed to fetch work:", error);
         throw error;
       } finally {
         this.loadingWorks = false;
@@ -331,10 +364,11 @@ export const useWorksStore = defineStore("works", {
       const totalUnits = normalizePositiveInteger(payload.totalUnits, 1);
       const defaultPanels = normalizePositiveInteger(payload.defaultPanelsPerPage, 1);
 
-      const pages: WorkPage[] = Array.from({ length: totalUnits }, (_, index) => ({
+      // 2段階構造（ページ > コマ）でunitsを作成
+      const units: WorkUnit[] = Array.from({ length: totalUnits }, (_, index) => ({
         id: generateId(),
         index: index + 1,
-        panels: Array.from({ length: defaultPanels }, (_, panelIndex) => ({
+        children: Array.from({ length: defaultPanels }, (_, panelIndex) => ({
           id: generateId(),
           index: panelIndex + 1,
           stageIndex: 0,
@@ -351,11 +385,11 @@ export const useWorksStore = defineStore("works", {
         createdAt: now,
         updatedAt: now,
         totalUnits,
-        defaultPanelsPerPage: defaultPanels,
+        defaultCounts: [defaultPanels], // ページ単位のデフォルトコマ数
         primaryGranularityId: payload.primaryGranularityId,
         unitEstimatedHours,
         totalEstimatedHours: Number((totalUnits * unitEstimatedHours).toFixed(2)),
-        pages,
+        units,
       };
 
       this.works.push(work);
@@ -364,7 +398,7 @@ export const useWorksStore = defineStore("works", {
       this.setSaveError(work.id, null);
       return work;
     },
-    updateWork(id: string, patch: Partial<Pick<Work, "title" | "status" | "startDate" | "deadline" | "defaultPanelsPerPage" | "unitEstimatedHours">>) {
+    updateWork(id: string, patch: Partial<Pick<Work, "title" | "status" | "startDate" | "deadline" | "unitEstimatedHours">>) {
       const target = this.works.find((work) => work.id === id);
       if (!target) {
         return;
@@ -384,9 +418,7 @@ export const useWorksStore = defineStore("works", {
       if (patch.deadline !== undefined) {
         target.deadline = patch.deadline;
       }
-      if (patch.defaultPanelsPerPage !== undefined) {
-        target.defaultPanelsPerPage = normalizePositiveInteger(patch.defaultPanelsPerPage, target.defaultPanelsPerPage);
-      }
+
       if (patch.unitEstimatedHours !== undefined) {
         target.unitEstimatedHours = Math.max(0, patch.unitEstimatedHours);
         shouldRecalculateTotals = true;
@@ -404,137 +436,175 @@ export const useWorksStore = defineStore("works", {
       if (!target) {
         return;
       }
-      target.totalUnits = target.pages.length;
+
+      const countUnits = (units: WorkUnit[]): number => {
+        return units.reduce((acc, unit) => {
+          if (unit.children && unit.children.length > 0) {
+            return acc + countUnits(unit.children);
+          }
+          return acc + 1;
+        }, 0);
+      };
+
+      target.totalUnits = countUnits(target.units);
       target.totalEstimatedHours = Number((target.totalUnits * target.unitEstimatedHours).toFixed(2));
       target.updatedAt = new Date().toISOString();
       this.markWorkDirty(target.id);
     },
-    advancePanelStage(workId: string, pageId: string, panelId: string, stageCount: number) {
+    advanceUnitStage(workId: string, unitId: string, stageCount: number) {
       const target = this.works.find((work) => work.id === workId);
       if (!target) {
         return;
       }
-      const page = target.pages.find((entry) => entry.id === pageId);
-      if (!page) {
-        return;
-      }
-      const panel = page.panels.find((entry) => entry.id === panelId);
-      if (!panel) {
+
+      const unit = findUnitInHierarchy(target.units, unitId);
+      if (!unit || unit.stageIndex === undefined) {
         return;
       }
       if (stageCount <= 0) {
         return;
       }
 
-      panel.stageIndex = (panel.stageIndex + 1) % stageCount;
+      unit.stageIndex = (unit.stageIndex + 1) % stageCount;
       target.updatedAt = new Date().toISOString();
       this.markWorkDirty(target.id);
     },
-    setPagePanelCount(workId: string, pageId: string, panelCount: number) {
+
+    // レガシー互換性のため
+    advancePanelStage(workId: string, pageId: string, panelId: string, stageCount: number) {
+      this.advanceUnitStage(workId, panelId, stageCount);
+    },
+    setUnitChildrenCount(workId: string, unitId: string, childrenCount: number) {
       const target = this.works.find((work) => work.id === workId);
       if (!target) {
         return;
       }
-      const page = target.pages.find((entry) => entry.id === pageId);
-      if (!page) {
+      const unit = findUnitInHierarchy(target.units, unitId);
+      if (!unit || !unit.children) {
         return;
       }
 
-      const normalizedCount = normalizePositiveInteger(panelCount, page.panels.length);
-      const currentCount = page.panels.length;
+      const normalizedCount = normalizePositiveInteger(childrenCount, unit.children.length);
+      const currentCount = unit.children.length;
 
       if (normalizedCount > currentCount) {
-        // パネルを追加
+        // 子ユニットを追加
         for (let i = currentCount; i < normalizedCount; i++) {
-          page.panels.push({
+          unit.children.push({
             id: generateId(),
             index: i + 1,
             stageIndex: 0,
           });
         }
       } else if (normalizedCount < currentCount) {
-        // パネルを削除
-        page.panels = page.panels.slice(0, normalizedCount);
+        // 子ユニットを削除
+        unit.children = unit.children.slice(0, normalizedCount);
       }
 
-      // パネルのindexを再計算
-      page.panels.forEach((panel, index) => {
-        panel.index = index + 1;
+      // 子ユニットのindexを再計算
+      unit.children.forEach((child, index) => {
+        child.index = index + 1;
       });
 
       target.updatedAt = new Date().toISOString();
       this.recalculateTotals(target.id);
       this.markWorkDirty(target.id);
     },
-    movePage(payload: MovePagePayload) {
-      const target = this.works.find((work) => work.id === payload.workId);
-      if (!target) {
-        return;
-      }
 
-      const currentIndex = target.pages.findIndex((page) => page.id === payload.pageId);
-      if (currentIndex === -1) {
-        return;
-      }
-
-      const [extracted] = target.pages.splice(currentIndex, 1);
-      if (!extracted) {
-        return;
-      }
-
-      const page = extracted;
-
-      if (payload.afterPageId === null) {
-        target.pages.unshift(page);
-      } else {
-        const afterIndex = target.pages.findIndex((entry) => entry.id === payload.afterPageId);
-        if (afterIndex === -1) {
-          target.pages.push(page);
-        } else {
-          target.pages.splice(afterIndex + 1, 0, page);
-        }
-      }
-
-      recalculatePageIndices(target.pages);
-      this.recalculateTotals(target.id);
-      this.markWorkDirty(target.id);
+    // レガシー互換性のため
+    setPagePanelCount(workId: string, pageId: string, panelCount: number) {
+      this.setUnitChildrenCount(workId, pageId, panelCount);
     },
-    addPage(workId: string, panelCount?: number) {
+
+    addRootUnit(workId: string) {
       const target = this.works.find((work) => work.id === workId);
       if (!target) {
         return;
       }
 
-      const nextIndex = target.pages.length + 1;
-      const defaultPanels = panelCount ? normalizePositiveInteger(panelCount, target.defaultPanelsPerPage) : target.defaultPanelsPerPage;
-
-      target.pages.push({
+      const newUnit: WorkUnit = {
         id: generateId(),
-        index: nextIndex,
-        panels: Array.from({ length: defaultPanels }, (_, panelIndex) => ({
-          id: generateId(),
-          index: panelIndex + 1,
-          stageIndex: 0,
-        })),
-      });
+        index: target.units.length + 1,
+        children: [
+          {
+            id: generateId(),
+            index: 1,
+            stageIndex: 0,
+          },
+        ],
+      };
 
+      target.units.push(newUnit);
+      recalculateUnitIndices(target.units);
+
+      target.updatedAt = new Date().toISOString();
       this.recalculateTotals(target.id);
+      this.markWorkDirty(target.id);
     },
-    removePage(payload: RemovePagePayload) {
-      const target = this.works.find((work) => work.id === payload.workId);
+
+    addChildUnit(workId: string, parentId: string) {
+      const target = this.works.find((work) => work.id === workId);
       if (!target) {
         return;
       }
 
-      const index = target.pages.findIndex((page) => page.id === payload.pageId);
-      if (index === -1) {
+      const parentUnit = findUnitInHierarchy(target.units, parentId);
+      if (!parentUnit) {
         return;
       }
 
-      target.pages.splice(index, 1);
-      recalculatePageIndices(target.pages);
+      // 親ユニットに子配列がない場合は作成
+      if (!parentUnit.children) {
+        parentUnit.children = [];
+      }
+
+      const newChild: WorkUnit = {
+        id: generateId(),
+        index: parentUnit.children.length + 1,
+        stageIndex: 0, // 最下位として作成
+      };
+
+      parentUnit.children.push(newChild);
+
+      target.updatedAt = new Date().toISOString();
       this.recalculateTotals(target.id);
+      this.markWorkDirty(target.id);
     },
+
+    removeUnit(workId: string, unitId: string) {
+      const target = this.works.find((work) => work.id === workId);
+      if (!target) {
+        return;
+      }
+
+      // 再帰的にユニットを削除する関数
+      const removeFromArray = (units: WorkUnit[], targetId: string): boolean => {
+        const index = units.findIndex((unit) => unit.id === targetId);
+        if (index !== -1) {
+          units.splice(index, 1);
+          // インデックスを再計算
+          units.forEach((unit, idx) => {
+            unit.index = idx + 1;
+          });
+          return true;
+        }
+
+        // 子階層を検索
+        for (const unit of units) {
+          if (unit.children && removeFromArray(unit.children, targetId)) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      if (removeFromArray(target.units, unitId)) {
+        target.updatedAt = new Date().toISOString();
+        this.recalculateTotals(target.id);
+        this.markWorkDirty(target.id);
+      }
+    },
+
     async saveWork(payload: SaveWorkPayload) {
       if (!payload.userId) {
         throw new Error("ユーザー情報が取得できませんでした。");
