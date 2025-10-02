@@ -141,13 +141,7 @@ const handleRemove = () => {
   }
 };
 
-const handleChildrenCountChange = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  const count = parseInt(target.value, 10);
-  if (isNaN(count) || count < 0) return;
 
-  emit("update-children-count", { unitId: props.unit.id, count });
-};
 </script>
 
 <style scoped>
@@ -354,18 +348,16 @@ const handleChildrenCountChange = (event: Event) => {
   padding: 0.25rem;
 }
 
-/* 最上位階層（レベル0）: 自動フィル */
-.unit-panel.level-0 .leaf-units-grid {
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-}
-
-/* 最上位階層以外（レベル1以上）: 2列固定 */
+/* 全階層で2列固定表示 */
+.unit-panel.level-0 .leaf-units-grid,
 .unit-panel.level-1 .leaf-units-grid,
 .unit-panel.level-2 .leaf-units-grid,
 .unit-panel.level-3 .leaf-units-grid,
 .unit-panel.level-4 .leaf-units-grid {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr !important;
 }
+
+
 
 .add-leaf-unit {
   display: flex;
@@ -402,16 +394,13 @@ const handleChildrenCountChange = (event: Event) => {
     gap: 0.375rem;
   }
 
-  /* モバイルでも最上位階層以外は2列固定を維持 */
-  .unit-panel.level-0 .leaf-units-grid {
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  }
-
+  /* モバイルでも全階層2列固定を維持 */
+  .unit-panel.level-0 .leaf-units-grid,
   .unit-panel.level-1 .leaf-units-grid,
   .unit-panel.level-2 .leaf-units-grid,
   .unit-panel.level-3 .leaf-units-grid,
   .unit-panel.level-4 .leaf-units-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr !important;
   }
 
   .leaf-units-grid {
@@ -430,16 +419,24 @@ const handleChildrenCountChange = (event: Event) => {
 }
 
 @media (min-width: 1200px) {
-  /* 大画面でも最上位階層以外は2列固定を維持 */
-  .unit-panel.level-0 .leaf-units-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  }
-
+  /* 大画面でも全階層2列固定を維持 */
+  .unit-panel.level-0 .leaf-units-grid,
   .unit-panel.level-1 .leaf-units-grid,
   .unit-panel.level-2 .leaf-units-grid,
   .unit-panel.level-3 .leaf-units-grid,
   .unit-panel.level-4 .leaf-units-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+@media (min-width: 1400px) {
+  /* 超大画面でも全階層2列固定を維持 */
+  .unit-panel.level-0 > .panel-content > .children-container > .leaf-units-grid,
+  .unit-panel.level-1 > .panel-content > .children-container > .leaf-units-grid,
+  .unit-panel.level-2 > .panel-content > .children-container > .leaf-units-grid,
+  .unit-panel.level-3 > .panel-content > .children-container > .leaf-units-grid,
+  .unit-panel.level-4 > .panel-content > .children-container > .leaf-units-grid {
+    grid-template-columns: 1fr 1fr !important;
   }
 }
 </style>
