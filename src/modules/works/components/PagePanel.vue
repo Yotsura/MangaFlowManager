@@ -19,6 +19,7 @@ const props = defineProps<{
   stageColors?: string[];
   defaultPanels: number;
   isEditMode?: boolean;
+  savingPanelIds?: Set<string>;
 }>();
 
 const emit = defineEmits<{
@@ -199,21 +200,20 @@ const cellKey = (cell: RenderCell, index: number) => {
             </div>
 
             <!-- コマごとの進捗ボタン -->
-            <div class="panels-grid">
+            <div v-if="!isEditMode" class="panels-grid">
               <button
                 v-for="panel in cell.page.panels"
                 :key="panel.id"
                 type="button"
                 class="panel-btn"
                 :style="panelButtonStyle(panel)"
-                :disabled="stageCount === 0"
+                :disabled="stageCount === 0 || savingPanelIds?.has(panel.id)"
                 @click="emit('advance-panel', { pageId: cell.page.id, panelId: panel.id })"
               >
                 <span class="panel-number">{{ panel.index }}</span><span class="panel-stage">{{ stageLabelFor(panel.stageIndex) }}</span>
               </button>
             </div>
-
-            <div v-if="isEditMode" class="page-settings">
+            <div v-else class="page-settings">
               <div>
                 <label class="form-label form-label-sm" :for="`panel-count-${cell.page.id}`">コマ数</label>
                 <input

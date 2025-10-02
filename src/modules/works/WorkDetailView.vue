@@ -55,6 +55,7 @@ const saveErrorMessage = computed(() => (work.value ? worksStore.getSaveError(wo
 
 const lastSaveStatus = ref<string | null>(null);
 const isEditMode = ref(false);
+const savingPanelIds = ref(new Set<string>());
 
 const toggleEditMode = () => {
   isEditMode.value = !isEditMode.value;
@@ -230,8 +231,41 @@ const overallProgress = computed(() => {
 
 const totalPanels = computed(() => work.value?.pages.reduce((sum, page) => sum + page.panels.length, 0) ?? 0);
 
-const advancePanelStage = (payload: { pageId: string; panelId: string }) => {
-  worksStore.advancePanelStage(workId, payload.pageId, payload.panelId, stageCount.value);
+const advancePanelStage = async (payload: { pageId: string; panelId: string }) => {
+  if (!userId.value) {
+    return;
+  }
+
+  // 保存中状態を追加
+  savingPanelIds.value.add(payload.panelId);
+
+  try {
+    // コマの段階を進める
+    worksStore.advancePanelStage(workId, payload.pageId, payload.panelId, stageCount.value);
+    
+    // 即座に保存
+    await worksStore.saveWork({ userId: userId.value, workId });
+    
+    // 成功時のフィードバック（オプション）
+    lastSaveStatus.value = `コマ ${payload.panelId} の進捗を保存しました`;
+    setTimeout(() => {
+      if (lastSaveStatus.value?.includes(payload.panelId)) {
+        lastSaveStatus.value = null;
+      }
+    }, 2000);
+    
+  } catch (error) {
+    console.error('コマ進捗の保存に失敗しました:', error);
+    // エラー表示
+    lastSaveStatus.value = 'コマ進捗の保存に失敗しました';
+    setTimeout(() => {
+      lastSaveStatus.value = null;
+    }, 3000);
+    
+  } finally {
+    // 保存中状態を削除
+    savingPanelIds.value.delete(payload.panelId);
+  }
 };
 
 const updatePanelCount = (payload: { pageId: string; panelCount: number }) => {
@@ -419,6 +453,7 @@ const formatDate = (value: string) => {
                 :stage-count="stageCount"
                 :default-panels="work.defaultPanelsPerPage"
                 :is-edit-mode="isEditMode"
+                :saving-panel-ids="savingPanelIds"
                 @advance-panel="advancePanelStage"
                 @update-panel="updatePanelCount"
                 @move-page="movePage"
