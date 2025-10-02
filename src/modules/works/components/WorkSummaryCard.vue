@@ -11,6 +11,10 @@ const props = defineProps<{
   totalPanels: number;
 }>();
 
+const emit = defineEmits<{
+  (event: "request-delete"): void;
+}>();
+
 const totalPages = computed(() => props.work.pages.length);
 
 const averagePanelsPerPage = computed(() => {
@@ -80,6 +84,10 @@ const formatDate = (value: string) => {
         <dd class="mb-0">{{ formatDate(work.updatedAt) }}</dd>
       </div>
     </dl>
+
+    <button type="button" class="btn btn-outline-danger w-100 mt-3" @click="emit('request-delete')">
+      作品を削除
+    </button>
   </div>
 </template>
 

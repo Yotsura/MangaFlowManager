@@ -49,6 +49,15 @@ interface MovePagePayload {
   afterPageId: string | null;
 }
 
+interface RemovePagePayload {
+  workId: string;
+  pageId: string;
+}
+
+interface RemoveWorkPayload {
+  workId: string;
+}
+
 const normalizePositiveInteger = (value: number, fallback: number): number => {
   if (!Number.isFinite(value) || value <= 0) {
     return fallback;
@@ -222,6 +231,29 @@ export const useWorksStore = defineStore("works", {
       });
 
       this.recalculateTotals(target.id);
+    },
+    removePage(payload: RemovePagePayload) {
+      const target = this.works.find((work) => work.id === payload.workId);
+      if (!target) {
+        return;
+      }
+
+      const index = target.pages.findIndex((page) => page.id === payload.pageId);
+      if (index === -1) {
+        return;
+      }
+
+      target.pages.splice(index, 1);
+      recalculatePageIndices(target.pages);
+      this.recalculateTotals(target.id);
+    },
+    removeWork(payload: RemoveWorkPayload) {
+      const index = this.works.findIndex((work) => work.id === payload.workId);
+      if (index === -1) {
+        return;
+      }
+
+      this.works.splice(index, 1);
     },
   },
 });

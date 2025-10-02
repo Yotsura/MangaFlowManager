@@ -175,6 +175,24 @@ const addPage = () => {
   worksStore.addPage(workId);
 };
 
+const removePage = (pageId: string) => {
+  worksStore.removePage({ workId, pageId });
+};
+
+const requestWorkDeletion = () => {
+  if (!work.value) {
+    return;
+  }
+
+  const confirmed = window.confirm(`作品「${work.value.title || "無題"}」を本当に削除しますか？`);
+  if (!confirmed) {
+    return;
+  }
+
+  worksStore.removeWork({ workId: work.value.id });
+  router.push({ name: "works" });
+};
+
 const goBackToList = () => {
   router.push({ name: "works" });
 };
@@ -263,6 +281,7 @@ const formatDate = (value: string) => {
                 @advance="advanceStage"
                 @update-panel="updatePanelCount"
                 @move-page="movePage"
+                @remove-page="removePage"
                 @add-page="addPage"
               />
             </div>
@@ -279,6 +298,7 @@ const formatDate = (value: string) => {
                 :progress-percent="overallProgress"
                 :primary-granularity-label="primaryGranularityLabel"
                 :total-panels="totalPanels"
+                @request-delete="requestWorkDeletion"
               />
             </div>
           </div>
