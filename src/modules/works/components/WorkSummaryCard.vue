@@ -14,6 +14,7 @@ const props = defineProps<{
   saveError: string | null;
   lastSaveStatus: string | null;
   isEditMode: boolean;
+  actualWorkHours: { totalEstimatedHours: number; remainingEstimatedHours: number };
 }>();
 
 const emit = defineEmits<{
@@ -100,9 +101,13 @@ const formatDate = (value: string) => {
       </div>
       <div class="col-6">
         <dt class="text-muted small">推定総工数</dt>
-        <dd class="mb-0 fw-semibold">{{ work.totalEstimatedHours.toFixed(2) }} h</dd>
+        <dd class="mb-0 fw-semibold">{{ actualWorkHours.totalEstimatedHours.toFixed(2) }} h</dd>
       </div>
       <div class="col-6">
+        <dt class="text-muted small">推定残工数</dt>
+        <dd class="mb-0 fw-semibold text-warning">{{ actualWorkHours.remainingEstimatedHours.toFixed(2) }} h</dd>
+      </div>
+      <div class="col-12">
         <dt class="text-muted small">最終更新</dt>
         <dd class="mb-0">{{ formatDate(work.updatedAt) }}</dd>
       </div>

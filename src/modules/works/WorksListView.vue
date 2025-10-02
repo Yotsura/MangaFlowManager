@@ -361,6 +361,11 @@ const computeWorkProgress = (work: Work) => {
 
 const totalPanelsForWork = (work: Work) => work.totalUnits;
 
+// 作品ごとの実際の工数計算
+const getWorkActualHours = (work: Work) => {
+  return worksStore.calculateActualWorkHours(work.id);
+};
+
 const navigateToDetail = (id: string) => {
   router.push({ name: "work-detail", params: { id } });
 };
@@ -524,9 +529,13 @@ const navigateToDetail = (id: string) => {
                   <dt class="text-muted">総コマ数</dt>
                   <dd class="mb-0">{{ totalPanelsForWork(work) }}</dd>
                 </div>
-                <div class="col-12">
+                <div class="col-6">
                   <dt class="text-muted">推定総工数</dt>
-                  <dd class="mb-0">{{ work.totalEstimatedHours.toFixed(2) }} h</dd>
+                  <dd class="mb-0">{{ getWorkActualHours(work).totalEstimatedHours.toFixed(2) }} h</dd>
+                </div>
+                <div class="col-6">
+                  <dt class="text-muted">推定残工数</dt>
+                  <dd class="mb-0 text-warning">{{ getWorkActualHours(work).remainingEstimatedHours.toFixed(2) }} h</dd>
                 </div>
               </dl>
 

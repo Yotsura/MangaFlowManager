@@ -326,6 +326,14 @@ const overallProgress = computed(() => {
 
 const totalPanels = computed(() => work.value?.totalUnits ?? 0);
 
+// 実際の進捗計算で使用される工数
+const actualWorkHours = computed(() => {
+  if (!work.value) {
+    return { totalEstimatedHours: 0, remainingEstimatedHours: 0 };
+  }
+  return worksStore.calculateActualWorkHours(work.value.id);
+});
+
 // 新しい階層ユニット操作のイベントハンドラー
 const handleAdvanceUnitStage = async (payload: { unitId: string }) => {
   if (!userId.value) {
@@ -492,9 +500,13 @@ const formatDate = (value: string) => {
                   <label class="form-label" for="detail-deadline">締め切り</label>
                   <input id="detail-deadline" v-model="detailForm.deadline" type="date" class="form-control" :min="detailForm.startDate || undefined" :readonly="!isEditMode" />
                 </div>
-                <div class="col-12 col-md-6 col-xl-2">
+                <div class="col-12 col-md-3 col-xl-2">
                   <label class="form-label">推定総工数</label>
-                  <div class="form-control-plaintext fw-semibold">{{ work.totalEstimatedHours.toFixed(2) }} h</div>
+                  <div class="form-control-plaintext fw-semibold">{{ actualWorkHours.totalEstimatedHours.toFixed(2) }} h</div>
+                </div>
+                <div class="col-12 col-md-3 col-xl-2">
+                  <label class="form-label">推定残工数</label>
+                  <div class="form-control-plaintext fw-semibold">{{ actualWorkHours.remainingEstimatedHours.toFixed(2) }} h</div>
                 </div>
               </div>
 
@@ -552,6 +564,7 @@ const formatDate = (value: string) => {
                 :save-error="saveErrorMessage"
                 :last-save-status="lastSaveStatus"
                 :is-edit-mode="isEditMode"
+                :actual-work-hours="actualWorkHours"
                 @request-save="handleSave"
                 @request-delete="requestWorkDeletion"
                 @toggle-edit-mode="toggleEditMode"

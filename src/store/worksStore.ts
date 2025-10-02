@@ -753,5 +753,76 @@ export const useWorksStore = defineStore("works", {
       // ダーティフラグを設定
       this.markWorkDirty(payload.workId);
     },
+
+    // 実際の進捗計算で使用される工数を計算
+    calculateActualWorkHours(workId: string): { totalEstimatedHours: number; remainingEstimatedHours: number } {
+      const work = this.getWorkById(workId);
+      if (!work) {
+        return { totalEstimatedHours: 0, remainingEstimatedHours: 0 };
+      }
+
+      // 最下位レベルのユニット（stageIndexを持つもの）を再帰的に収集
+      const collectLeafUnits = (units: WorkUnit[]): WorkUnit[] => {
+        const result: WorkUnit[] = [];
+        for (const unit of units) {
+          if (unit.stageIndex !== undefined) {
+            result.push(unit);
+          } else if (unit.children) {
+            result.push(...collectLeafUnits(unit.children));
+          }
+        }
+        return result;
+      };
+
+      const leafUnits = collectLeafUnits(work.units);
+      const totalUnits = leafUnits.length;
+
+      if (totalUnits === 0) {
+        return { totalEstimatedHours: 0, remainingEstimatedHours: 0 };
+      }
+
+      // 作品固有設定または全体設定を使用
+      const workStageWorkloads = work.workStageWorkloads && work.workStageWorkloads.length > 0 
+        ? work.workStageWorkloads 
+        : [];
+
+      if (work.primaryGranularityId && workStageWorkloads.length > 0) {
+        // 各段階の工数を取得
+        const stageWorkloadHours = workStageWorkloads.map(stage => {
+          const entry = stage.entries.find(e => e.granularityId === work.primaryGranularityId);
+          return entry?.hours ?? 0;
+        });
+
+        // 各段階の累積工数を計算
+        const cumulativeWorkloads = stageWorkloadHours.reduce((acc, hours, index) => {
+          const prevTotal = index > 0 ? (acc[index - 1] ?? 0) : 0;
+          acc.push(prevTotal + hours);
+          return acc;
+        }, [] as number[]);
+
+        const totalWorkHoursPerUnit = cumulativeWorkloads[cumulativeWorkloads.length - 1] || 0;
+        const totalEstimatedHours = Number((totalWorkHoursPerUnit * totalUnits).toFixed(2));
+
+        // 各ユニットの完了工数を計算
+        const completedWorkHours = leafUnits.reduce((sum, unit) => {
+          const stageIndex = unit.stageIndex ?? 0;
+          const completedHours = stageIndex < cumulativeWorkloads.length ? (cumulativeWorkloads[stageIndex] || 0) : 0;
+          return sum + completedHours;
+        }, 0);
+
+        const remainingEstimatedHours = Number((totalEstimatedHours - completedWorkHours).toFixed(2));
+
+        return { 
+          totalEstimatedHours, 
+          remainingEstimatedHours: Math.max(0, remainingEstimatedHours)
+        };
+      } else {
+        // 従来の計算方法（工数データがない場合）
+        return { 
+          totalEstimatedHours: Number((work.totalUnits * work.unitEstimatedHours).toFixed(2)), 
+          remainingEstimatedHours: Number((work.totalUnits * work.unitEstimatedHours).toFixed(2))
+        };
+      }
+    },
   },
 });
