@@ -214,10 +214,19 @@ const submitNewGranularity = () => {
   isAddingNew.value = false;
 };
 
+interface Emits {
+  (event: "granularity-removed", granularityId: string): void;
+}
+
+const emit = defineEmits<Emits>();
+
 const removeRow = (id: string) => {
   editableRows.value = editableRows.value.filter((row) => row.id !== id);
   touched.value = true;
   saved.value = false;
+
+  // 削除された粒度IDをイベントで通知
+  emit("granularity-removed", id);
 };
 
 const getFieldError = (id: string, field: keyof FieldError) => rowErrors.value.get(id)?.[field] ?? null;

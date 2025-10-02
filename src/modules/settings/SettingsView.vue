@@ -24,6 +24,7 @@ interface StageWorkloadEditorExposed {
   isSaving: () => boolean;
   canSave: () => boolean;
   resetColors: () => void;
+  removeGranularityEntries: (granularityId: string) => void;
 }
 
 const workHoursRef = ref<WorkHoursFormExposed | null>(null);
@@ -51,6 +52,11 @@ const saveStageWorkloads = () => {
 
 const resetStageColors = () => {
   stageEditorRef.value?.resetColors();
+};
+
+const handleGranularityRemoved = (granularityId: string) => {
+  // StageWorkloadEditorに粒度削除を通知
+  stageEditorRef.value?.removeGranularityEntries(granularityId);
 };
 </script>
 
@@ -85,7 +91,7 @@ const resetStageColors = () => {
                 {{ granularitySaving ? "保存中..." : "変更を保存" }}
               </button>
             </div>
-            <GranularityTable ref="granularityRef" />
+            <GranularityTable ref="granularityRef" @granularity-removed="handleGranularityRemoved" />
           </div>
         </div>
       </div>

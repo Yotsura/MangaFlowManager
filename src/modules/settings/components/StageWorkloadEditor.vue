@@ -374,11 +374,22 @@ const handleSave = async () => {
   }
 };
 
+const removeGranularityEntries = (granularityId: string) => {
+  // 各段階から指定された粒度のエントリを削除
+  editableStages.value.forEach(stage => {
+    stage.entries = stage.entries.filter(entry => entry.granularityId !== granularityId);
+  });
+
+  touched.value = true;
+  saved.value = false;
+};
+
 defineExpose({
   save: handleSave,
   isSaving: () => isSaving.value,
   canSave: () => canSave.value,
   resetColors: resetStageColors,
+  removeGranularityEntries,
 });
 </script>
 
