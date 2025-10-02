@@ -33,6 +33,18 @@ const stageColors = computed(() => {
 });
 const stageCount = computed(() => stageLabels.value.length);
 
+const stageWorkloadHours = computed(() => {
+  const workData = work.value;
+  if (!workData?.primaryGranularityId || stageWorkloads.value.length === 0) {
+    return [];
+  }
+
+  return stageWorkloads.value.map(stage => {
+    const entry = stage.entries.find(e => e.granularityId === workData.primaryGranularityId);
+    return entry?.hours ?? 0;
+  });
+});
+
 const primaryGranularityLabel = computed(() => {
   const id = work.value?.primaryGranularityId;
   if (!id) {
@@ -221,20 +233,42 @@ const overallProgress = computed(() => {
     return 0;
   }
 
-  const denominator = stageCount.value;
   const leafUnits = collectLeafUnits(work.value.units);
-
-  if (leafUnits.length === 0) {
+  const totalUnits = leafUnits.length;
+  
+  if (totalUnits === 0) {
     return 0;
   }
 
-  let totalProgress = 0;
-  leafUnits.forEach((unit) => {
-    const ratio = Math.min((unit.stageIndex ?? 0) + 1, denominator) / denominator;
-    totalProgress += ratio;
-  });
+  // 工数ベースの進捗計算
+  if (work.value.primaryGranularityId && stageWorkloads.value.length > 0) {
+    // 各段階の累積工数を計算
+    const cumulativeWorkloads = stageWorkloadHours.value.reduce((acc, hours, index) => {
+      const prevTotal = index > 0 ? (acc[index - 1] ?? 0) : 0;
+      acc.push(prevTotal + hours);
+      return acc;
+    }, [] as number[]);
 
-  return Math.round((totalProgress / leafUnits.length) * 100);
+    const totalWorkHoursPerUnit = cumulativeWorkloads[cumulativeWorkloads.length - 1] || 0;
+    const totalWorkHours = totalWorkHoursPerUnit * totalUnits;
+    
+    if (totalWorkHours === 0) {
+      return 0;
+    }
+
+    // 各ユニットの完了工数を計算
+    const completedWorkHours = leafUnits.reduce((sum, unit) => {
+      const stageIndex = unit.stageIndex ?? 0;
+      const completedHours = stageIndex < cumulativeWorkloads.length ? (cumulativeWorkloads[stageIndex] || 0) : 0;
+      return sum + completedHours;
+    }, 0);
+
+    return Math.round((completedWorkHours / totalWorkHours) * 100);
+  } else {
+    // 従来の単純な進捗計算（工数データがない場合）
+    const completedUnits = leafUnits.filter(unit => (unit.stageIndex ?? 0) >= stageCount.value - 1).length;
+    return Math.round((completedUnits / totalUnits) * 100);
+  }
 });
 
 const totalPanels = computed(() => work.value?.totalUnits ?? 0);
@@ -422,6 +456,7 @@ const formatDate = (value: string) => {
                 :stage-count="stageCount"
                 :stage-labels="stageLabels"
                 :stage-colors="stageColors"
+                :stage-workloads="stageWorkloadHours"
                 :is-edit-mode="isEditMode"
                 :saving-unit-ids="savingPanelIds"
                 @advance-stage="handleAdvanceUnitStage"

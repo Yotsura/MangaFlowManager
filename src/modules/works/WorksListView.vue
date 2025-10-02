@@ -210,14 +210,66 @@ const formatDate = (value: string) => {
   }
 };
 
+// 最下位レベルのユニット（stageIndexを持つもの）を再帰的に収集
+const collectLeafUnits = (units: Work['units']): Work['units'] => {
+  const result: Work['units'] = [];
+  for (const unit of units) {
+    if (unit.stageIndex !== undefined) {
+      result.push(unit);
+    } else if (unit.children) {
+      result.push(...collectLeafUnits(unit.children));
+    }
+  }
+  return result;
+};
+
 const computeWorkProgress = (work: Work) => {
-  // 簡略化: totalUnitsと総進捗から計算
-  if (!work.totalUnits || stageCount.value === 0) {
+  if (!work.units || work.units.length === 0 || stageCount.value === 0) {
     return 0;
   }
 
-  // 暫定: 50%の進捗として表示（実際の計算は後で実装）
-  return 50;
+  const leafUnits = collectLeafUnits(work.units);
+  const totalUnits = leafUnits.length;
+  
+  if (totalUnits === 0) {
+    return 0;
+  }
+
+  // 工数ベースの進捗計算
+  if (work.primaryGranularityId && stageWorkloads.value.length > 0) {
+    // 各段階の工数を取得
+    const stageHours = stageWorkloads.value.map(stage => {
+      const entry = stage.entries.find(e => e.granularityId === work.primaryGranularityId);
+      return entry?.hours ?? 0;
+    });
+
+    // 各段階の累積工数を計算
+    const cumulativeWorkloads = stageHours.reduce((acc, hours, index) => {
+      const prevTotal = index > 0 ? (acc[index - 1] ?? 0) : 0;
+      acc.push(prevTotal + hours);
+      return acc;
+    }, [] as number[]);
+
+    const totalWorkHoursPerUnit = cumulativeWorkloads[cumulativeWorkloads.length - 1] || 0;
+    const totalWorkHours = totalWorkHoursPerUnit * totalUnits;
+    
+    if (totalWorkHours === 0) {
+      return 0;
+    }
+
+    // 各ユニットの完了工数を計算
+    const completedWorkHours = leafUnits.reduce((sum, unit) => {
+      const stageIndex = unit.stageIndex ?? 0;
+      const completedHours = stageIndex < cumulativeWorkloads.length ? (cumulativeWorkloads[stageIndex] || 0) : 0;
+      return sum + completedHours;
+    }, 0);
+
+    return Math.round((completedWorkHours / totalWorkHours) * 100);
+  } else {
+    // 従来の単純な進捗計算（工数データがない場合）
+    const completedUnits = leafUnits.filter(unit => (unit.stageIndex ?? 0) >= stageCount.value - 1).length;
+    return Math.round((completedUnits / totalUnits) * 100);
+  }
 };
 
 const totalPanelsForWork = (work: Work) => work.totalUnits;

@@ -20,6 +20,7 @@
           :stage-count="stageCount"
           :stage-labels="stageLabels"
           :stage-colors="stageColors"
+          :stage-workloads="stageWorkloads"
           :is-edit-mode="isEditMode"
           :saving-unit-ids="savingUnitIds"
           @advance-stage="handleAdvanceStage"
@@ -46,6 +47,7 @@ interface Props {
   stageCount: number;
   stageLabels: string[];
   stageColors: string[];
+  stageWorkloads?: number[];
   isEditMode: boolean;
   savingUnitIds: Set<string>;
 }
