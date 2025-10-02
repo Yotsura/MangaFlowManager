@@ -26,28 +26,45 @@ const { granularities, granularitiesLoaded, loadingGranularities, stageWorkloads
 
 const work = computed(() => worksStore.getWorkById(workId));
 
-const stageLabels = computed(() => stageWorkloads.value.map((stage) => stage.label));
+const stageLabels = computed(() => workStageWorkloads.value.map((stage) => stage.label));
 const stageColors = computed(() => {
-  const total = stageWorkloads.value.length;
-  return stageWorkloads.value.map((stage, index) => normalizeStageColorValue(stage.color, index, total));
+  const total = workStageWorkloads.value.length;
+  return workStageWorkloads.value.map((stage, index) => normalizeStageColorValue(stage.color, index, total));
 });
 const stageCount = computed(() => stageLabels.value.length);
 
 const stageWorkloadHours = computed(() => {
   const workData = work.value;
-  if (!workData?.primaryGranularityId || stageWorkloads.value.length === 0) {
+  if (!workData?.primaryGranularityId || workStageWorkloads.value.length === 0) {
     return [];
   }
 
-  return stageWorkloads.value.map(stage => {
+  return workStageWorkloads.value.map(stage => {
     const entry = stage.entries.find(e => e.granularityId === workData.primaryGranularityId);
     return entry?.hours ?? 0;
   });
 });
 
+// 作品固有の設定または全体設定を使用
+const workGranularities = computed(() => {
+  // 作品固有の設定があればそれを使用、なければ全体設定を使用
+  if (work.value?.workGranularities && work.value.workGranularities.length > 0) {
+    return work.value.workGranularities;
+  }
+  return granularities.value;
+});
+
+const workStageWorkloads = computed(() => {
+  // 作品固有の設定があればそれを使用、なければ全体設定を使用
+  if (work.value?.workStageWorkloads && work.value.workStageWorkloads.length > 0) {
+    return work.value.workStageWorkloads;
+  }
+  return stageWorkloads.value;
+});
+
 // 重みでソートした粒度配列（高い重み→低い重み）
 const sortedGranularities = computed(() => {
-  return [...granularities.value].sort((a, b) => b.weight - a.weight);
+  return [...workGranularities.value].sort((a, b) => b.weight - a.weight);
 });
 
 const primaryGranularityLabel = computed(() => {
@@ -55,7 +72,7 @@ const primaryGranularityLabel = computed(() => {
   if (!id) {
     return null;
   }
-  return granularities.value.find((item) => item.id === id)?.label ?? null;
+  return workGranularities.value.find((item) => item.id === id)?.label ?? null;
 });
 
 const userId = computed(() => user.value?.uid ?? null);
@@ -180,6 +197,16 @@ watch(
     detailForm.startDate = next.startDate;
     detailForm.deadline = next.deadline;
     lastSaveStatus.value = null;
+
+    // 作品固有設定がない場合は現在の全体設定をコピー
+    if ((!next.workGranularities || next.workGranularities.length === 0) &&
+        (!next.workStageWorkloads || next.workStageWorkloads.length === 0)) {
+      worksStore.migrateWorkSettings({
+        workId: next.id,
+        granularities: granularities.value,
+        stageWorkloads: stageWorkloads.value
+      });
+    }
   },
   { immediate: true },
 );

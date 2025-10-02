@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 
 import { deleteDocument, getCollectionDocs, getDocument, setDocument } from "@/services/firebase/firestoreService";
 import { generateId } from "@/utils/id";
+import type { Granularity, StageWorkload } from "@/store/settingsStore";
 
 export const WORK_STATUSES = ["未着手", "作業中", "完了", "保留"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
@@ -11,6 +12,26 @@ export interface WorkUnit {
   index: number;
   children?: WorkUnit[]; // 最下位以外は持つ
   stageIndex?: number; // 最下位のみ持つ
+}
+
+// 作品固有の粒度設定
+export interface WorkGranularity {
+  id: string;
+  label: string;
+  weight: number;
+}
+
+// 作品固有の段階工数設定
+export interface WorkStageWorkloadEntry {
+  granularityId: string;
+  hours: number | null;
+}
+
+export interface WorkStageWorkload {
+  id: number;
+  label: string;
+  color: string;
+  entries: WorkStageWorkloadEntry[];
 }
 
 export interface Work {
@@ -27,6 +48,10 @@ export interface Work {
   unitEstimatedHours: number;
   totalEstimatedHours: number;
   units: WorkUnit[]; // 最上位粒度の配列
+
+  // 作品固有の設定
+  workGranularities?: WorkGranularity[]; // 作品作成時点の粒度設定
+  workStageWorkloads?: WorkStageWorkload[]; // 作品作成時点の段階工数設定
 }
 
 type WorkDocument = Omit<Work, "id">;
@@ -50,6 +75,10 @@ interface CreateWorkPayload {
   defaultCounts: number[]; // 各階層のデフォルト数 [上位→下位]
   primaryGranularityId: string | null;
   unitEstimatedHours: number;
+
+  // 作品作成時点の設定をコピー
+  workGranularities: WorkGranularity[];
+  workStageWorkloads: WorkStageWorkload[];
 }
 
 interface RemoveWorkPayload {
@@ -216,6 +245,8 @@ const mapDocumentToWork = (item: WorkDocument & { id: string }): Work => {
     unitEstimatedHours,
     totalEstimatedHours,
     units,
+    workGranularities: Array.isArray(item.workGranularities) ? item.workGranularities : [],
+    workStageWorkloads: Array.isArray(item.workStageWorkloads) ? item.workStageWorkloads : [],
   };
 };
 
@@ -249,6 +280,8 @@ const serializeWork = (work: Work): WorkDocument => ({
   unitEstimatedHours: work.unitEstimatedHours,
   totalEstimatedHours: work.totalEstimatedHours,
   units: work.units.map(serializeWorkUnit),
+  workGranularities: work.workGranularities || [],
+  workStageWorkloads: work.workStageWorkloads || [],
 });
 
 export const useWorksStore = defineStore("works", {
@@ -409,6 +442,10 @@ export const useWorksStore = defineStore("works", {
         unitEstimatedHours,
         totalEstimatedHours: Number((totalUnits * unitEstimatedHours).toFixed(2)),
         units,
+
+        // 作品固有の設定をコピー
+        workGranularities: payload.workGranularities,
+        workStageWorkloads: payload.workStageWorkloads,
       };
 
       this.works.push(work);
@@ -667,6 +704,46 @@ export const useWorksStore = defineStore("works", {
         this.setSaving(payload.workId, false);
         this.setSaveError(payload.workId, null);
       }
+    },
+
+    // 作品固有設定がない作品に現在の全体設定をコピー
+    async migrateWorkSettings(payload: {
+      workId: string;
+      granularities: Granularity[];
+      stageWorkloads: StageWorkload[]
+    }) {
+      const work = this.getWorkById(payload.workId);
+      if (!work) return;
+
+      // 既に作品固有設定がある場合はスキップ
+      if ((work.workGranularities && work.workGranularities.length > 0) ||
+          (work.workStageWorkloads && work.workStageWorkloads.length > 0)) {
+        return;
+      }
+
+      // 全体設定をコピー
+      const workGranularities: WorkGranularity[] = payload.granularities.map(g => ({
+        id: g.id,
+        label: g.label,
+        weight: g.weight
+      }));
+
+      const workStageWorkloads: WorkStageWorkload[] = payload.stageWorkloads.map(s => ({
+        id: s.id,
+        label: s.label,
+        color: s.color,
+        entries: s.entries.map(e => ({
+          granularityId: e.granularityId,
+          hours: e.hours
+        }))
+      }));
+
+      // 作品を直接更新
+      work.workGranularities = workGranularities;
+      work.workStageWorkloads = workStageWorkloads;
+
+      // ダーティフラグを設定
+      this.markWorkDirty(payload.workId);
     },
   },
 });

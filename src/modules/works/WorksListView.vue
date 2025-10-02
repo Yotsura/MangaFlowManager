@@ -142,6 +142,27 @@ onMounted(async () => {
   initializeGranularityForm();
 });
 
+// 設定をコピーする関数
+const copyCurrentSettings = () => {
+  const workGranularities = granularities.value.map(g => ({
+    id: g.id,
+    label: g.label,
+    weight: g.weight
+  }));
+
+  const workStageWorkloads = stageWorkloads.value.map(stage => ({
+    id: stage.id,
+    label: stage.label,
+    color: stage.color,
+    entries: stage.entries.map(entry => ({
+      granularityId: entry.granularityId,
+      hours: entry.hours
+    }))
+  }));
+
+  return { workGranularities, workStageWorkloads };
+};
+
 onMounted(async () => {
   await authStore.ensureInitialized();
   await ensureSettingsLoaded();
@@ -234,6 +255,9 @@ const handleCreate = () => {
       creationForm.granularityCounts[granularity.id] ?? 6
     );
 
+    // 現在の設定をコピー
+    const { workGranularities, workStageWorkloads } = copyCurrentSettings();
+
     const work = worksStore.createWork({
       title: creationForm.title,
       status: creationForm.status,
@@ -243,6 +267,8 @@ const handleCreate = () => {
       defaultCounts,
       primaryGranularityId: topGranularity.value.id,
       unitEstimatedHours: unitEstimatedHours.value,
+      workGranularities,
+      workStageWorkloads,
     });
 
     // フォームをリセット
