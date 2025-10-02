@@ -22,6 +22,21 @@ interface GranularitiesDocument {
   granularities: Granularity[];
 }
 
+interface StageWorkloadEntry {
+  granularityId: number;
+  hours: number | null;
+}
+
+interface StageWorkload {
+  id: number;
+  label: string;
+  entries: StageWorkloadEntry[];
+}
+
+interface StageWorkloadDocument {
+  stages: StageWorkload[];
+}
+
 interface SettingsState {
   workHours: WorkHourRange[];
   workHoursLoaded: boolean;
@@ -35,10 +50,17 @@ interface SettingsState {
   savingGranularities: boolean;
   granularitiesLoadError: string | null;
   granularitiesSaveError: string | null;
+  stageWorkloads: StageWorkload[];
+  stageWorkloadsLoaded: boolean;
+  loadingStageWorkloads: boolean;
+  savingStageWorkloads: boolean;
+  stageWorkloadsLoadError: string | null;
+  stageWorkloadsSaveError: string | null;
 }
 
 const buildDocumentPath = (userId: string) => `users/${userId}/settings/workHours`;
 const buildGranularityPath = (userId: string) => `users/${userId}/settings/granularities`;
+const buildStageWorkloadPath = (userId: string) => `users/${userId}/settings/stageWorkloads`;
 
 const DEFAULT_GRANULARITIES: Granularity[] = [
   {
@@ -53,6 +75,41 @@ const DEFAULT_GRANULARITIES: Granularity[] = [
   },
 ];
 
+const DEFAULT_STAGE_WORKLOADS: StageWorkload[] = [
+  {
+    id: 1,
+    label: "ネーム",
+    entries: [
+      { granularityId: 1, hours: 3 },
+      { granularityId: 2, hours: null },
+    ],
+  },
+  {
+    id: 2,
+    label: "下書き",
+    entries: [
+      { granularityId: 1, hours: 1 },
+      { granularityId: 2, hours: 0.5 },
+    ],
+  },
+  {
+    id: 3,
+    label: "ペン入れ",
+    entries: [
+      { granularityId: 1, hours: null },
+      { granularityId: 2, hours: 1 },
+    ],
+  },
+  {
+    id: 4,
+    label: "仕上げ",
+    entries: [
+      { granularityId: 1, hours: null },
+      { granularityId: 2, hours: 0.5 },
+    ],
+  },
+];
+
 const mapError = (error: unknown) => {
   if (error instanceof Error) {
     return error.message;
@@ -61,6 +118,10 @@ const mapError = (error: unknown) => {
 };
 
 const cloneDefaults = () => DEFAULT_GRANULARITIES.map((item) => ({ ...item }));
+const cloneDefaultStages = () => DEFAULT_STAGE_WORKLOADS.map((stage) => ({
+  ...stage,
+  entries: stage.entries.map((entry) => ({ ...entry })),
+}));
 
 const normalizeGranularities = (items: unknown): Granularity[] => {
   if (!Array.isArray(items) || items.length === 0) {
@@ -100,6 +161,81 @@ const normalizeGranularities = (items: unknown): Granularity[] => {
   }));
 };
 
+const normalizeStageWorkloads = (items: unknown, granularities: Granularity[]): StageWorkload[] => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+
+  const knownGranularityIds = new Set(granularities.map((g) => g.id));
+
+  const normalized = items
+    .map((entry, index) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const rawStage = entry as Record<string, unknown>;
+      const label = typeof rawStage.label === "string"
+        ? rawStage.label
+        : typeof rawStage.name === "string"
+          ? rawStage.name
+          : `ステージ${index + 1}`;
+
+      const entriesRaw = Array.isArray(rawStage.entries) ? rawStage.entries : [];
+      const entries: StageWorkloadEntry[] = entriesRaw
+        .map((item) => {
+          if (!item || typeof item !== "object") {
+            return null;
+          }
+          const rawItem = item as Record<string, unknown>;
+          const granularityId = Number(rawItem.granularityId ?? rawItem.id);
+          if (!Number.isInteger(granularityId) || granularityId <= 0 || !knownGranularityIds.has(granularityId)) {
+            return null;
+          }
+          const hoursValue = rawItem.hours;
+          const hoursRaw =
+            typeof hoursValue === "number"
+              ? hoursValue
+              : typeof hoursValue === "string"
+                ? Number(hoursValue)
+                : null;
+          const normalizedHours =
+            hoursRaw !== null && Number.isFinite(hoursRaw) && hoursRaw >= 0 ? Number(hoursRaw.toFixed(2)) : null;
+          return {
+            granularityId,
+            hours: normalizedHours,
+          } satisfies StageWorkloadEntry;
+        })
+        .filter((item): item is StageWorkloadEntry => item !== null);
+
+      return {
+        id: index + 1,
+        label,
+        entries,
+      } satisfies StageWorkload;
+    })
+    .filter((item): item is StageWorkload => item !== null);
+
+  return normalized.map((stage, index) => ({
+    id: index + 1,
+    label: stage.label,
+    entries: stage.entries,
+  }));
+};
+
+const alignStageEntries = (stages: StageWorkload[], granularities: Granularity[]): StageWorkload[] =>
+  stages.map((stage, index) => ({
+    id: index + 1,
+    label: stage.label,
+    entries: granularities.map((granularity) => {
+      const existing = stage.entries.find((entry) => entry.granularityId === granularity.id);
+      return {
+        granularityId: granularity.id,
+        hours: existing?.hours ?? null,
+      } satisfies StageWorkloadEntry;
+    }),
+  }));
+
 export const useSettingsStore = defineStore("settings", {
   state: (): SettingsState => ({
     workHours: [],
@@ -114,6 +250,12 @@ export const useSettingsStore = defineStore("settings", {
     savingGranularities: false,
     granularitiesLoadError: null,
     granularitiesSaveError: null,
+    stageWorkloads: [],
+    stageWorkloadsLoaded: false,
+    loadingStageWorkloads: false,
+    savingStageWorkloads: false,
+    stageWorkloadsLoadError: null,
+    stageWorkloadsSaveError: null,
   }),
   actions: {
     setWorkHours(hours: WorkHourRange[]) {
@@ -212,7 +354,59 @@ export const useSettingsStore = defineStore("settings", {
         this.savingGranularities = false;
       }
     },
+    async fetchStageWorkloads(userId: string) {
+      if (!userId) {
+        return;
+      }
+
+      this.loadingStageWorkloads = true;
+      this.stageWorkloadsLoadError = null;
+
+      try {
+        if (!this.granularitiesLoaded && !this.loadingGranularities) {
+          await this.fetchGranularities(userId);
+        }
+
+        const document = await getDocument<StageWorkloadDocument>(buildStageWorkloadPath(userId));
+        const normalized = normalizeStageWorkloads(document?.stages, this.granularities);
+
+        if (normalized.length > 0) {
+          this.stageWorkloads = alignStageEntries(normalized, this.granularities);
+        } else {
+          const defaults = cloneDefaultStages();
+          this.stageWorkloads = alignStageEntries(defaults, this.granularities);
+        }
+
+        this.stageWorkloadsLoaded = true;
+      } catch (error) {
+        this.stageWorkloadsLoadError = mapError(error);
+        throw error;
+      } finally {
+        this.loadingStageWorkloads = false;
+      }
+    },
+    async saveStageWorkloads(userId: string, stages: StageWorkload[]) {
+      if (!userId) {
+        throw new Error("ユーザー情報が取得できませんでした。");
+      }
+
+      this.savingStageWorkloads = true;
+      this.stageWorkloadsSaveError = null;
+
+      try {
+        const sequencedStages = alignStageEntries(stages, this.granularities);
+
+        await setDocument(buildStageWorkloadPath(userId), { stages: sequencedStages });
+        this.stageWorkloads = sequencedStages;
+        this.stageWorkloadsLoaded = true;
+      } catch (error) {
+        this.stageWorkloadsSaveError = mapError(error);
+        throw error;
+      } finally {
+        this.savingStageWorkloads = false;
+      }
+    },
   },
 });
 
-export type { WorkHourRange, Granularity };
+export type { WorkHourRange, Granularity, StageWorkload, StageWorkloadEntry };
