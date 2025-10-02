@@ -2,17 +2,17 @@
   <button
     type="button"
     class="leaf-unit-button"
-    :class="stageButtonClass"
+    :class="[stageButtonClass, { 'edit-mode': isEditMode, 'normal-mode': !isEditMode }]"
     :style="stageButtonStyle"
-    @click="handleAdvanceStage"
-    :disabled="!isEditMode || isSaving"
-    :title="`#${unit.index} 現在: ${currentStageLabel} → クリックで次の段階へ`"
+    @click="handleButtonClick"
+    :disabled="isSaving"
+    :title="buttonTitle"
   >
     <span v-if="isSaving" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
     #{{ unit.index }} {{ currentStageLabel }}
 
-    <!-- 削除ボタン（編集モード時） -->
-    <button v-if="isEditMode" type="button" class="remove-btn" @click.stop="handleRemove" title="削除">×</button>
+    <!-- 編集モード時の削除アイコン -->
+    <span v-if="isEditMode" class="delete-icon">×</span>
   </button>
 </template>
 
@@ -70,12 +70,34 @@ const stageButtonStyle = computed(() => {
   return {};
 });
 
-// イベントハンドラー
+// ボタンのタイトルテキスト
+const buttonTitle = computed(() => {
+  if (props.isEditMode) {
+    return `#${props.unit.index} ${currentStageLabel.value} - クリックで削除`;
+  } else {
+    return `#${props.unit.index} 現在: ${currentStageLabel.value} → クリックで次の段階へ`;
+  }
+});
+
+// メインボタンのクリックハンドラー
+const handleButtonClick = () => {
+  if (isSaving.value) return;
+
+  if (props.isEditMode) {
+    // 編集モード：削除
+    handleRemove();
+  } else {
+    // 通常モード：段階進行
+    handleAdvanceStage();
+  }
+};
+
+// 段階進行ハンドラー
 const handleAdvanceStage = () => {
-  if (!props.isEditMode || isSaving.value) return;
   emit("advance-stage", { unitId: props.unit.id });
 };
 
+// 削除ハンドラー
 const handleRemove = () => {
   if (confirm(`コマ #${props.unit.index}を削除しますか？`)) {
     emit("remove-unit", { unitId: props.unit.id });
