@@ -454,7 +454,7 @@ export const useWorksStore = defineStore("works", {
       this.setSaveError(work.id, null);
       return work;
     },
-    updateWork(id: string, patch: Partial<Pick<Work, "title" | "status" | "startDate" | "deadline" | "unitEstimatedHours">>) {
+    updateWork(id: string, patch: Partial<Pick<Work, "title" | "status" | "startDate" | "deadline" | "unitEstimatedHours" | "workGranularities" | "workStageWorkloads">>) {
       const target = this.works.find((work) => work.id === id);
       if (!target) {
         return;
@@ -478,6 +478,14 @@ export const useWorksStore = defineStore("works", {
       if (patch.unitEstimatedHours !== undefined) {
         target.unitEstimatedHours = Math.max(0, patch.unitEstimatedHours);
         shouldRecalculateTotals = true;
+      }
+
+      if (patch.workGranularities !== undefined) {
+        target.workGranularities = patch.workGranularities;
+      }
+
+      if (patch.workStageWorkloads !== undefined) {
+        target.workStageWorkloads = patch.workStageWorkloads;
       }
 
       if (shouldRecalculateTotals) {

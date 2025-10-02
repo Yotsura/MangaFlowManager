@@ -7,6 +7,7 @@ import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 import PanelStyleUnitEditor from "./components/PanelStyleUnitEditor.vue";
 import ProgressHeatmap from "./components/ProgressHeatmap.vue";
 import WorkSummaryCard from "./components/WorkSummaryCard.vue";
+import WorkSettingsEditor from "./components/WorkSettingsEditor.vue";
 
 import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
@@ -97,6 +98,13 @@ const toggleEditMode = () => {
       detailForm.status = work.value.status;
       detailForm.startDate = work.value.startDate;
       detailForm.deadline = work.value.deadline;
+
+      // 設定フォームも元に戻す
+      settingsForm.workGranularities = workGranularities.value.slice();
+      settingsForm.workStageWorkloads = workStageWorkloads.value.map(stage => ({
+        ...stage,
+        entries: stage.entries.slice()
+      }));
     }
   }
 };
@@ -186,6 +194,12 @@ const detailForm = reactive({
   deadline: "",
 });
 
+// 作品固有設定の編集用フォーム
+const settingsForm = reactive({
+  workGranularities: [] as typeof workGranularities.value,
+  workStageWorkloads: [] as typeof workStageWorkloads.value,
+});
+
 watch(
   work,
   (next) => {
@@ -197,6 +211,13 @@ watch(
     detailForm.startDate = next.startDate;
     detailForm.deadline = next.deadline;
     lastSaveStatus.value = null;
+
+    // 設定フォームを初期化
+    settingsForm.workGranularities = workGranularities.value.slice();
+    settingsForm.workStageWorkloads = workStageWorkloads.value.map(stage => ({
+      ...stage,
+      entries: stage.entries.slice()
+    }));
 
     // 作品固有設定がない場合は現在の全体設定をコピー
     if ((!next.workGranularities || next.workGranularities.length === 0) &&
@@ -392,6 +413,12 @@ const handleSave = async () => {
   lastSaveStatus.value = null;
 
   try {
+    // 作品固有設定を更新
+    worksStore.updateWork(work.value.id, {
+      workGranularities: settingsForm.workGranularities,
+      workStageWorkloads: settingsForm.workStageWorkloads
+    });
+
     await worksStore.saveWork({ userId: userId.value, workId: work.value.id });
     lastSaveStatus.value = "保存しました。";
 
@@ -469,6 +496,14 @@ const formatDate = (value: string) => {
                   <label class="form-label">推定総工数</label>
                   <div class="form-control-plaintext fw-semibold">{{ work.totalEstimatedHours.toFixed(2) }} h</div>
                 </div>
+              </div>
+
+              <!-- 編集モードでの設定編集 -->
+              <div v-if="isEditMode" class="mt-4 border-top pt-4">
+                <WorkSettingsEditor
+                  v-model:work-granularities="settingsForm.workGranularities"
+                  v-model:work-stage-workloads="settingsForm.workStageWorkloads"
+                />
               </div>
             </div>
           </div>
