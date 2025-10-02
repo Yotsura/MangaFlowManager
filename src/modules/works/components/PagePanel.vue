@@ -347,9 +347,11 @@ const cellKey = (cell: RenderCell, index: number) => {
   transition: all 0.15s ease-in-out;
   min-height: 32px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
+  gap: 0.125rem;
+  white-space: nowrap;
 }
 
 .panel-btn:hover:not(:disabled) {
@@ -402,6 +404,7 @@ const cellKey = (cell: RenderCell, index: number) => {
   .panel-btn {
     min-height: 28px;
     padding: 0.1rem 0.2rem;
+    gap: 0.1rem;
   }
 
   .panel-number {

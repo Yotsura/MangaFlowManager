@@ -242,10 +242,10 @@ const advancePanelStage = async (payload: { pageId: string; panelId: string }) =
   try {
     // コマの段階を進める
     worksStore.advancePanelStage(workId, payload.pageId, payload.panelId, stageCount.value);
-    
+
     // 即座に保存
     await worksStore.saveWork({ userId: userId.value, workId });
-    
+
     // 成功時のフィードバック（オプション）
     lastSaveStatus.value = `コマ ${payload.panelId} の進捗を保存しました`;
     setTimeout(() => {
@@ -253,7 +253,7 @@ const advancePanelStage = async (payload: { pageId: string; panelId: string }) =
         lastSaveStatus.value = null;
       }
     }, 2000);
-    
+
   } catch (error) {
     console.error('コマ進捗の保存に失敗しました:', error);
     // エラー表示
@@ -261,7 +261,7 @@ const advancePanelStage = async (payload: { pageId: string; panelId: string }) =
     setTimeout(() => {
       lastSaveStatus.value = null;
     }, 3000);
-    
+
   } finally {
     // 保存中状態を削除
     savingPanelIds.value.delete(payload.panelId);
@@ -342,6 +342,9 @@ const handleSave = async () => {
   try {
     await worksStore.saveWork({ userId: userId.value, workId: work.value.id });
     lastSaveStatus.value = "保存しました。";
+
+    // 保存成功後に編集モードを閉じる
+    isEditMode.value = false;
   } catch (error) {
     console.error(error);
     lastSaveStatus.value = null;
