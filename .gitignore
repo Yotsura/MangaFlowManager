@@ -33,6 +33,7 @@ Thumbs.db
 
 # TypeScript build cache
 *.tsbuildinfo
+node_modules/.tmp/
 
 # Env & credentials
 *.local
@@ -43,3 +44,9 @@ Thumbs.db
 # Firebase
 .firebase/
 firebase-debug.log
+firestore-debug.log
+
+# Temporary files
+tmp/
+temp/
+.tmp/

@@ -29,7 +29,7 @@ export interface Work {
   pages: WorkPage[];
 }
 
-interface WorkDocument extends Omit<Work, "id"> {}
+type WorkDocument = Omit<Work, "id">;
 
 interface WorksState {
   works: Work[];
@@ -198,21 +198,24 @@ export const useWorksStore = defineStore("works", {
       if (!this.dirtyWorkMap[workId]) {
         return;
       }
-      const { [workId]: _removed, ...rest } = this.dirtyWorkMap;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [workId]: _, ...rest } = this.dirtyWorkMap;
       this.dirtyWorkMap = rest;
     },
     setSaving(workId: string, value: boolean) {
       if (value) {
         this.savingWorkMap = { ...this.savingWorkMap, [workId]: true };
       } else if (this.savingWorkMap[workId]) {
-        const { [workId]: _removed, ...rest } = this.savingWorkMap;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { [workId]: _, ...rest } = this.savingWorkMap;
         this.savingWorkMap = rest;
       }
     },
     setSaveError(workId: string, message: string | null) {
       if (message === null) {
         if (this.saveErrorMap[workId] !== undefined) {
-          const { [workId]: _removed, ...rest } = this.saveErrorMap;
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { [workId]: _, ...rest } = this.saveErrorMap;
           this.saveErrorMap = rest;
         }
       } else {

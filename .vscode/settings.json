@@ -7,5 +7,8 @@
   },
   "editor.codeActionsOnSave": {
     "source.fixAll": "explicit"
-  }
+  },
+  "vetur.validation.template": false,
+  "vetur.validation.script": false,
+  "vetur.validation.style": false
 }
