@@ -9,7 +9,7 @@ Vue 3 + Vite で構築した漫画制作の進捗管理アプリです。Firebas
 ## Recommended Browser Setup
 
 - Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd) 
+  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
   - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
 - Firefox:
   - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
@@ -22,16 +22,18 @@ TypeScript cannot handle type information for `.vue` imports by default, so we r
 ## Firebase 連携の準備
 
 1. `.env.example` を参考に `.env.local`（または `.env`）を作成し、Firebase コンソールから取得した値を設定します。
-  ```ini
-  VITE_FIREBASE_API_KEY=YOUR_API_KEY
-  VITE_FIREBASE_AUTH_DOMAIN=YOUR_DOMAIN
-  VITE_FIREBASE_PROJECT_ID=YOUR_PROJECT_ID
-  VITE_FIREBASE_STORAGE_BUCKET=YOUR_BUCKET
-  VITE_FIREBASE_MESSAGING_SENDER_ID=YOUR_SENDER_ID
-  VITE_FIREBASE_APP_ID=YOUR_APP_ID
-  VITE_FIREBASE_MEASUREMENT_ID=YOUR_MEASUREMENT_ID # 任意
-  VITE_USE_FIREBASE_EMULATORS=false
-  ```
+
+```ini
+VITE_FIREBASE_API_KEY=YOUR_API_KEY
+VITE_FIREBASE_AUTH_DOMAIN=YOUR_DOMAIN
+VITE_FIREBASE_PROJECT_ID=YOUR_PROJECT_ID
+VITE_FIREBASE_STORAGE_BUCKET=YOUR_BUCKET
+VITE_FIREBASE_MESSAGING_SENDER_ID=YOUR_SENDER_ID
+VITE_FIREBASE_APP_ID=YOUR_APP_ID
+VITE_FIREBASE_MEASUREMENT_ID=YOUR_MEASUREMENT_ID # 任意
+VITE_USE_FIREBASE_EMULATORS=false
+```
+
 2. Firebase Authentication で Email/Password と Google を有効化します。
 3. Cloud Firestore を Production モードで初期化し、必要に応じてセキュリティルールを更新します（`firestore.rules` を参照）。
 

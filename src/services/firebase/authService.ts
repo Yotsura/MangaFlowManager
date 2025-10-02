@@ -1,9 +1,5 @@
 import { initializeApp } from "firebase/app";
-import {
-  getAnalytics,
-  isSupported as isAnalyticsSupported,
-  type Analytics,
-} from "firebase/analytics";
+import { getAnalytics, isSupported as isAnalyticsSupported, type Analytics } from "firebase/analytics";
 import {
   createUserWithEmailAndPassword,
   getAuth,
@@ -20,11 +16,7 @@ import {
   type Auth,
   type Persistence,
 } from "firebase/auth";
-import {
-  connectFirestoreEmulator,
-  getFirestore,
-  type Firestore,
-} from "firebase/firestore";
+import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
 
 import firebaseConfig from "./config";
 
@@ -36,8 +28,7 @@ const projectAuth: Auth = getAuth(app);
 const projectFirestore: Firestore = getFirestore(app);
 const projectGoogleAuth = new GoogleAuthProvider();
 
-const shouldUseEmulators =
-  import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true";
+const shouldUseEmulators = import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true";
 
 if (shouldUseEmulators) {
   connectAuthEmulator(projectAuth, "http://localhost:9099", {
@@ -52,8 +43,7 @@ const authPersistence = {
   NONE: inMemoryPersistence,
 } as const;
 
-const applyAuthPersistence = (persistence: Persistence = authPersistence.LOCAL) =>
-  setPersistence(projectAuth, persistence);
+const applyAuthPersistence = (persistence: Persistence = authPersistence.LOCAL) => setPersistence(projectAuth, persistence);
 
 const getAnalyticsIfAvailable = async (): Promise<Analytics | null> => {
   if (!analyticsPromise) {
@@ -69,11 +59,9 @@ const getAnalyticsIfAvailable = async (): Promise<Analytics | null> => {
   return analyticsPromise;
 };
 
-const signInWithEmail = (email: string, password: string) =>
-  signInWithEmailAndPassword(projectAuth, email, password);
+const signInWithEmail = (email: string, password: string) => signInWithEmailAndPassword(projectAuth, email, password);
 
-const registerWithEmail = (email: string, password: string) =>
-  createUserWithEmailAndPassword(projectAuth, email, password);
+const registerWithEmail = (email: string, password: string) => createUserWithEmailAndPassword(projectAuth, email, password);
 
 const signInWithGoogle = () => signInWithPopup(projectAuth, projectGoogleAuth);
 

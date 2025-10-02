@@ -14,10 +14,7 @@ const { displayName } = storeToRefs(authStore);
         <div class="card shadow-sm border-0">
           <div class="card-body">
             <h1 class="h4 mb-2">ようこそ、{{ displayName || "ユーザー" }} さん</h1>
-            <p class="text-muted mb-0">
-              ここから作品の進捗や作業スケジュールを管理できます。
-              メニューから各機能にアクセスしてください。
-            </p>
+            <p class="text-muted mb-0">ここから作品の進捗や作業スケジュールを管理できます。 メニューから各機能にアクセスしてください。</p>
           </div>
         </div>
       </div>
@@ -48,9 +45,7 @@ const { displayName } = storeToRefs(authStore);
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
             <h2 class="h5 mb-3">お知らせ</h2>
-            <p class="text-muted mb-0">
-              まだ機能は準備中です。今後、作品管理やカレンダー画面を追加予定です。
-            </p>
+            <p class="text-muted mb-0">まだ機能は準備中です。今後、作品管理やカレンダー画面を追加予定です。</p>
           </div>
         </div>
       </div>

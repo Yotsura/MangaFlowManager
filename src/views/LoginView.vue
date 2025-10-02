@@ -19,9 +19,7 @@ const form = reactive({
 const localError = ref<string | null>(null);
 const redirectPath = computed(() => {
   const redirect = route.query.redirect;
-  return typeof redirect === "string" && redirect.startsWith("/")
-    ? redirect
-    : undefined;
+  return typeof redirect === "string" && redirect.startsWith("/") ? redirect : undefined;
 });
 
 const isRegisterMode = computed(() => preferredMode.value === "register");
@@ -37,7 +35,7 @@ watch(
       await navigateAfterAuth();
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(preferredMode, () => {
@@ -102,84 +100,44 @@ const clearMessages = () => {
               <form @submit.prevent="submit" @keydown.enter="clearMessages">
                 <div class="mb-3">
                   <label for="email" class="form-label">メールアドレス</label>
-                  <input
-                    id="email"
-                    v-model="form.email"
-                    type="email"
-                    class="form-control"
-                    placeholder="you@example.com"
-                    autocomplete="email"
-                    required
-                  />
+                  <input id="email" v-model="form.email" type="email" class="form-control"
+                    placeholder="you@example.com" autocomplete="email" required />
                 </div>
 
                 <div class="mb-3">
                   <label for="password" class="form-label">パスワード</label>
-                  <input
-                    id="password"
-                    v-model="form.password"
-                    type="password"
-                    class="form-control"
-                    placeholder="8文字以上"
-                    autocomplete="current-password"
-                    minlength="6"
-                    required
-                  />
+                  <input id="password" v-model="form.password" type="password" class="form-control"
+                    placeholder="8文字以上" autocomplete="current-password" minlength="6" required />
                 </div>
 
                 <div v-if="isRegisterMode" class="mb-3">
                   <label for="confirmPassword" class="form-label">パスワード（確認）</label>
-                  <input
-                    id="confirmPassword"
-                    v-model="form.confirmPassword"
-                    type="password"
-                    class="form-control"
-                    autocomplete="new-password"
-                    minlength="6"
-                    required
-                  />
+                  <input id="confirmPassword" v-model="form.confirmPassword" type="password"
+                    class="form-control" autocomplete="new-password" minlength="6" required />
                 </div>
 
                 <div v-if="localError || lastError" class="alert alert-danger" role="alert">
                   {{ localError || lastError }}
                 </div>
 
-                <button
-                  type="submit"
-                  class="btn btn-primary w-100"
-                  :disabled="pending"
-                >
+                <button type="submit" class="btn btn-primary w-100" :disabled="pending">
                   <span v-if="pending" class="spinner-border spinner-border-sm me-2" />
-                  {{ isRegisterMode ? "登録" : "ログイン" }}
+                  {{ isRegisterMode ? "メールアドレスで登録" : "ログイン" }}
                 </button>
               </form>
 
-              <div class="text-center my-3">
+              <div v-if="!isRegisterMode" class="text-center my-3">
                 <span class="text-muted">または</span>
               </div>
 
-              <button
-                type="button"
-                class="btn btn-outline-secondary w-100"
-                :disabled="pending"
-                @click="handleGoogleSignIn"
-              >
+              <button v-if="!isRegisterMode" type="button" class="btn btn-outline-secondary w-100" :disabled="pending" @click="handleGoogleSignIn">
                 <span v-if="pending" class="spinner-border spinner-border-sm me-2" />
-                Googleで{{ isRegisterMode ? "登録" : "ログイン" }}
+                Googleでログイン
               </button>
 
               <div class="mt-4 text-center">
-                <button
-                  type="button"
-                  class="btn btn-link p-0"
-                  :disabled="pending"
-                  @click="toggleMode"
-                >
-                  {{
-                    isRegisterMode
-                      ? "既にアカウントをお持ちの方はこちら"
-                      : "アカウントをお持ちでない方はこちら"
-                  }}
+                <button type="button" class="btn btn-link p-0" :disabled="pending" @click="toggleMode">
+                  {{ isRegisterMode ? "既にアカウントをお持ちの方はこちら" : "アカウントをお持ちでない方はこちら" }}
                 </button>
               </div>
             </div>

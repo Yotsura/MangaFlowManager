@@ -56,22 +56,9 @@ const isLoginRoute = () => route.name === "login";
               <span class="d-block">{{ displayName || "ログイン中" }}</span>
             </div>
 
-            <button
-              v-if="isAuthenticated"
-              type="button"
-              class="btn btn-outline-light btn-sm"
-              @click="handleLogout"
-            >
-              ログアウト
-            </button>
+            <button v-if="isAuthenticated" type="button" class="btn btn-outline-light btn-sm" @click="handleLogout">ログアウト</button>
 
-            <RouterLink
-              v-else-if="!isLoginRoute()"
-              class="btn btn-outline-light btn-sm"
-              to="/login"
-            >
-              ログイン
-            </RouterLink>
+            <RouterLink v-else-if="!isLoginRoute()" class="btn btn-outline-light btn-sm" to="/login"> ログイン </RouterLink>
           </div>
         </div>
       </div>
@@ -89,9 +76,7 @@ const isLoginRoute = () => route.name === "login";
     </main>
 
     <footer class="bg-light py-3 mt-auto border-top">
-      <div class="container text-center text-muted small">
-        © {{ new Date().getFullYear() }} MangaFlow Manager
-      </div>
+      <div class="container text-center text-muted small">© {{ new Date().getFullYear() }} MangaFlow Manager</div>
     </footer>
   </div>
 </template>

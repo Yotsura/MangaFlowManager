@@ -3,16 +3,7 @@ import type { Persistence, User } from "firebase/auth";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
-import {
-  applyAuthPersistence,
-  authPersistence,
-  onAuthStateChanged,
-  projectAuth,
-  registerWithEmail,
-  signInWithEmail,
-  signInWithGoogle,
-  signOutFromFirebase,
-} from "@/services/firebase/authService";
+import { applyAuthPersistence, authPersistence, onAuthStateChanged, projectAuth, registerWithEmail, signInWithEmail, signInWithGoogle, signOutFromFirebase } from "@/services/firebase/authService";
 
 type AuthMode = "login" | "register";
 
@@ -56,9 +47,7 @@ export const useAuthStore = defineStore("auth", () => {
   let initPromise: Promise<void> | null = null;
 
   const isAuthenticated = computed(() => user.value !== null);
-  const displayName = computed(
-    () => user.value?.displayName || user.value?.email || ""
-  );
+  const displayName = computed(() => user.value?.displayName || user.value?.email || "");
 
   const setMode = (mode: AuthMode) => {
     preferredMode.value = mode;
@@ -79,7 +68,7 @@ export const useAuthStore = defineStore("auth", () => {
             lastError.value = mapFirebaseError(error);
             initializing.value = false;
             resolve();
-          }
+          },
         );
       });
     }
@@ -87,9 +76,7 @@ export const useAuthStore = defineStore("auth", () => {
     await initPromise;
   };
 
-  const setPersistenceMode = async (
-    persistence: Persistence = authPersistence.LOCAL
-  ) => {
+  const setPersistenceMode = async (persistence: Persistence = authPersistence.LOCAL) => {
     await applyAuthPersistence(persistence);
   };
 
@@ -108,11 +95,9 @@ export const useAuthStore = defineStore("auth", () => {
     }
   };
 
-  const loginWithEmail = (email: string, password: string) =>
-    withPending(() => signInWithEmail(email, password));
+  const loginWithEmail = (email: string, password: string) => withPending(() => signInWithEmail(email, password));
 
-  const registerWithEmailAndPassword = (email: string, password: string) =>
-    withPending(() => registerWithEmail(email, password));
+  const registerWithEmailAndPassword = (email: string, password: string) => withPending(() => registerWithEmail(email, password));
 
   const loginWithGoogleProvider = () => withPending(() => signInWithGoogle());
 
