@@ -158,13 +158,7 @@ const isSaving = computed(() => props.savingUnitIds.has(props.unit.id));
 const panelTypeLabel = computed(() => {
   if (!props.granularities || props.granularities.length === 0) {
     // フォールバック：粒度設定がない場合
-    if (isLeafUnit.value) return "コマ";
-    switch (props.level) {
-      case 0: return "ページ";
-      case 1: return "パネル";
-      case 2: return "グループ";
-      default: return `レベル${props.level}`;
-    }
+    return `レベル${props.level}`;
   }
 
   // 粒度設定から適切なラベルを取得
