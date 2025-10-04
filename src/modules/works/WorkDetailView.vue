@@ -86,26 +86,15 @@ const lastSaveStatus = ref<string | null>(null);
 const isEditMode = ref(false);
 const savingPanelIds = ref(new Set<string>());
 
-const toggleEditMode = () => {
+const toggleEditMode = async () => {
   isEditMode.value = !isEditMode.value;
 
   // 編集モードを出る際に未保存の変更を破棄
   if (!isEditMode.value && work.value && canSaveWork.value) {
     worksStore.discardWorkChanges(work.value.id);
-    // フォームを元の値に戻す
-    if (work.value) {
-      detailForm.title = work.value.title;
-      detailForm.status = work.value.status;
-      detailForm.startDate = work.value.startDate;
-      detailForm.deadline = work.value.deadline;
 
-      // 設定フォームも元に戻す
-      settingsForm.workGranularities = workGranularities.value.slice();
-      settingsForm.workStageWorkloads = workStageWorkloads.value.map(stage => ({
-        ...stage,
-        entries: stage.entries.slice()
-      }));
-    }
+    // 作品データを再読み込みして全ての変更を破棄
+    await reloadWorkData();
   }
 };
 
