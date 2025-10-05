@@ -2,150 +2,156 @@
   <div class="work-settings-editor">
     <h5 class="mb-4">作品固有設定</h5>
 
-    <!-- 粒度設定 -->
-    <div class="mb-5">
-      <h6 class="mb-3 d-flex justify-content-between align-items-center">
-        粒度設定
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-primary"
-          @click="addGranularity"
-        >
-          <i class="bi bi-plus"></i> 追加
-        </button>
-      </h6>
+    <div class="row">
+      <!-- 粒度設定 -->
+      <div class="col-12 col-lg-6">
+        <div class="mb-4">
+          <h6 class="mb-3 d-flex justify-content-between align-items-center">
+            粒度設定
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-primary"
+              @click="addGranularity"
+            >
+              <i class="bi bi-plus"></i> 追加
+            </button>
+          </h6>
 
-      <div v-if="localGranularities.length === 0" class="alert alert-info">
-        粒度が設定されていません。追加ボタンから粒度を追加してください。
+          <div v-if="localGranularities.length === 0" class="alert alert-info">
+            粒度が設定されていません。追加ボタンから粒度を追加してください。
+          </div>
+
+          <div v-else class="table-responsive">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>ラベル</th>
+                  <th>比重</th>
+                  <th>デフォルト配置数</th>
+                  <th width="80">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(granularity, index) in localGranularities" :key="granularity.id">
+                  <td>
+                    <input
+                      v-model="granularity.label"
+                      type="text"
+                      class="form-control form-control-sm"
+                      @input="notifyGranularityChange"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      v-model.number="granularity.weight"
+                      type="number"
+                      class="form-control form-control-sm"
+                      min="1"
+                      @input="notifyGranularityChange"
+                      @change="notifyGranularityChange"
+                      @blur="notifyGranularityChange"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      v-model.number="granularity.defaultCount"
+                      type="number"
+                      class="form-control form-control-sm"
+                      min="1"
+                      @input="notifyGranularityChange"
+                      @change="notifyGranularityChange"
+                      @blur="notifyGranularityChange"
+                    />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-danger"
+                      @click="removeGranularity(index)"
+                    >
+                      削除
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
-      <div v-else class="table-responsive">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>ラベル</th>
-              <th>重み</th>
-              <th>デフォルト数</th>
-              <th width="100">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(granularity, index) in localGranularities" :key="granularity.id">
-              <td>
-                <input
-                  v-model="granularity.label"
-                  type="text"
-                  class="form-control form-control-sm"
-                  @input="notifyGranularityChange"
-                />
-              </td>
-              <td>
-                <input
-                  v-model.number="granularity.weight"
-                  type="number"
-                  class="form-control form-control-sm"
-                  min="1"
-                  @input="notifyGranularityChange"
-                  @change="notifyGranularityChange"
-                  @blur="notifyGranularityChange"
-                />
-              </td>
-              <td>
-                <input
-                  v-model.number="granularity.defaultCount"
-                  type="number"
-                  class="form-control form-control-sm"
-                  min="1"
-                  @input="notifyGranularityChange"
-                  @change="notifyGranularityChange"
-                  @blur="notifyGranularityChange"
-                />
-              </td>
-              <td>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-danger"
-                  @click="removeGranularity(index)"
-                >
-                  削除
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+      <!-- ステージ作業負荷設定 -->
+      <div class="col-12 col-lg-6">
+        <div class="mb-4">
+          <h6 class="mb-3 d-flex justify-content-between align-items-center">
+            ステージ作業負荷設定
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-primary"
+              @click="addStageWorkload"
+            >
+              <i class="bi bi-plus"></i> 追加
+            </button>
+          </h6>
 
-    <!-- ステージ作業負荷設定 -->
-    <div class="mb-4">
-      <h6 class="mb-3 d-flex justify-content-between align-items-center">
-        ステージ作業負荷設定
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-primary"
-          @click="addStageWorkload"
-        >
-          <i class="bi bi-plus"></i> 追加
-        </button>
-      </h6>
+          <div v-if="localStageWorkloads.length === 0" class="alert alert-info">
+            ステージが設定されていません。追加ボタンからステージを追加してください。
+          </div>
 
-      <div v-if="localStageWorkloads.length === 0" class="alert alert-info">
-        ステージが設定されていません。追加ボタンからステージを追加してください。
-      </div>
-
-      <div v-else class="table-responsive">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>ラベル</th>
-              <th>色</th>
-              <th>基準工数</th>
-              <th width="100">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(stage, index) in localStageWorkloads" :key="stage.id">
-              <td>
-                <input
-                  v-model="stage.label"
-                  type="text"
-                  class="form-control form-control-sm"
-                  @input="notifyStageWorkloadChange"
-                />
-              </td>
-              <td>
-                <input
-                  v-model="stage.color"
-                  type="color"
-                  class="form-control form-control-sm"
-                  @input="notifyStageWorkloadChange"
-                  @change="notifyStageWorkloadChange"
-                />
-              </td>
-              <td>
-                <input
-                  v-model.number="stage.baseHours"
-                  type="number"
-                  class="form-control form-control-sm"
-                  min="0"
-                  step="0.1"
-                  @input="notifyStageWorkloadChange"
-                  @change="notifyStageWorkloadChange"
-                  @blur="notifyStageWorkloadChange"
-                />
-              </td>
-              <td>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-danger"
-                  @click="removeStageWorkload(index)"
-                >
-                  削除
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+          <div v-else class="table-responsive">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>ラベル</th>
+                  <th>色</th>
+                  <th>基準工数</th>
+                  <th width="80">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(stage, index) in localStageWorkloads" :key="stage.id">
+                  <td>
+                    <input
+                      v-model="stage.label"
+                      type="text"
+                      class="form-control form-control-sm"
+                      @input="notifyStageWorkloadChange"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      v-model="stage.color"
+                      type="color"
+                      class="form-control form-control-sm"
+                      @input="notifyStageWorkloadChange"
+                      @change="notifyStageWorkloadChange"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      v-model.number="stage.baseHours"
+                      type="number"
+                      class="form-control form-control-sm"
+                      min="0"
+                      step="0.1"
+                      @input="notifyStageWorkloadChange"
+                      @change="notifyStageWorkloadChange"
+                      @blur="notifyStageWorkloadChange"
+                    />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-danger"
+                      @click="removeStageWorkload(index)"
+                    >
+                      削除
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
 
