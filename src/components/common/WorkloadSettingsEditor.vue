@@ -1,5 +1,7 @@
 <template>
   <div class="workload-settings-editor">
+    <h5 v-if="isWorkMode" class="mb-4">作品固有設定</h5>
+
     <div class="row g-4">
       <!-- 作業粒度設定 -->
       <div class="col-12 col-lg-6">
@@ -235,8 +237,8 @@
       </div>
     </div>
 
-    <!-- 保存ボタン（編集可能な場合のみ） -->
-    <div v-if="!readonly" class="d-flex justify-content-end gap-2 mt-4">
+    <!-- 保存ボタン（編集可能で、かつ作品モードでない場合のみ） -->
+    <div v-if="!readonly && !isWorkMode" class="d-flex justify-content-end gap-2 mt-4">
       <button
         class="btn btn-outline-secondary"
         type="button"
@@ -257,12 +259,18 @@
       </button>
     </div>
 
-    <!-- 変更状況表示 -->
-    <div v-if="!readonly && hasChanges" class="mt-3">
+    <!-- 変更状況表示（グローバル設定モードのみ） -->
+    <div v-if="!readonly && !isWorkMode && hasChanges" class="mt-3">
       <div class="alert alert-info d-flex align-items-center">
         <i class="bi bi-info-circle me-2"></i>
         <span>設定に変更があります。保存ボタンを押して変更を適用してください。</span>
       </div>
+    </div>
+
+    <!-- 作品モード用の説明 -->
+    <div v-if="isWorkMode" class="text-muted small mt-4 pt-3 border-top">
+      <p class="mb-1">※ 作品固有設定を変更すると、この作品のみの表示・計算に影響します。</p>
+      <p class="mb-0">※ 変更内容はリアルタイムで反映されます。</p>
     </div>
   </div>
 </template>
@@ -277,14 +285,43 @@ import { getDefaultStageColor, normalizeStageColorValue } from '@/modules/works/
 
 interface Props {
   readonly?: boolean;
+  // 作品固有設定モード
+  workMode?: boolean;
+  workGranularities?: Array<{
+    id: string;
+    label: string;
+    weight: number;
+    defaultCount: number;
+  }>;
+  workStageWorkloads?: Array<{
+    id: number;
+    label: string;
+    color: string;
+    baseHours: number | null;
+  }>;
 }
 
 interface Emits {
   (e: 'settings-saved'): void;
+  (e: 'granularity-change', granularities: Array<{
+    id: string;
+    label: string;
+    weight: number;
+    defaultCount: number;
+  }>): void;
+  (e: 'stage-workload-change', stageWorkloads: Array<{
+    id: number;
+    label: string;
+    color: string;
+    baseHours: number | null;
+  }>): void;
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   readonly: false,
+  workMode: false,
+  workGranularities: () => [],
+  workStageWorkloads: () => [],
 });
 
 const emit = defineEmits<Emits>();
@@ -320,6 +357,9 @@ const editableGranularities = ref<EditableGranularity[]>([]);
 const granularityTouched = ref(false);
 const granularitySaveAttempted = ref(false);
 
+// 作品モードかどうかを判定
+const isWorkMode = computed(() => props.workMode);
+
 // 作業工数関連の状態
 interface EditableEntry {
   granularityId: string;
@@ -350,7 +390,7 @@ const canSave = computed(() => hasChanges.value && !granularityErrors.value.size
 
 // 初期化
 const ensureLoaded = async () => {
-  if (!userId.value) return;
+  if (!userId.value || isWorkMode.value) return;
 
   if (!granularitiesLoaded.value && !loadingGranularities.value) {
     await settingsStore.fetchGranularities(userId.value);
@@ -362,34 +402,53 @@ const ensureLoaded = async () => {
 };
 
 onMounted(async () => {
-  if (!user.value) {
+  if (!user.value && !isWorkMode.value) {
     await authStore.ensureInitialized();
   }
-  await ensureLoaded();
+  if (!isWorkMode.value) {
+    await ensureLoaded();
+  }
 });
 
 watch(userId, async (next, prev) => {
-  if (next && next !== prev) {
+  if (next && next !== prev && !isWorkMode.value) {
     await ensureLoaded();
   }
 });
 
 // 作業粒度の同期
 const syncGranularities = () => {
-  if (!granularitiesLoaded.value) return;
-
-  editableGranularities.value = granularities.value.map(g => ({
-    id: g.id,
-    label: g.label,
-    weight: g.weight.toString(),
-    defaultCount: g.defaultCount.toString(),
-  }));
+  if (isWorkMode.value) {
+    // 作品モードの場合、propsから初期化
+    editableGranularities.value = props.workGranularities.map(g => ({
+      id: g.id,
+      label: g.label,
+      weight: g.weight.toString(),
+      defaultCount: g.defaultCount.toString(),
+    }));
+  } else {
+    // グローバル設定モードの場合、storeから初期化
+    if (!granularitiesLoaded.value) return;
+    editableGranularities.value = granularities.value.map(g => ({
+      id: g.id,
+      label: g.label,
+      weight: g.weight.toString(),
+      defaultCount: g.defaultCount.toString(),
+    }));
+  }
 
   granularityTouched.value = false;
   granularitySaveAttempted.value = false;
 };
 
-watch(granularities, syncGranularities, { immediate: true });
+// 作品モード用のwatcher
+watch(() => props.workGranularities, syncGranularities, { immediate: true, deep: true });
+// グローバル設定モード用のwatcher
+watch(granularities, () => {
+  if (!isWorkMode.value) {
+    syncGranularities();
+  }
+}, { immediate: true });
 
 // 作業工数の同期
 const formatHours = (value: number | null | undefined) => {
@@ -399,15 +458,31 @@ const formatHours = (value: number | null | undefined) => {
 };
 
 const syncStages = () => {
-  if (!stageWorkloadsLoaded.value || editableGranularities.value.length === 0) return;
+  if (editableGranularities.value.length === 0) return;
 
-  const totalStages = stageWorkloads.value.length;
+  let sourceStages: Array<{
+    id?: number;
+    label: string;
+    color: string;
+    baseHours: number | null;
+  }> = [];
+
+  if (isWorkMode.value) {
+    // 作品モードの場合、propsから初期化
+    sourceStages = props.workStageWorkloads;
+  } else {
+    // グローバル設定モードの場合、storeから初期化
+    if (!stageWorkloadsLoaded.value) return;
+    sourceStages = stageWorkloads.value;
+  }
+
+  const totalStages = sourceStages.length;
   const lowestGranularity = editableGranularities.value.reduce((min, current) =>
     Number(current.weight) < Number(min.weight) ? current : min
   );
 
-  editableStages.value = stageWorkloads.value.map((stage, index) => ({
-    id: index + 1,
+  editableStages.value = sourceStages.map((stage, index) => ({
+    id: stage.id ?? (index + 1),
     label: stage.label,
     color: normalizeStageColorValue(stage.color, index, totalStages),
     baseHours: stage.baseHours,
@@ -428,7 +503,14 @@ const syncStages = () => {
   stageSaveAttempted.value = false;
 };
 
-watch([stageWorkloads, editableGranularities], syncStages, { deep: true, immediate: true });
+// 作品モード用のwatcher
+watch(() => props.workStageWorkloads, syncStages, { deep: true, immediate: true });
+// グローバル設定モード用のwatcher
+watch([stageWorkloads, editableGranularities], () => {
+  if (!isWorkMode.value) {
+    syncStages();
+  }
+}, { deep: true, immediate: true });
 
 // 作業粒度のバリデーション
 interface GranularityFieldError {
@@ -529,7 +611,7 @@ const stageErrors = computed(() => {
 });
 
 const getStageError = (id: number) => stageErrors.value.get(id);
-const getEntryError = (stageId: number, granularityId: string) => 
+const getEntryError = (stageId: number, granularityId: string) =>
   stageErrors.value.get(stageId)?.entryErrors.get(granularityId);
 
 // ユーティリティ関数
@@ -557,10 +639,41 @@ const handleGranularityChange = () => {
   granularityTouched.value = true;
   // 粒度が変更されたら、既存のステージを同期
   syncStagesWithGranularities();
+
+  // 作品モードの場合、親コンポーネントに変更を通知
+  if (isWorkMode.value) {
+    const granularities = editableGranularities.value.map(g => ({
+      id: g.id,
+      label: g.label.trim(),
+      weight: Number(g.weight),
+      defaultCount: Number(g.defaultCount),
+    }));
+    emit('granularity-change', granularities);
+  }
 };
 
 const handleStageChange = () => {
   stageTouched.value = true;
+
+  // 作品モードの場合、親コンポーネントに変更を通知
+  if (isWorkMode.value) {
+    const lowestGranularity = editableGranularities.value.reduce((min, current) =>
+      Number(current.weight) < Number(min.weight) ? current : min
+    );
+
+    const stageWorkloads = editableStages.value.map(stage => {
+      const lowestEntry = stage.entries.find(entry => entry.granularityId === lowestGranularity.id);
+      const baseHours = lowestEntry && lowestEntry.hours !== "" ? Number(lowestEntry.hours) : null;
+
+      return {
+        id: stage.id,
+        label: stage.label.trim(),
+        color: stage.color,
+        baseHours,
+      };
+    });
+    emit('stage-workload-change', stageWorkloads);
+  }
 };
 
 const syncStagesWithGranularities = () => {
@@ -586,7 +699,7 @@ const addGranularity = () => {
 
   const newId = generateId();
   const nextNumber = editableGranularities.value.length + 1;
-  
+
   editableGranularities.value.push({
     id: newId,
     label: `粒度${nextNumber}`,
@@ -728,7 +841,23 @@ const saveAll = async () => {
   granularitySaveAttempted.value = true;
   stageSaveAttempted.value = true;
 
-  if (!userId.value || granularityErrors.value.size > 0 || stageErrors.value.size > 0) {
+  if (granularityErrors.value.size > 0 || stageErrors.value.size > 0) {
+    return;
+  }
+
+  // 作品モードの場合は親コンポーネントが保存を処理
+  if (isWorkMode.value) {
+    // 最終的な変更を通知
+    handleGranularityChange();
+    handleStageChange();
+    granularityTouched.value = false;
+    stageTouched.value = false;
+    emit('settings-saved');
+    return;
+  }
+
+  // グローバル設定モードの場合は直接保存
+  if (!userId.value) {
     return;
   }
 

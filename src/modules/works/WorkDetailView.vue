@@ -6,7 +6,7 @@ import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 import PanelStyleUnitEditor from "./components/PanelStyleUnitEditor.vue";
 import ProgressHeatmap from "./components/ProgressHeatmap.vue";
 import WorkSummaryCard from "./components/WorkSummaryCard.vue";
-import WorkSettingsEditor from "./components/WorkSettingsEditor.vue";
+import WorkloadSettingsEditor from "@/components/common/WorkloadSettingsEditor.vue";
 
 import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
@@ -775,9 +775,10 @@ const formatDate = (value: string) => {
                 </div>
 
                 <div v-if="isSettingsEditMode">
-                  <WorkSettingsEditor
-                    :granularities="localWorkGranularities"
-                    :stage-workloads="localWorkStageWorkloads"
+                  <WorkloadSettingsEditor
+                    work-mode
+                    :work-granularities="localWorkGranularities"
+                    :work-stage-workloads="localWorkStageWorkloads"
                     @granularity-change="handleGranularityChange"
                     @stage-workload-change="handleStageWorkloadChange"
                   />
