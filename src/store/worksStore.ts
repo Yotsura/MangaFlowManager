@@ -574,6 +574,21 @@ export const useWorksStore = defineStore("works", {
       target.updatedAt = new Date().toISOString();
       this.markWorkDirty(target.id);
     },
+    updateUnitStage(workId: string, unitId: string, newStage: number) {
+      const target = this.works.find((work) => work.id === workId);
+      if (!target) {
+        return;
+      }
+
+      const unit = findUnitInHierarchy(target.units, unitId);
+      if (!unit || unit.stageIndex === undefined) {
+        return;
+      }
+
+      unit.stageIndex = Math.max(0, newStage);
+      target.updatedAt = new Date().toISOString();
+      this.markWorkDirty(target.id);
+    },
 
     // レガシー互換性のため
     advancePanelStage(workId: string, pageId: string, panelId: string, stageCount: number) {

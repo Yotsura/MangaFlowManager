@@ -210,6 +210,31 @@ const handleStageWorkloadChange = (newStageWorkloads: WorkStageWorkload[]) => {
   if (isSettingsEditMode.value) {
     hasUnsavedSettings.value = true;
   }
+};
+
+const handleBulkStageUpdate = async (updates: Array<{ unitId: string; newStage: number }>) => {
+  if (!work.value || updates.length === 0) return;
+
+  try {
+    // 各作業単位の段階を更新
+    for (const update of updates) {
+      worksStore.updateUnitStage(work.value.id, update.unitId, update.newStage);
+    }
+
+    // サーバーに保存
+    if (userId.value) {
+      await worksStore.saveWork({
+        userId: userId.value,
+        workId: work.value.id
+      });
+    }
+
+    // 成功メッセージを表示
+    console.log(`${updates.length}個の作業単位の段階を更新し、サーバーに保存しました`);
+  } catch (error) {
+    console.error('一括段階更新エラー:', error);
+    alert('一括段階更新に失敗しました。もう一度お試しください。');
+  }
 };// 設定編集モードの変更を監視
 watch(isSettingsEditMode, (newValue) => {
   if (!newValue) {
@@ -779,8 +804,10 @@ const formatDate = (value: string) => {
                     work-mode
                     :work-granularities="localWorkGranularities"
                     :work-stage-workloads="localWorkStageWorkloads"
+                    :work-data="work"
                     @granularity-change="handleGranularityChange"
                     @stage-workload-change="handleStageWorkloadChange"
+                    @bulk-stage-update="handleBulkStageUpdate"
                   />
 
                   <!-- 設定保存/キャンセルボタン -->

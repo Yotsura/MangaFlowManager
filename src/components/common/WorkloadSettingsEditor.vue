@@ -169,27 +169,16 @@
                   </div>
 
                   <div class="stage-actions">
-                    <div class="dropdown">
-                      <button
-                        class="btn btn-outline-secondary btn-sm dropdown-toggle"
-                        type="button"
-                        :disabled="isSaving"
-                        data-bs-toggle="dropdown"
-                      >
-                        一括設定
-                      </button>
-                      <ul class="dropdown-menu">
-                        <li>
-                          <button
-                            class="dropdown-item"
-                            type="button"
-                            @click="applyBulkSetting(stage.id)"
-                          >
-                            この段階未満に適用
-                          </button>
-                        </li>
-                      </ul>
-                    </div>
+                    <button
+                      v-if="isWorkMode"
+                      class="btn btn-outline-secondary btn-sm"
+                      type="button"
+                      :disabled="isSaving"
+                      @click="applyBulkSetting(stage.id)"
+                      title="この段階未満に適用"
+                    >
+                      一括設定
+                    </button>
                     <button
                       class="btn btn-outline-danger btn-sm ms-2"
                       type="button"
@@ -299,6 +288,20 @@ interface Props {
     color: string;
     baseHours: number | null;
   }>;
+  // 作品データ（一括段階更新用）
+  workData?: {
+    id: string;
+    units: Array<{
+      id: string;
+      index: number;
+      children?: Array<{
+        id: string;
+        index: number;
+        stageIndex?: number;
+      }>;
+      stageIndex?: number;
+    }>;
+  };
 }
 
 interface Emits {
@@ -315,6 +318,10 @@ interface Emits {
     color: string;
     baseHours: number | null;
   }>): void;
+  (e: 'bulk-stage-update', updates: Array<{
+    unitId: string;
+    newStage: number;
+  }>): void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -322,6 +329,7 @@ const props = withDefaults(defineProps<Props>(), {
   workMode: false,
   workGranularities: () => [],
   workStageWorkloads: () => [],
+  workData: undefined,
 });
 
 const emit = defineEmits<Emits>();
@@ -797,29 +805,61 @@ const updateRelatedEntries = (stageId: number, changedGranularityId: string, new
 };
 
 const applyBulkSetting = (targetStageId: number) => {
-  if (isSaving.value) return;
+  if (isSaving.value || !isWorkMode.value || !props.workData) return;
 
-  const targetStage = editableStages.value.find(stage => stage.id === targetStageId);
-  if (!targetStage) return;
+  // 階層構造をフラットにして最下位の作業単位を取得
+  const flattenUnits = (units: typeof props.workData.units): Array<{ id: string; stageIndex: number }> => {
+    const result: Array<{ id: string; stageIndex: number }> = [];
 
-  const lowestGranularity = editableGranularities.value.reduce((prev, current) =>
-    Number(current.weight) > Number(prev.weight) ? current : prev
-  );
-
-  if (!lowestGranularity) return;
-
-  editableStages.value.forEach(stage => {
-    if (stage.id < targetStageId) {
-      const existingEntry = stage.entries.find(entry => entry.granularityId === lowestGranularity.id);
-      const targetEntry = targetStage.entries.find(entry => entry.granularityId === lowestGranularity.id);
-
-      if (targetEntry && existingEntry) {
-        existingEntry.hours = targetEntry.hours;
+    for (const unit of units) {
+      if (unit.stageIndex !== undefined) {
+        // 最下位の単位（stageIndexを持つ）
+        result.push({ id: unit.id, stageIndex: unit.stageIndex });
+      } else if (unit.children) {
+        // 中間層の場合、子を再帰的に処理
+        result.push(...flattenUnits(unit.children));
       }
     }
-  });
 
-  stageTouched.value = true;
+    return result;
+  };
+
+  const allLeafUnits = flattenUnits(props.workData.units);
+  let unitsToUpdate: Array<{ id: string; stageIndex: number }>;
+  let confirmMessage: string;
+  let newStageIndex: number;
+
+  if (targetStageId === 1) {
+    // 最初の段階の場合：すべての作業単位を最初の段階に巻き戻す
+    unitsToUpdate = allLeafUnits.filter(unit => unit.stageIndex > 0);
+    newStageIndex = 0;
+    confirmMessage = `すべての作業単位を最初の段階に巻き戻しますか？（${unitsToUpdate.length}個の作業単位が対象）`;
+  } else {
+    // その他の段階の場合：対象段階未満のものを対象段階に進める
+    unitsToUpdate = allLeafUnits.filter(unit => unit.stageIndex < (targetStageId - 1));
+    newStageIndex = targetStageId - 1;
+    const targetStageName = editableStages.value.find(s => s.id === targetStageId)?.label || `段階${targetStageId}`;
+    confirmMessage = `対象段階未満の作業単位を「${targetStageName}」に進めますか？（${unitsToUpdate.length}個の作業単位が対象）`;
+  }
+
+  if (unitsToUpdate.length === 0) {
+    alert('対象となる作業単位がありません。');
+    return;
+  }
+
+  // 確認ダイアログ
+  if (!confirm(confirmMessage)) {
+    return;
+  }
+
+  // 一括更新用のデータを作成
+  const updates = unitsToUpdate.map(unit => ({
+    unitId: unit.id,
+    newStage: newStageIndex
+  }));
+
+  // 親コンポーネントに一括段階更新を通知
+  emit('bulk-stage-update', updates);
 };
 
 const resetStageColors = () => {
