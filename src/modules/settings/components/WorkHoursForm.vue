@@ -122,8 +122,10 @@ const handleSubmit = async () => {
   try {
     await settingsStore.saveWorkHours(userId.value, selectedHours);
     saved.value = true;
+    console.log('作業時間設定を保存しました');
   } catch (error) {
-    console.error(error);
+    console.error('作業時間設定の保存に失敗しました:', error);
+    alert('作業時間設定の保存に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
   }
 };
 
@@ -138,7 +140,10 @@ defineExpose({
   <form class="work-hours-form" @submit.prevent="handleSubmit">
     <div v-if="isLoading" class="alert alert-info" role="status">作業可能時間を読み込み中です...</div>
     <div v-else-if="loadError" class="alert alert-danger" role="alert">
-      {{ loadError }}
+      読み込みエラー: {{ loadError }}
+    </div>
+    <div v-if="saveError" class="alert alert-danger" role="alert">
+      保存エラー: {{ saveError }}
     </div>
     <template v-else>
       <div class="list-group">

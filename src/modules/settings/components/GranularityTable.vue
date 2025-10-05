@@ -58,10 +58,12 @@ const resetNewGranularity = () => {
 
 const ensureLoaded = async () => {
   if (!userId.value) {
+    console.warn('粒度設定を読み込めません: ユーザーIDがありません');
     return;
   }
 
   if (!granularitiesLoaded.value && !loadingGranularities.value) {
+    console.log('粒度設定を読み込み中:', userId.value);
     await settingsStore.fetchGranularities(userId.value);
   }
 };
@@ -255,8 +257,10 @@ const handleSave = async () => {
     saved.value = true;
     saveAttempted.value = false;
     touched.value = false;
+    console.log('粒度設定を保存しました');
   } catch (error) {
-    console.error(error);
+    console.error('粒度設定の保存に失敗しました:', error);
+    alert('粒度設定の保存に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
   }
 };
 

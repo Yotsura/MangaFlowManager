@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
-import { generateCalendarDays, isSameMonth, isToday, isWeekend, isHoliday } from '@/utils/dateUtils';
+import { ref, computed, watch, onMounted } from 'vue';
+import { generateCalendarDays, isSameMonth, isToday, isWeekend, isHoliday, getHolidaysWithCabinetOfficeData } from '@/utils/dateUtils';
+import type { Holiday } from '@/utils/dateUtils';
 
 interface Props {
   year?: number;
@@ -19,6 +20,8 @@ const emit = defineEmits<{
 
 const currentYear = ref(props.year);
 const currentMonth = ref(props.month);
+const holidays = ref<Holiday[]>([]);
+const holidaysLastUpdated = ref<number>(0);
 
 // カレンダーの日付配列を生成
 const calendarDays = computed(() => {
@@ -29,6 +32,17 @@ const calendarDays = computed(() => {
 const currentMonthDate = computed(() => {
   return new Date(currentYear.value, currentMonth.value - 1, 1);
 });
+
+// 祝日データを更新
+const updateHolidays = async () => {
+  try {
+    const yearHolidays = await getHolidaysWithCabinetOfficeData(currentYear.value);
+    holidays.value = yearHolidays;
+    holidaysLastUpdated.value = Date.now();
+  } catch (error) {
+    console.warn('Failed to update holidays:', error);
+  }
+};
 
 // 曜日ラベル
 const weekDays = ['月', '火', '水', '木', '金', '土', '日'];
@@ -46,6 +60,18 @@ const onDateClick = (date: Date) => {
   emit('date-click', date);
 };
 
+// 祝日を取得（内閣府データ優先）
+const getHolidayForDate = (date: Date): Holiday | null => {
+  const holiday = holidays.value.find(h =>
+    h.date.getFullYear() === date.getFullYear() &&
+    h.date.getMonth() === date.getMonth() &&
+    h.date.getDate() === date.getDate()
+  );
+
+  // 内閣府データにない場合は計算ベースにフォールバック
+  return holiday || isHoliday(date);
+};
+
 // 日付セルのクラスを取得
 const getDateCellClass = (date: Date) => {
   const classes = ['calendar-date'];
@@ -58,7 +84,7 @@ const getDateCellClass = (date: Date) => {
     classes.push('today');
   }
 
-  const holiday = isHoliday(date);
+  const holiday = getHolidayForDate(date);
   if (holiday) {
     classes.push('holiday');
   }
@@ -72,14 +98,24 @@ const getDateCellClass = (date: Date) => {
 
 // 祝日名を取得
 const getHolidayName = (date: Date) => {
-  const holiday = isHoliday(date);
+  const holiday = getHolidayForDate(date);
   return holiday ? holiday.name : null;
 };
+
+// 年が変わったら祝日データを更新
+watch(() => currentYear.value, async () => {
+  await updateHolidays();
+});
 
 // propsが変更された時の処理
 watch(() => [props.year, props.month], ([newYear, newMonth]) => {
   if (newYear !== undefined) currentYear.value = newYear;
   if (newMonth !== undefined) currentMonth.value = newMonth;
+});
+
+// 初期化時に祝日データを読み込み
+onMounted(async () => {
+  await updateHolidays();
 });
 </script>
 

@@ -207,7 +207,7 @@ export const getHolidays = (year: number): Holiday[] => {
   holidays.push({ name: '秋分の日', date: new Date(year, 8, autumnalEquinox) });
 
   // スポーツの日（体育の日）
-  if (year >= 2021) {
+  if (year === 2021) {
     // 2021年は五輪特例で7月23日
     holidays.push({ name: 'スポーツの日', date: new Date(year, 6, 23) });
   } else if (year >= 2020) {
@@ -266,7 +266,33 @@ export const getAllHolidays = (year: number): Holiday[] => {
 };
 
 /**
- * 指定日が祝日かどうかを判定
+ * 内閣府データを優先した祝日取得（Firestore経由）
+ */
+export const getHolidaysWithCabinetOfficeData = async (year: number): Promise<Holiday[]> => {
+  try {
+    const { globalHolidayService } = await import('@/services/globalHolidayService');
+    return await globalHolidayService.getHolidaysForYear(year);
+  } catch (error) {
+    console.warn('Failed to get holidays from Firestore, using calculated holidays:', error);
+    return getAllHolidays(year);
+  }
+};
+
+/**
+ * 内閣府データを優先した祝日判定（Firestore経由）
+ */
+export const isHolidayWithCabinetOfficeData = async (date: Date): Promise<Holiday | null> => {
+  try {
+    const { globalHolidayService } = await import('@/services/globalHolidayService');
+    return await globalHolidayService.isHoliday(date);
+  } catch (error) {
+    console.warn('Failed to check holiday from Firestore, using calculated holidays:', error);
+    return isHoliday(date);
+  }
+};
+
+/**
+ * 指定日が祝日かどうかを判定（計算ベース）
  */
 export const isHoliday = (date: Date): Holiday | null => {
   const year = date.getFullYear();

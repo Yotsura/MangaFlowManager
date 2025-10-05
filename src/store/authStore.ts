@@ -58,8 +58,23 @@ export const useAuthStore = defineStore("auth", () => {
     if (!initPromise) {
       initPromise = new Promise<void>((resolve) => {
         unsubscribe = onAuthStateChanged(
-          (currentUser) => {
+          async (currentUser) => {
+            const wasLoggedOut = user.value === null;
             user.value = currentUser;
+
+            // ユーザーがログインした時（以前がnullで現在がnullでない）
+            if (wasLoggedOut && currentUser) {
+              try {
+                // グローバル祝日データを非同期で更新（ブロックしない）
+                const { globalHolidayService } = await import('@/services/globalHolidayService');
+                globalHolidayService.getHolidays().catch(error => {
+                  console.warn('Failed to update holidays on login:', error);
+                });
+              } catch (error) {
+                console.warn('Failed to load global holiday service:', error);
+              }
+            }
+
             initializing.value = false;
             resolve();
           },

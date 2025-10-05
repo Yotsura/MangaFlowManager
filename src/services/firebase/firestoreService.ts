@@ -8,8 +8,17 @@ import { projectFirestore } from "./firebaseApp";
 const getCollection = (path: string) => collection(projectFirestore, path);
 
 const getDocument = async <T>(path: string) => {
-  const snapshot = await getDoc(doc(projectFirestore, path));
-  return snapshot.exists() ? (snapshot.data() as T) : null;
+  console.log('Firestore読み込み開始:', path);
+  try {
+    const snapshot = await getDoc(doc(projectFirestore, path));
+    const exists = snapshot.exists();
+    const data = exists ? (snapshot.data() as T) : null;
+    console.log('Firestore読み込み完了:', { path, exists, hasData: !!data });
+    return data;
+  } catch (error) {
+    console.error('Firestore読み込み失敗:', { path, error });
+    throw error;
+  }
 };
 
 const getCollectionDocs = async <T>(path: string) => {
@@ -17,8 +26,19 @@ const getCollectionDocs = async <T>(path: string) => {
   return snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...(docSnapshot.data() as T) }));
 };
 
-const setDocument = async (path: string, data: Record<string, unknown>, options?: SetOptions) =>
-  options ? setDoc(doc(projectFirestore, path), data, options) : setDoc(doc(projectFirestore, path), data);
+const setDocument = async (path: string, data: Record<string, unknown>, options?: SetOptions) => {
+  console.log('Firestore書き込み開始:', { path, data, options });
+  try {
+    const result = options ?
+      await setDoc(doc(projectFirestore, path), data, options) :
+      await setDoc(doc(projectFirestore, path), data);
+    console.log('Firestore書き込み成功:', path);
+    return result;
+  } catch (error) {
+    console.error('Firestore書き込み失敗:', { path, error });
+    throw error;
+  }
+};
 
 const deleteDocument = async (path: string) => deleteDoc(doc(projectFirestore, path));
 

@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import WorkloadCalendar from './components/WorkloadCalendar.vue';
-import { isHoliday, isWeekend, getAllHolidays } from '@/utils/dateUtils';
+import { isHoliday, isWeekend, getHolidaysWithCabinetOfficeData } from '@/utils/dateUtils';
+import type { Holiday } from '@/utils/dateUtils';
 
 const selectedDate = ref<Date | null>(null);
 const currentYear = ref(new Date().getFullYear());
 const currentMonth = ref(new Date().getMonth() + 1);
+const holidays = ref<Holiday[]>([]);
 
 const selectedDateInfo = computed(() => {
   if (!selectedDate.value) return null;
 
   const date = selectedDate.value;
-  const holiday = isHoliday(date);
+  const holiday = getHolidayForDate(date);
   const weekend = isWeekend(date);
 
   return {
@@ -22,26 +24,63 @@ const selectedDateInfo = computed(() => {
   };
 });
 
+// 祝日を取得（内閣府データ優先）
+const getHolidayForDate = (date: Date): Holiday | null => {
+  const holiday = holidays.value.find(h =>
+    h.date.getFullYear() === date.getFullYear() &&
+    h.date.getMonth() === date.getMonth() &&
+    h.date.getDate() === date.getDate()
+  );
+
+  // 内閣府データにない場合は計算ベースにフォールバック
+  return holiday || isHoliday(date);
+};
+
 // 現在表示中の月の祝日一覧を取得
 const currentMonthHolidays = computed(() => {
-  const holidays = getAllHolidays(currentYear.value);
-
-  return holidays.filter(holiday => {
+  return holidays.value.filter((holiday: Holiday) => {
     const holidayMonth = holiday.date.getMonth() + 1;
     return holidayMonth === currentMonth.value;
-  }).sort((a, b) => a.date.getDate() - b.date.getDate());
+  }).sort((a: Holiday, b: Holiday) => a.date.getDate() - b.date.getDate());
 });
+
+// 祝日データを更新
+const updateHolidays = async () => {
+  try {
+    const yearHolidays = await getHolidaysWithCabinetOfficeData(currentYear.value);
+    holidays.value = yearHolidays;
+  } catch (error) {
+    console.warn('Failed to update holidays:', error);
+  }
+};
 
 const onDateClick = (date: Date) => {
   selectedDate.value = date;
   console.log('Selected date:', date);
 };
 
-const onMonthChange = (year: number, month: number) => {
+const onMonthChange = async (year: number, month: number) => {
+  const yearChanged = currentYear.value !== year;
   currentYear.value = year;
   currentMonth.value = month;
+
+  // 年が変わった場合は祝日データを更新
+  if (yearChanged) {
+    await updateHolidays();
+  }
+
   console.log('Month changed:', year, month);
 };
+
+// 年が変わったら祝日データを更新
+watch(() => currentYear.value, async () => {
+  await updateHolidays();
+});
+
+// 初期化時に祝日データを読み込み
+onMounted(async () => {
+  await updateHolidays();
+});
 </script>
 
 <template>
