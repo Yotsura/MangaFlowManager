@@ -12,6 +12,13 @@ import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkUnit, type WorkGranularity, type WorkStageWorkload } from "@/store/worksStore";
+import {
+  parseStructureString,
+  validateStructureString,
+  convertToWorkStructure,
+  convertWorkUnitsToStructureString,
+  type WorkStructure
+} from "@/utils/structureParser";
 
 const route = useRoute();
 const router = useRouter();
@@ -175,9 +182,24 @@ const isSavingWork = computed(() => (work.value ? worksStore.isSavingWork(work.v
 const canSaveWork = computed(() => (work.value ? worksStore.isWorkDirty(work.value.id) : false));
 const saveErrorMessage = computed(() => (work.value ? worksStore.getSaveError(work.value.id) : null));
 
-const lastSaveStatus = ref<string | null>(null);
+// 現在の構造を文字列として表示
+const currentStructureString = computed(() => {
+  if (!work.value || !work.value.units || work.value.units.length === 0) {
+    return "構造が設定されていません";
+  }
+
+  return convertWorkUnitsToStructureString(work.value.units);
+});const lastSaveStatus = ref<string | null>(null);
 const isEditMode = ref(false);
 const savingPanelIds = ref(new Set<string>());
+
+// 作品構造編集用の状態
+const isStructureEditMode = ref(false);
+const structureEditForm = reactive({
+  structureString: "",
+});
+const structureEditError = ref<string | null>(null);
+const isSavingStructure = ref(false);
 
 // リアルタイム更新用のローカル設定状態
 const localWorkGranularities = ref<WorkGranularity[]>([]);
@@ -311,6 +333,94 @@ const toggleEditMode = async () => {
 
     // 作品データを再読み込みして全ての変更を破棄
     await reloadWorkData();
+  }
+};
+
+// 作品構造編集機能
+const toggleStructureEditMode = () => {
+  isStructureEditMode.value = !isStructureEditMode.value;
+
+  if (isStructureEditMode.value) {
+    // 編集モード開始時にフォームをクリア
+    structureEditForm.structureString = "";
+    structureEditError.value = null;
+  }
+};
+
+// 構造文字列をクリップボードにコピー
+const copyStructureString = async () => {
+  try {
+    await navigator.clipboard.writeText(currentStructureString.value);
+    // 成功の視覚的フィードバックを追加することも可能
+    console.log('構造文字列をクリップボードにコピーしました');
+  } catch (error) {
+    console.error('クリップボードへのコピーに失敗しました:', error);
+  }
+};
+
+const validateStructureInput = () => {
+  const structureStr = structureEditForm.structureString.trim();
+  if (!structureStr) {
+    structureEditError.value = "構造文字列を入力してください。";
+    return false;
+  }
+
+  const granularityCount = sortedGranularities.value.length;
+  const basicError = validateStructureString(structureStr, granularityCount);
+  if (basicError) {
+    structureEditError.value = basicError;
+    return false;
+  }
+
+  structureEditError.value = null;
+  return true;
+};
+
+const applyStructureChanges = async () => {
+  if (!work.value || !validateStructureInput()) {
+    return;
+  }
+
+  try {
+    isSavingStructure.value = true;
+
+    const granularityCount = sortedGranularities.value.length;
+    const parsed = parseStructureString(structureEditForm.structureString, granularityCount);
+    if (!parsed) {
+      structureEditError.value = "構造文字列の解析に失敗しました。階層数が粒度設定と一致しているか確認してください。";
+      return;
+    }
+
+    const workStructure = convertToWorkStructure(parsed);
+
+    // worksStoreの構造上書き機能を使用
+    const success = worksStore.overwriteWorkStructure(work.value.id, {
+      topLevelUnits: workStructure.structureData,
+      hierarchicalUnits: workStructure.hierarchicalStructureData
+    });
+
+    if (success) {
+      console.log('作品構造が正常に更新されました');
+
+      // Firestoreに保存
+      await worksStore.saveWork({
+        userId: user.value.uid,
+        workId: work.value.id
+      });
+
+      isStructureEditMode.value = false;
+      structureEditForm.structureString = "";
+
+      // 作品データを再読み込み
+      await reloadWorkData();
+    } else {
+      structureEditError.value = "構造の更新に失敗しました。";
+    }
+  } catch (error) {
+    console.error('作品構造更新エラー:', error);
+    structureEditError.value = "構造の更新中にエラーが発生しました。";
+  } finally {
+    isSavingStructure.value = false;
   }
 };
 
@@ -832,6 +942,71 @@ const formatDate = (value: string) => {
                     </button>
                   </div>
                 </div>
+
+                <!-- 作品構造編集 -->
+                <div class="mt-4 border-top pt-4">
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">作品構造編集</h6>
+                    <button
+                      type="button"
+                      class="btn btn-sm"
+                      :class="isStructureEditMode ? 'btn-outline-secondary' : 'btn-outline-primary'"
+                      @click="toggleStructureEditMode"
+                    >
+                      <i class="bi" :class="isStructureEditMode ? 'bi-x' : 'bi-pencil'"></i>
+                      {{ isStructureEditMode ? 'キャンセル' : '作品を編集する' }}
+                    </button>
+                  </div>
+
+                  <div v-if="!isStructureEditMode" class="text-muted">
+                    <p class="mb-0">構造指定文字列を使用して作品の構造と作業段階を一括更新できます。</p>
+                  </div>
+
+                  <div v-if="isStructureEditMode">
+                    <div class="mb-3">
+                      <label for="structure-input" class="form-label">構造指定文字列</label>
+                      <textarea
+                        id="structure-input"
+                        v-model="structureEditForm.structureString"
+                        class="form-control"
+                        :class="{ 'is-invalid': structureEditError }"
+                        rows="3"
+                        placeholder="例: [1],[5/5/5/5/5],[5/5/5/4]"
+                      ></textarea>
+                      <div v-if="structureEditError" class="invalid-feedback">
+                        {{ structureEditError }}
+                      </div>
+                      <div class="form-text">
+                        <strong>書式:</strong><br>
+                        • 最上位ユニット：カンマ(,)区切りで分割<br>
+                        • 各最上位ユニット：角括弧[]で囲む<br>
+                        • 作業段階：スラッシュ(/)区切りで各最下位ユニットの作業段階を指定<br>
+                        <strong>作業段階:</strong> 1=未着手, 2=ネーム済, 3=下書済, 4=ペン入済, 5=仕上済
+                      </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                      <button
+                        type="button"
+                        class="btn btn-success"
+                        @click="applyStructureChanges"
+                        :disabled="isSavingStructure || !structureEditForm.structureString.trim()"
+                      >
+                        <span v-if="isSavingStructure" class="spinner-border spinner-border-sm me-2"></span>
+                        <i class="bi bi-check me-1"></i>
+                        構造を更新
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary"
+                        @click="toggleStructureEditMode"
+                      >
+                        <i class="bi bi-x me-1"></i>
+                        キャンセル
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -861,6 +1036,25 @@ const formatDate = (value: string) => {
                 @remove-unit="handleRemoveUnit"
                 @update-children-count="handleUpdateChildrenCount"
               />
+
+              <!-- 現在の構造文字列を表示 -->
+              <div class="mt-3 pt-3 border-top">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="mb-0 text-muted">現在の構造</h6>
+                  <button
+                    v-if="currentStructureString !== '構造が設定されていません'"
+                    type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    @click="copyStructureString"
+                    title="構造文字列をコピー"
+                  >
+                    <i class="bi bi-clipboard"></i>
+                  </button>
+                </div>
+                <div class="bg-light p-2 rounded">
+                  <code class="text-dark">{{ currentStructureString }}</code>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -6,6 +6,14 @@ import { useRouter } from "vue-router";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useWorksStore, WORK_STATUSES, type Work, type WorkStatus } from "@/store/worksStore";
+import {
+  parseStructureString as parseStructure,
+  validateStructureString as validateStructure,
+  convertToWorkStructure,
+  type ParsedStructure,
+  type TopLevelUnit,
+  type WorkStructure
+} from "@/utils/structureParser";
 
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
@@ -25,12 +33,14 @@ const creationForm = reactive({
   granularityCounts: {} as Record<string, number>, // 粒度IDごとの数量
   startDate: new Date().toISOString().slice(0, 10),
   deadline: "",
+  structureString: "", // 文字列による作品構造指定
 });
 
 const fieldErrors = reactive<Record<string, string | null>>({
   title: null,
   startDate: null,
   deadline: null,
+  structureString: null,
 });
 
 const creationError = ref<string | null>(null);
@@ -191,6 +201,75 @@ const copyCurrentSettings = () => {
   return { workGranularities, workStageWorkloads };
 };
 
+// 構造解析は外部ユーティリティを使用
+
+// カスタム検証関数（設定との整合性チェック）
+const validateStructureWithSettings = (structureStr: string): string | null => {
+  if (!structureStr.trim()) {
+    return null; // 空文字列は有効（通常の入力方式を使用）
+  }
+
+  const granularityCount = sortedGranularities.value.length;
+  if (granularityCount === 0) {
+    return "粒度設定が未完了のため、文字列構造は使用できません。";
+  }
+
+  const parsed = parseStructure(structureStr, granularityCount);
+  if (!parsed) {
+    return "書式が正しくありません。角括弧[]、カンマ(,)、スラッシュ(/)の構文を確認するか、階層数が粒度設定と一致しているか確認してください。";
+  }
+
+  // 各最上位単位の階層数をチェック
+  for (let i = 0; i < parsed.topLevelUnits.length; i++) {
+    const unit = parsed.topLevelUnits[i];
+    const counts = unit.counts;
+    const stages = unit.stages;
+
+    // 粒度設定を超える階層が指定されていないかチェック
+    if (counts.length > granularityCount) {
+      return `${i + 1}番目の最上位単位の階層数（${counts.length}階層）が設定の粒度数（${granularityCount}階層）を超えています。`;
+    }
+
+    // 各数値が正の整数かチェック
+    for (let j = 0; j < counts.length; j++) {
+      if (!Number.isInteger(counts[j]) || counts[j] <= 0) {
+        return `${i + 1}番目の最上位単位の${j + 1}階層目の数値が無効です（正の整数である必要があります）。`;
+      }
+    }
+
+    // 作業段階インデックスが指定されている場合の検証
+    if (stages.length > 0) {
+      // 新しい記法では、subUnitsの詳細情報を使用して検証
+      const unitWithSubUnits = unit as TopLevelUnit & { subUnits?: { count: number; stages: number[] }[] };
+
+      if (unitWithSubUnits.subUnits) {
+        // 各subUnitの作業段階インデックス数が正しいかチェック
+        for (let j = 0; j < unitWithSubUnits.subUnits.length; j++) {
+          const subUnit = unitWithSubUnits.subUnits[j];
+
+          // 作業段階インデックスの値をチェック
+          for (let k = 0; k < subUnit.stages.length; k++) {
+            const stageIndex = subUnit.stages[k];
+            if (stageIndex < 0) {
+              return `${i + 1}番目の最上位単位の${j + 1}番目のサブユニットの${k + 1}番目の作業段階インデックスが無効です（0以上の整数である必要があります）。`;
+            }
+          }
+        }
+      } else {
+        // subUnits情報がない場合は従来の検証方法
+        for (let k = 0; k < stages.length; k++) {
+          const stageIndex = parseInt(stages[k]);
+          if (isNaN(stageIndex) || stageIndex < 0) {
+            return `${i + 1}番目の最上位単位の${k + 1}番目の作業段階インデックスが無効です（0以上の整数である必要があります）。`;
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+};
+
 const loadData = async () => {
   if (!user.value) {
     await authStore.ensureInitialized();
@@ -239,24 +318,34 @@ const validate = () => {
     hasError = true;
   }
 
-  // 最上位粒度の数をチェック
-  if (!Number.isFinite(topGranularityCount.value) || topGranularityCount.value <= 0) {
-    if (topGranularity.value) {
-      granularityFieldErrors[topGranularity.value.id] = "1以上で入力してください。";
-    }
-    hasError = true;
-  }
-
-  // 各粒度の数をチェック
-  sortedGranularities.value.slice(1).forEach(granularity => {
-    const count = creationForm.granularityCounts[granularity.id] ?? 0;
-    if (!Number.isFinite(count) || count <= 0) {
-      granularityFieldErrors[granularity.id] = "1以上で入力してください。";
+  // 文字列構造が入力されている場合の検証
+  if (creationForm.structureString.trim()) {
+    const structureError = validateStructureWithSettings(creationForm.structureString);
+    if (structureError) {
+      fieldErrors.structureString = structureError;
       hasError = true;
-    } else {
-      granularityFieldErrors[granularity.id] = null;
     }
-  });
+  } else {
+    // 通常入力方式の検証
+    // 最上位粒度の数をチェック
+    if (!Number.isFinite(topGranularityCount.value) || topGranularityCount.value <= 0) {
+      if (topGranularity.value) {
+        granularityFieldErrors[topGranularity.value.id] = "1以上で入力してください。";
+      }
+      hasError = true;
+    }
+
+    // 各粒度の数をチェック
+    sortedGranularities.value.slice(1).forEach(granularity => {
+      const count = creationForm.granularityCounts[granularity.id] ?? 0;
+      if (!Number.isFinite(count) || count <= 0) {
+        granularityFieldErrors[granularity.id] = "1以上で入力してください。";
+        hasError = true;
+      } else {
+        granularityFieldErrors[granularity.id] = null;
+      }
+    });
+  }
 
   if (!topGranularity.value) {
     creationError.value = "作業粒度設定が未完了のため、作品を作成できません。";
@@ -290,6 +379,7 @@ const resetCreateForm = () => {
   creationForm.granularityCounts = {};
   creationForm.startDate = new Date().toISOString().slice(0, 10);
   creationForm.deadline = "";
+  creationForm.structureString = "";
 
   // エラー状態もリセット
   Object.keys(fieldErrors).forEach(key => {
@@ -321,40 +411,156 @@ const handleCreate = () => {
   isSubmitting.value = true;
 
   try {
-    // 粒度に基づいてdefaultCountsを構築
-    const defaultCounts = sortedGranularities.value.slice(1).map(granularity =>
-      creationForm.granularityCounts[granularity.id] ?? 6
-    );
-
-    // 現在の設定をコピー
     const { workGranularities, workStageWorkloads } = copyCurrentSettings();
 
-    const work = worksStore.createWork({
-      title: creationForm.title,
-      status: creationForm.status,
-      startDate,
-      deadline,
-      totalUnits: topGranularityCount.value,
-      defaultCounts,
-      primaryGranularityId: topGranularity.value.id,
-      unitEstimatedHours: unitEstimatedHours.value,
-      workGranularities,
-      workStageWorkloads,
-    });
+    // 文字列構造が入力されている場合の処理
+    if (creationForm.structureString.trim()) {
+      const granularityCount = sortedGranularities.value.length;
+      const parsed = parseStructure(creationForm.structureString, granularityCount);
+      if (!parsed) {
+        creationError.value = "文字列の解析に失敗しました。階層数が粒度設定と一致しているか確認してください。";
+        return;
+      }
+
+      console.log('新記法解析結果:', parsed);
+
+      // 新記法では、カンマ区切りで最上位単位を分割
+      // 各最上位単位は1個として計算し、その下位構造を持つ
+      const totalTopLevelUnits = parsed.topLevelUnits.length;
+
+      // 構造の一致性をチェック（簡易版）
+      const allStructuresMatch = parsed.topLevelUnits.every(unit => {
+        return unit.counts.length === parsed.topLevelUnits[0].counts.length;
+      });
+
+      if (!allStructuresMatch) {
+        creationError.value = "現在の実装では、すべての最上位単位が同じ階層構造を持つ必要があります。";
+        return;
+      }
+
+      // 実際の最下位ユニット数を計算
+      const totalLeafUnits = parsed.topLevelUnits.reduce((sum, unit) => {
+        return sum + unit.stages.length;  // 各最上位単位の作業段階数 = 最下位ユニット数
+      }, 0);
+
+      // 各最上位単位の最下位ユニット数を配列で保持
+      const leafUnitsPerTopUnit = parsed.topLevelUnits.map(unit => unit.stages.length);
+
+      console.log('新記法による作品構造:', {
+        title: creationForm.title,
+        totalUnits: totalTopLevelUnits,
+        totalLeafUnits,
+        leafUnitsPerTopUnit,
+        topLevelUnits: parsed.topLevelUnits,
+        allStructuresMatch,
+        detailedStructure: parsed.topLevelUnits.map((unit, index) => ({
+          unitIndex: index,
+          counts: unit.counts,
+          stages: unit.stages,
+          subUnits: (unit as TopLevelUnit & { subUnits?: { count: number; stages: number[] }[] }).subUnits
+        }))
+      });
+
+      // 作品作成（構造指定対応）
+      let work: Work;
+
+      if (typeof worksStore.createWorkWithStructure === 'function') {
+        // 新しいメソッドが利用可能な場合
+        const workStructure = convertToWorkStructure(parsed);
+        const structureData = workStructure.structureData;
+
+        work = worksStore.createWorkWithStructure({
+          title: creationForm.title,
+          status: creationForm.status,
+          startDate,
+          deadline,
+          primaryGranularityId: topGranularity.value.id,
+          unitEstimatedHours: unitEstimatedHours.value,
+          workGranularities,
+          workStageWorkloads,
+          structure: {
+            topLevelUnits: structureData,
+            hierarchicalUnits: workStructure.hierarchicalStructureData
+          }
+        });
+
+        console.log('構造データ:', structureData);
+      } else {
+        // 代替案: 通常の作成を使用
+        console.log('createWorkWithStructureメソッドが見つからないため、代替方法を使用します');
+
+        work = worksStore.createWork({
+          title: creationForm.title,
+          status: creationForm.status,
+          startDate,
+          deadline,
+          totalUnits: totalTopLevelUnits,
+          defaultCounts: leafUnitsPerTopUnit,  // 各最上位単位の下位ユニット数
+          primaryGranularityId: topGranularity.value.id,
+          unitEstimatedHours: unitEstimatedHours.value,
+          workGranularities,
+          workStageWorkloads,
+        });
+
+        // 作成後に作業段階を適用
+        const allStageIndices: number[] = [];
+        parsed.topLevelUnits.forEach((topUnit, topIndex) => {
+          console.log(`最上位単位${topIndex + 1}:`, topUnit);
+          topUnit.stages.forEach((stageIndexStr, stageIdx) => {
+            const userStageIndex = parseInt(stageIndexStr, 10);
+            // ユーザー入力を0ベースインデックスに変換
+            // ユーザー: 1=未着手, 2=ネーム済, 3=下書済, 4=ペン入済, 5=仕上済
+            // システム: 0=未着手, 1=ネーム済, 2=下書済, 3=ペン入済, 4=仕上済
+            const systemStageIndex = isNaN(userStageIndex) ? 0 : Math.max(0, userStageIndex - 1);
+            console.log(`  作業段階${stageIdx + 1}: ユーザー入力"${stageIndexStr}" → システム値${systemStageIndex}`);
+            allStageIndices.push(systemStageIndex);
+          });
+        });
+
+        console.log('適用する作業段階インデックス:', allStageIndices);
+        const success = worksStore.applyStageIndicesToLeafUnits(work.id, allStageIndices);
+        console.log('作業段階適用結果:', success);
+      }
+
+      console.log('作成された作品:', work);
+      router.push({ name: "work-detail", params: { id: work.id } });
+    } else {
+      // 通常の入力方式による作品作成
+      const defaultCounts = sortedGranularities.value.slice(1).map(granularity =>
+        creationForm.granularityCounts[granularity.id] ?? 6
+      );
+
+      const work = worksStore.createWork({
+        title: creationForm.title,
+        status: creationForm.status,
+        startDate,
+        deadline,
+        totalUnits: topGranularityCount.value,
+        defaultCounts,
+        primaryGranularityId: topGranularity.value.id,
+        unitEstimatedHours: unitEstimatedHours.value,
+        workGranularities,
+        workStageWorkloads,
+      });
+
+      router.push({ name: "work-detail", params: { id: work.id } });
+    }
 
     // フォームをリセット
     creationForm.title = "";
     creationForm.startDate = new Date().toISOString().slice(0, 10);
     creationForm.deadline = "";
     creationForm.status = WORK_STATUSES[0];
+    creationForm.structureString = "";
     initializeGranularityForm();
     attempted.value = false;
     resetErrors();
 
     // フォームを非表示にする
     showCreateForm.value = false;
-
-    router.push({ name: "work-detail", params: { id: work.id } });
+  } catch (error) {
+    console.error('作品作成エラー:', error);
+    creationError.value = "作品の作成中にエラーが発生しました。";
   } finally {
     isSubmitting.value = false;
   }
@@ -450,6 +656,38 @@ const getWorkActualHours = (work: Work) => {
 const navigateToDetail = (id: string) => {
   router.push({ name: "work-detail", params: { id } });
 };
+
+// デバッグ用：文字列解析テスト
+const testStringParsing = () => {
+  const testCases = [
+    "[1],[4/4/4/4/4],[4/4/4/3]", // ユーザーの実際の例
+    "[[1/2][3/1/2][1]],[[2/2/1/3]]", // 提案された新記法
+    "[[1/2/3][2/1]]", // 2階層構造
+    "[[1][2][3]]", // 各ユニット1個ずつ
+    "[[1/1/1/1]]", // 単一ユニットに4個
+    "[[2/2][1/3][2/1]],[[1/1][2/2]]" // 複数の最上位ユニット
+  ];
+
+  testCases.forEach(testCase => {
+    console.log(`テスト: "${testCase}"`);
+    const result = parseStructure(testCase);
+    console.log('結果:', result);
+    if (result) {
+      const error = validateStructure(testCase);
+      console.log('検証:', error || 'OK');
+
+      // 合計最上位単位数を計算
+      const total = result.topLevelUnits.reduce((sum, unit) => sum + unit.counts[0], 0);
+      console.log('合計最上位単位数:', total);
+    }
+    console.log('---');
+  });
+};
+
+// グローバルスコープに公開（デバッグ用）
+if (typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).testStringParsing = testStringParsing;
+}
 </script>
 
 <template>
@@ -568,7 +806,7 @@ const navigateToDetail = (id: string) => {
                 :class="['form-control', attempted && granularityFieldErrors[granularity.id] ? 'is-invalid' : '']"
                 type="number"
                 min="1"
-                :disabled="isSubmitting || isSettingsLoading"
+                :disabled="isSubmitting || isSettingsLoading || !!creationForm.structureString.trim()"
               />
               <input
                 v-else
@@ -577,7 +815,7 @@ const navigateToDetail = (id: string) => {
                 :class="['form-control', attempted && granularityFieldErrors[granularity.id] ? 'is-invalid' : '']"
                 type="number"
                 min="1"
-                :disabled="isSubmitting || isSettingsLoading"
+                :disabled="isSubmitting || isSettingsLoading || !!creationForm.structureString.trim()"
               />
               <span class="input-group-text">{{ granularity.label }}</span>
             </div>
@@ -589,6 +827,44 @@ const navigateToDetail = (id: string) => {
           <div class="col-12 col-md-3">
             <label class="form-label">推定総工数</label>
             <div class="form-control-plaintext h-100 d-flex align-items-center fw-semibold">{{ totalEstimatedHours.toFixed(2) }} h</div>
+          </div>
+
+          <!-- 区切り線 -->
+          <div class="col-12">
+            <hr class="my-3">
+          </div>
+
+          <!-- 文字列による構造指定 -->
+          <div class="col-12">
+            <label class="form-label" for="structure-string">
+              文字列による構造指定
+              <span class="text-muted small">(任意・上記の数値設定を無視)</span>
+            </label>
+            <textarea
+              id="structure-string"
+              v-model="creationForm.structureString"
+              :class="['form-control', attempted && fieldErrors.structureString ? 'is-invalid' : '']"
+              rows="3"
+              placeholder="例: 4,2/2/2/2/2,2/2/2/2/2,4/4,2/2"
+              :disabled="isSubmitting || isSettingsLoading"
+            ></textarea>
+            <div v-if="attempted && fieldErrors.structureString" class="invalid-feedback">
+              {{ fieldErrors.structureString }}
+            </div>
+            <div class="form-text">
+              <strong>書式:</strong><br>
+              • 最上位ユニット：カンマ(,)区切りで分割<br>
+              • 各最上位ユニット：角括弧[]で囲む<br>
+              • 作業段階：スラッシュ(/)区切りで各最下位ユニットの作業段階を指定<br>
+              • 最下位ユニット数：/で分割した数から自動計算<br>
+              <strong>作業段階:</strong><br>
+              • 1=未着手, 2=ネーム済, 3=下書済, 4=ペン入済, 5=仕上済<br>
+              <strong>例:</strong><br>
+              • 実例: <code>[1],[5/5/5/5/5],[5/5/5/4]</code><br>
+              　→ 最上位1(1個未着手), 最上位2(5個仕上済), 最上位3(3個仕上済+1個ペン入済)<br>
+              • 単純例: <code>[1/2/3],[2/1]</code><br>
+              　→ 最上位1(未着手/ネーム済/下書済), 最上位2(ネーム済/未着手)
+            </div>
           </div>
         </form>
       </div>

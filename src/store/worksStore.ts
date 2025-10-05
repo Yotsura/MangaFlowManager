@@ -155,6 +155,26 @@ const findUnitInHierarchy = (units: WorkUnit[], unitId: string): WorkUnit | null
   return null;
 };
 
+// 最下位ユニット（リーフノード）を全て取得する関数
+const getAllLeafUnits = (units: WorkUnit[]): WorkUnit[] => {
+  const leafUnits: WorkUnit[] = [];
+
+  const collectLeaves = (units: WorkUnit[]) => {
+    for (const unit of units) {
+      if (unit.stageIndex !== undefined) {
+        // stageIndexを持つユニットは最下位
+        leafUnits.push(unit);
+      } else if (unit.children && unit.children.length > 0) {
+        // 子がいる場合は再帰的に探索
+        collectLeaves(unit.children);
+      }
+    }
+  };
+
+  collectLeaves(units);
+  return leafUnits;
+};
+
 const normalizeUnit = (raw: unknown, fallbackIndex: number, isLeafLevel?: boolean): WorkUnit | null => {
   if (!raw || typeof raw !== "object") {
     return null;
@@ -486,6 +506,84 @@ export const useWorksStore = defineStore("works", {
       this.setSaveError(work.id, null);
       return work;
     },
+
+    // 構造指定による作品作成
+    createWorkWithStructure(payload: {
+      title: string;
+      status: WorkStatus;
+      startDate: string;
+      deadline: string;
+      primaryGranularityId: string;
+      unitEstimatedHours: number;
+      workGranularities?: WorkGranularity[];
+      workStageWorkloads?: WorkStageWorkload[];
+      structure: {
+        topLevelUnits: { leafCount: number; stageIndices: number[] }[];
+        hierarchicalUnits?: { children: { leafCount: number; stageIndices: number[] }[] }[];
+      };
+    }) {
+      const now = new Date().toISOString();
+      const totalUnits = payload.structure.topLevelUnits.length;
+      const totalLeafUnits = payload.structure.topLevelUnits.reduce((sum, unit) => sum + unit.leafCount, 0);
+
+      // 構造に基づいて階層を作成
+      let units: WorkUnit[];
+
+      if (payload.structure.hierarchicalUnits) {
+        // 3階層構造の場合
+        units = payload.structure.hierarchicalUnits.map((topUnit, topIndex) => ({
+          id: generateId(),
+          index: topIndex + 1,
+          children: topUnit.children.map((midUnit, midIndex) => ({
+            id: generateId(),
+            index: midIndex + 1,
+            children: Array.from({ length: midUnit.leafCount }, (_, leafIndex) => ({
+              id: generateId(),
+              index: leafIndex + 1,
+              stageIndex: midUnit.stageIndices[leafIndex] || 0,
+            })),
+          })),
+        }));
+      } else {
+        // 2階層構造の場合（従来通り）
+        units = payload.structure.topLevelUnits.map((topUnit, topIndex) => ({
+          id: generateId(),
+          index: topIndex + 1,
+          children: Array.from({ length: topUnit.leafCount }, (_, leafIndex) => ({
+            id: generateId(),
+            index: leafIndex + 1,
+            stageIndex: topUnit.stageIndices[leafIndex] || 0,
+          })),
+        }));
+      }
+
+      const unitEstimatedHours = Math.max(0, payload.unitEstimatedHours);
+      const work: Work = {
+        id: generateId(),
+        title: payload.title.trim(),
+        status: payload.status,
+        startDate: payload.startDate,
+        deadline: payload.deadline,
+        createdAt: now,
+        updatedAt: now,
+        totalUnits,
+        defaultCounts: [Math.ceil(totalLeafUnits / totalUnits)], // 平均的な下位ユニット数
+        primaryGranularityId: payload.primaryGranularityId,
+        unitEstimatedHours,
+        totalEstimatedHours: Number((totalLeafUnits * unitEstimatedHours).toFixed(2)),
+        units,
+
+        // 作品固有の設定をコピー
+        workGranularities: payload.workGranularities,
+        workStageWorkloads: payload.workStageWorkloads,
+      };
+
+      this.works.push(work);
+      this.worksLoaded = true;
+      this.markWorkDirty(work.id);
+      this.setSaveError(work.id, null);
+      return work;
+    },
     updateWork(id: string, patch: Partial<Pick<Work, "title" | "status" | "startDate" | "deadline" | "unitEstimatedHours" | "workGranularities" | "workStageWorkloads">>) {
       const target = this.works.find((work) => work.id === id);
       if (!target) {
@@ -588,6 +686,90 @@ export const useWorksStore = defineStore("works", {
       unit.stageIndex = Math.max(0, newStage);
       target.updatedAt = new Date().toISOString();
       this.markWorkDirty(target.id);
+    },
+
+    // 最下位ユニットの作業段階を一括更新
+    applyStageIndicesToLeafUnits(workId: string, stageIndices: number[]) {
+      const target = this.works.find((work) => work.id === workId);
+      if (!target) {
+        return false;
+      }
+
+      const leafUnits = getAllLeafUnits(target.units);
+
+      // 作業段階インデックスの数と最下位ユニット数が一致しない場合は適用しない
+      if (leafUnits.length !== stageIndices.length) {
+        console.warn(`作業段階数(${stageIndices.length})と最下位ユニット数(${leafUnits.length})が一致しません`);
+        return false;
+      }
+
+      // 各最下位ユニットに作業段階を適用
+      leafUnits.forEach((unit, index) => {
+        unit.stageIndex = Math.max(0, stageIndices[index] || 0);
+      });
+
+      target.updatedAt = new Date().toISOString();
+      this.markWorkDirty(target.id);
+      return true;
+    },
+
+    // 既存作品の構造を上書き
+    overwriteWorkStructure(workId: string, structure: {
+      topLevelUnits: { leafCount: number; stageIndices: number[] }[];
+      hierarchicalUnits?: { children: { leafCount: number; stageIndices: number[] }[] }[];
+    }) {
+      const target = this.works.find((work) => work.id === workId);
+      if (!target) {
+        return false;
+      }
+
+      let newUnits: WorkUnit[];
+      let totalLeafUnits: number;
+      let totalUnits: number;
+
+      if (structure.hierarchicalUnits) {
+        // 3階層構造の場合
+        totalLeafUnits = structure.hierarchicalUnits.reduce((sum, topUnit) =>
+          sum + topUnit.children.reduce((childSum, child) => childSum + child.leafCount, 0), 0
+        );
+        totalUnits = structure.hierarchicalUnits.length;
+
+        newUnits = structure.hierarchicalUnits.map((topUnit, topIndex) => ({
+          id: generateId(),
+          index: topIndex + 1,
+          children: topUnit.children.map((midUnit, midIndex) => ({
+            id: generateId(),
+            index: midIndex + 1,
+            children: Array.from({ length: midUnit.leafCount }, (_, leafIndex) => ({
+              id: generateId(),
+              index: leafIndex + 1,
+              stageIndex: midUnit.stageIndices[leafIndex] || 0,
+            })),
+          })),
+        }));
+      } else {
+        // 2階層構造の場合（従来通り）
+        totalLeafUnits = structure.topLevelUnits.reduce((sum, unit) => sum + unit.leafCount, 0);
+        totalUnits = structure.topLevelUnits.length;
+
+        newUnits = structure.topLevelUnits.map((topUnit, topIndex) => ({
+          id: generateId(),
+          index: topIndex + 1,
+          children: Array.from({ length: topUnit.leafCount }, (_, leafIndex) => ({
+            id: generateId(),
+            index: leafIndex + 1,
+            stageIndex: topUnit.stageIndices[leafIndex] || 0,
+          })),
+        }));
+      }
+
+      // 作品の構造を更新
+      target.units = newUnits;
+      target.totalUnits = totalUnits;
+      target.totalEstimatedHours = Number((totalLeafUnits * target.unitEstimatedHours).toFixed(2));
+      target.updatedAt = new Date().toISOString();
+      this.markWorkDirty(target.id);
+      return true;
     },
 
     // レガシー互換性のため
