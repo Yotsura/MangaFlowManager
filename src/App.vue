@@ -82,10 +82,10 @@ onMounted(() => {
                   <RouterLink class="nav-link" to="/">ホーム</RouterLink>
                 </li>
                 <li class="nav-item">
-                  <RouterLink class="nav-link" to="/calendar">カレンダー</RouterLink>
+                  <RouterLink class="nav-link" to="/works">作品管理</RouterLink>
                 </li>
                 <li class="nav-item">
-                  <RouterLink class="nav-link" to="/works">作品管理</RouterLink>
+                  <RouterLink class="nav-link" to="/calendar">カレンダー</RouterLink>
                 </li>
                 <li class="nav-item">
                   <RouterLink class="nav-link" to="/settings">設定</RouterLink>

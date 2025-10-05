@@ -6,8 +6,7 @@ import { generateId } from "@/utils/id";
 
 interface WorkHourRange {
   day: string;
-  start: string;
-  end: string;
+  hours: number;
 }
 
 interface WorkHoursDocument {
