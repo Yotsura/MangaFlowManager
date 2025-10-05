@@ -2,7 +2,6 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
-
 // import PagePanel from "./components/PagePanel.vue"; // 一時的に無効化
 import PanelStyleUnitEditor from "./components/PanelStyleUnitEditor.vue";
 import ProgressHeatmap from "./components/ProgressHeatmap.vue";
@@ -12,7 +11,7 @@ import WorkSettingsEditor from "./components/WorkSettingsEditor.vue";
 import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkUnit } from "@/store/worksStore";
+import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkUnit, type WorkGranularity, type WorkStageWorkload } from "@/store/worksStore";
 
 const route = useRoute();
 const router = useRouter();
@@ -26,13 +25,6 @@ const { user } = storeToRefs(authStore);
 const { granularities, granularitiesLoaded, loadingGranularities, stageWorkloads, stageWorkloadsLoaded, loadingStageWorkloads } = storeToRefs(settingsStore);
 
 const work = computed(() => worksStore.getWorkById(workId));
-
-const stageLabels = computed(() => workStageWorkloads.value.map((stage) => stage.label));
-const stageColors = computed(() => {
-  const total = workStageWorkloads.value.length;
-  return workStageWorkloads.value.map((stage, index) => normalizeStageColorValue(stage.color, index, total));
-});
-const stageCount = computed(() => stageLabels.value.length);
 
 const stageWorkloadHours = computed(() => {
   const workData = work.value;
@@ -76,8 +68,8 @@ const stageWorkloadHours = computed(() => {
   });
 });
 
-// 作品固有の設定または全体設定を使用
-const workGranularities = computed(() => {
+// 元の設定を取得する計算プロパティ
+const originalWorkGranularities = computed(() => {
   // 作品固有の設定があればそれを使用、なければ全体設定を使用
   if (work.value?.workGranularities && work.value.workGranularities.length > 0) {
     return work.value.workGranularities;
@@ -85,13 +77,25 @@ const workGranularities = computed(() => {
   return granularities.value;
 });
 
-const workStageWorkloads = computed(() => {
+const originalWorkStageWorkloads = computed(() => {
   // 作品固有の設定があればそれを使用、なければ全体設定を使用
   if (work.value?.workStageWorkloads && work.value.workStageWorkloads.length > 0) {
     return work.value.workStageWorkloads;
   }
   return stageWorkloads.value;
 });
+
+// リアルタイム表示用（ローカル変更または元の設定）
+const workGranularities = computed(() => hasUnsavedSettings.value ? localWorkGranularities.value : originalWorkGranularities.value);
+const workStageWorkloads = computed(() => hasUnsavedSettings.value ? localWorkStageWorkloads.value : originalWorkStageWorkloads.value);
+
+// 作品固有設定に基づく派生データ
+const stageLabels = computed(() => workStageWorkloads.value.map((stage) => stage.label));
+const stageColors = computed(() => {
+  const total = workStageWorkloads.value.length;
+  return workStageWorkloads.value.map((stage, index) => normalizeStageColorValue(stage.color, index, total));
+});
+const stageCount = computed(() => stageLabels.value.length);
 
 // 重みでソートした粒度配列（高い重み→低い重み）
 const sortedGranularities = computed(() => {
@@ -175,6 +179,104 @@ const lastSaveStatus = ref<string | null>(null);
 const isEditMode = ref(false);
 const savingPanelIds = ref(new Set<string>());
 
+// リアルタイム更新用のローカル設定状態
+const localWorkGranularities = ref<WorkGranularity[]>([]);
+const localWorkStageWorkloads = ref<WorkStageWorkload[]>([]);
+const hasUnsavedSettings = ref(false);
+const isSavingSettings = ref(false);
+const isSettingsEditMode = ref(false);
+
+// ローカル設定の初期化
+const initializeLocalSettings = () => {
+  localWorkGranularities.value = [...originalWorkGranularities.value];
+  localWorkStageWorkloads.value = [...originalWorkStageWorkloads.value];
+  hasUnsavedSettings.value = false;
+};
+
+// 設定変更のハンドラー（リアルタイム適用）
+const handleGranularityChange = (newGranularities: WorkGranularity[]) => {
+  localWorkGranularities.value = [...newGranularities];
+
+  // 編集モードでのみ未保存フラグを設定
+  if (isSettingsEditMode.value) {
+    hasUnsavedSettings.value = true;
+  }
+};
+
+const handleStageWorkloadChange = (newStageWorkloads: WorkStageWorkload[]) => {
+  localWorkStageWorkloads.value = [...newStageWorkloads];
+
+  // 編集モードでのみ未保存フラグを設定
+  if (isSettingsEditMode.value) {
+    hasUnsavedSettings.value = true;
+  }
+};// 設定編集モードの変更を監視
+watch(isSettingsEditMode, (newValue) => {
+  if (!newValue) {
+    // 編集モードを出る際は未保存フラグをリセット
+    hasUnsavedSettings.value = false;
+  }
+});
+
+// 設定の保存
+const saveSettings = async () => {
+  if (!work.value || !userId.value || isSavingSettings.value) return;
+
+  isSavingSettings.value = true;
+
+  try {
+    // worksStoreのupdateWorkメソッドを使用して設定を更新
+    worksStore.updateWork(workId, {
+      workGranularities: [...localWorkGranularities.value],
+      workStageWorkloads: [...localWorkStageWorkloads.value]
+    });
+
+    // サーバーに保存
+    await worksStore.saveWork({ userId: userId.value, workId });
+
+    hasUnsavedSettings.value = false;
+    isSettingsEditMode.value = false;
+    lastSaveStatus.value = "作品設定を保存しました";
+    setTimeout(() => {
+      lastSaveStatus.value = null;
+    }, 3000);
+  } catch (error) {
+    console.error("設定の保存に失敗:", error);
+    lastSaveStatus.value = "設定の保存に失敗しました";
+    setTimeout(() => {
+      lastSaveStatus.value = null;
+    }, 5000);
+  } finally {
+    isSavingSettings.value = false;
+  }
+};
+
+// 設定の変更を破棄
+const discardSettings = () => {
+  initializeLocalSettings();
+  isSettingsEditMode.value = false;
+};
+
+// 設定編集モードの切り替え
+const toggleSettingsEditMode = () => {
+  if (isSettingsEditMode.value && hasUnsavedSettings.value) {
+    const confirmed = window.confirm('未保存の設定変更があります。破棄してよろしいですか？');
+    if (!confirmed) {
+      return;
+    }
+  }
+
+  isSettingsEditMode.value = !isSettingsEditMode.value;
+
+  if (isSettingsEditMode.value) {
+    // 編集モードに入る際はローカル設定を初期化
+    initializeLocalSettings();
+  } else {
+    // 編集モードを出る際は変更を破棄
+    discardSettings();
+  }
+};
+
 const toggleEditMode = async () => {
   isEditMode.value = !isEditMode.value;
 
@@ -205,6 +307,17 @@ watch(
     }
   },
   { immediate: false },
+);
+
+// 元の設定が変更されたらローカル設定を初期化
+watch(
+  [originalWorkGranularities, originalWorkStageWorkloads],
+  () => {
+    if (!hasUnsavedSettings.value) {
+      initializeLocalSettings();
+    }
+  },
+  { immediate: true },
 );
 
 const ensureSettingsLoaded = async () => {
@@ -253,6 +366,9 @@ onMounted(async () => {
   await authStore.ensureInitialized();
   await ensureSettingsLoaded();
   await ensureWorksLoaded();
+
+  // ローカル設定を初期化
+  initializeLocalSettings();
 
   // 作品詳細画面を開く際は常にサーバーから最新データを取得
   await reloadWorkData();
@@ -449,14 +565,34 @@ const handleAdvanceUnitStage = async (payload: { unitId: string }) => {
 };
 
 const handleAddRootUnit = () => {
+  // 未保存の設定がある場合は先に保存するか警告
+  if (hasUnsavedSettings.value) {
+    const confirmed = window.confirm('未保存の設定があります。先に設定を保存してから構造を追加しますか？');
+    if (confirmed) {
+      saveSettings().then(() => {
+        worksStore.addRootUnit(workId);
+      });
+      return;
+    }
+  }
+
   worksStore.addRootUnit(workId);
 };
 
 const handleAddChildUnit = (payload: { parentId: string }) => {
-  worksStore.addChildUnit(workId, payload.parentId);
-};
+  // 未保存の設定がある場合は先に保存するか警告
+  if (hasUnsavedSettings.value) {
+    const confirmed = window.confirm('未保存の設定があります。先に設定を保存してから構造を追加しますか？');
+    if (confirmed) {
+      saveSettings().then(() => {
+        worksStore.addChildUnit(workId, payload.parentId);
+      });
+      return;
+    }
+  }
 
-const handleRemoveUnit = (payload: { unitId: string }) => {
+  worksStore.addChildUnit(workId, payload.parentId);
+};const handleRemoveUnit = (payload: { unitId: string }) => {
   worksStore.removeUnit(workId, payload.unitId);
 };
 
@@ -608,12 +744,66 @@ const formatDate = (value: string) => {
                 </div>
               </div>
 
-              <!-- 編集モードでの設定編集 -->
-              <div v-if="isEditMode" class="mt-4 border-top pt-4">
-                <WorkSettingsEditor
-                  v-model:work-granularities="settingsForm.workGranularities"
-                  v-model:work-stage-workloads="settingsForm.workStageWorkloads"
-                />
+              <!-- 作品固有設定 -->
+              <div class="mt-4 border-top pt-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h6 class="mb-0">作品固有設定</h6>
+                  <button
+                    type="button"
+                    class="btn btn-sm"
+                    :class="isSettingsEditMode ? 'btn-outline-secondary' : 'btn-outline-primary'"
+                    @click="toggleSettingsEditMode"
+                  >
+                    <i class="bi" :class="isSettingsEditMode ? 'bi-x' : 'bi-gear'"></i>
+                    {{ isSettingsEditMode ? 'キャンセル' : '設定を編集' }}
+                  </button>
+                </div>
+
+                <div v-if="!isSettingsEditMode" class="text-muted">
+                  <div class="mb-2">
+                    <strong>粒度設定:</strong>
+                    {{ originalWorkGranularities.length > 0
+                       ? originalWorkGranularities.map(g => `${g.label}(${g.defaultCount}個)`).join(' → ')
+                       : 'デフォルト設定を使用' }}
+                  </div>
+                  <div>
+                    <strong>ステージ設定:</strong>
+                    {{ originalWorkStageWorkloads.length > 0
+                       ? originalWorkStageWorkloads.length + '個のステージ'
+                       : 'デフォルト設定を使用' }}
+                  </div>
+                </div>
+
+                <div v-if="isSettingsEditMode">
+                  <WorkSettingsEditor
+                    :granularities="localWorkGranularities"
+                    :stage-workloads="localWorkStageWorkloads"
+                    @granularity-change="handleGranularityChange"
+                    @stage-workload-change="handleStageWorkloadChange"
+                  />
+
+                  <!-- 設定保存/キャンセルボタン -->
+                  <div v-if="hasUnsavedSettings" class="mt-3 d-flex gap-2">
+                    <button
+                      type="button"
+                      class="btn btn-success"
+                      @click="saveSettings"
+                      :disabled="isSavingSettings"
+                    >
+                      <span v-if="isSavingSettings" class="spinner-border spinner-border-sm me-2"></span>
+                      <i class="bi bi-check me-1"></i>
+                      作品設定を保存
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary"
+                      @click="discardSettings"
+                    >
+                      <i class="bi bi-x me-1"></i>
+                      変更を破棄
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -514,6 +514,15 @@ export const useWorksStore = defineStore("works", {
 
       if (patch.workGranularities !== undefined) {
         target.workGranularities = patch.workGranularities;
+
+        // 粒度設定が変更された場合、defaultCountsも更新
+        if (target.workGranularities.length > 0) {
+          const newDefaultCounts = target.workGranularities
+            .sort((a, b) => b.weight - a.weight) // 上位から下位の順にソート
+            .map(g => g.defaultCount);
+
+          target.defaultCounts = newDefaultCounts;
+        }
       }
 
       if (patch.workStageWorkloads !== undefined) {
@@ -645,8 +654,37 @@ export const useWorksStore = defineStore("works", {
         });
       };
 
-      // 作品のdefaultCountsに基づいて新しいルートユニットを作成
-      const newUnits = createHierarchy([1, ...target.defaultCounts]);
+      // 現在の作品固有粒度設定からdefaultCountsを計算
+      const currentGranularities = target.workGranularities && target.workGranularities.length > 0
+        ? target.workGranularities
+        : [];
+      const currentDefaultCounts = currentGranularities
+        .sort((a, b) => b.weight - a.weight) // 上位から下位の順にソート
+        .map(g => g.defaultCount);
+
+      // defaultCountsが空の場合は既存の値を使用
+      const defaultCounts = currentDefaultCounts.length > 0 ? currentDefaultCounts : target.defaultCounts;
+
+      // 粒度設定に基づいて適切な階層構造を作成
+      // ルートユニット追加時は、最上位の粒度単位を1つ追加する
+      // 例：「ページ＞コマ」設定で「ページ」を追加 → [1, コマ数]
+      // 例：「見開き＞ページ＞コマ」設定で「見開き」を追加 → [1, ページ数, コマ数]
+
+      let hierarchyCounts: number[];
+      if (defaultCounts.length === 0) {
+        // フォールバック：設定なしの場合
+        hierarchyCounts = [1];
+      } else if (defaultCounts.length === 1) {
+        // 1階層設定：例えば「コマ」のみ → 1つのコマを追加
+        hierarchyCounts = [1];
+      } else {
+        // 2階層以上：最上位粒度を1つ、その下の階層は設定通り
+        // defaultCounts[0] = 最上位の子数、defaultCounts[1] = 次の階層の子数、...
+        hierarchyCounts = [1, ...defaultCounts.slice(1)];
+      }
+
+      // 新しいルートユニットを作成
+      const newUnits = createHierarchy(hierarchyCounts);
       const newUnit = newUnits[0];
 
       if (newUnit) {
@@ -671,9 +709,6 @@ export const useWorksStore = defineStore("works", {
         return;
       }
 
-      // デバッグ：子要素追加前の作品構造を出力
-
-
       // 親ユニットに子配列がない場合は作成
       if (!parentUnit.children) {
         parentUnit.children = [];
@@ -685,7 +720,6 @@ export const useWorksStore = defineStore("works", {
       const getUnitDepthInHierarchy = (targetUnit: WorkUnit, rootUnits: WorkUnit[], currentDepth: number = 0): number => {
         // ルートレベルで見つかった場合
         if (rootUnits.includes(targetUnit)) {
-          console.log("getUnitDepthInHierarchy: found", targetUnit.id, "at depth", currentDepth);
           return currentDepth;
         }
 
@@ -694,16 +728,25 @@ export const useWorksStore = defineStore("works", {
           if (unit.children) {
             const foundDepth = getUnitDepthInHierarchy(targetUnit, unit.children, currentDepth + 1);
             if (foundDepth !== -1) {
-              console.log("getUnitDepthInHierarchy: found in children", targetUnit.id, "at depth", foundDepth);
               return foundDepth;
             }
           }
         }
-        console.log("getUnitDepthInHierarchy: not found", targetUnit.id);
         return -1; // 見つからない場合
       };
 
       const parentDepth = getUnitDepthInHierarchy(parentUnit, target.units);
+
+      // 現在の作品固有粒度設定からdefaultCountsを計算
+      const currentGranularities = target.workGranularities && target.workGranularities.length > 0
+        ? target.workGranularities
+        : [];
+      const currentDefaultCounts = currentGranularities
+        .sort((a, b) => b.weight - a.weight) // 上位から下位の順にソート
+        .map(g => g.defaultCount);
+
+      // defaultCountsが空の場合は既存の値を使用
+      const defaultCounts = currentDefaultCounts.length > 0 ? currentDefaultCounts : target.defaultCounts;
 
       // 新しいユニットの子構造を決定
       // defaultCounts = [見開き数, ページ数, コマ数]
@@ -716,7 +759,7 @@ export const useWorksStore = defineStore("works", {
       if (newUnitDepth === 1) {
         // 見開きレベルに追加 → ページが追加される
         // ページは最後のdefaultCounts要素個のコマを持つ
-        childCount = target.defaultCounts[target.defaultCounts.length - 1] ?? 0;  // 最後の要素（コマ数）
+        childCount = defaultCounts[defaultCounts.length - 1] ?? 0;  // 最後の要素（コマ数）
       } else {
         // ページレベル以下でコマ追加 → コマは最下位なので子を持たない
         childCount = 0;
