@@ -41,8 +41,38 @@ const stageWorkloadHours = computed(() => {
   }
 
   return workStageWorkloads.value.map(stage => {
-    const entry = stage.entries.find(e => e.granularityId === workData.primaryGranularityId);
-    return entry?.hours ?? 0;
+    // 新しいbaseHours構造に対応
+    if ('baseHours' in stage && stage.baseHours !== null && stage.baseHours !== undefined) {
+      // baseHoursは最低粒度での工数なので、そのまま返す
+      // 表示は主要粒度単位で行うが、工数の値は最低粒度ベース
+      return stage.baseHours;
+    }
+
+    // 後方互換性: entries構造の場合
+    if ('entries' in stage && Array.isArray(stage.entries)) {
+      // 最低粒度のエントリを探す
+      const lowestGranularity = workGranularities.value.reduce((min, current) =>
+        current.weight < min.weight ? current : min
+      );
+
+      const lowestEntry = stage.entries.find(e => e.granularityId === lowestGranularity.id);
+      if (lowestEntry?.hours != null) {
+        return lowestEntry.hours;
+      }
+
+      // 他の粒度から最低粒度の工数を逆算
+      for (const entry of stage.entries) {
+        if (entry.hours != null) {
+          const entryGranularity = workGranularities.value.find(g => g.id === entry.granularityId);
+          if (entryGranularity) {
+            const ratio = lowestGranularity.weight / entryGranularity.weight;
+            return entry.hours * ratio;
+          }
+        }
+      }
+    }
+
+    return 0;
   });
 });
 
@@ -76,7 +106,66 @@ const primaryGranularityLabel = computed(() => {
   return workGranularities.value.find((item) => item.id === id)?.label ?? null;
 });
 
+// 各工程の最低粒度での工数を計算
+const stageBaseHours = computed(() => {
+  if (workStageWorkloads.value.length === 0 || workGranularities.value.length === 0) {
+    return [];
+  }
+
+  // 最低粒度を取得
+  const lowestGranularity = workGranularities.value.reduce((min, current) =>
+    current.weight < min.weight ? current : min
+  );
+
+  return workStageWorkloads.value.map((stage, index) => {
+    let baseHours = 0;
+
+    // 新しいbaseHours構造に対応
+    if ('baseHours' in stage && stage.baseHours !== null && stage.baseHours !== undefined) {
+      baseHours = stage.baseHours;
+    } else if ('entries' in stage && Array.isArray(stage.entries)) {
+      // 後方互換性: entries構造の場合、最低粒度のエントリを探す
+      const lowestEntry = stage.entries.find(entry => entry.granularityId === lowestGranularity.id);
+      if (lowestEntry && lowestEntry.hours !== null && lowestEntry.hours !== undefined) {
+        baseHours = lowestEntry.hours;
+      } else {
+        // 他の粒度から逆算
+        for (const entry of stage.entries) {
+          if (entry.hours !== null && entry.hours !== undefined) {
+            const entryGranularity = workGranularities.value.find(g => g.id === entry.granularityId);
+            if (entryGranularity) {
+              baseHours = (entry.hours * lowestGranularity.weight) / entryGranularity.weight;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      label: stage.label,
+      color: stageColors.value[index] || '#666666',
+      hours: baseHours
+    };
+  }); // 0時間の工程も表示する
+});
+
 const userId = computed(() => user.value?.uid ?? null);
+
+// 背景色に対して適切なテキスト色を返す関数
+const getContrastColor = (backgroundColor: string) => {
+  // カラーコードから RGB 値を抽出
+  const hex = backgroundColor.replace('#', '');
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+
+  // 明度を計算 (0-255)
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+  // 明度が128より大きい場合は黒、そうでなければ白
+  return brightness > 128 ? '#000000' : '#ffffff';
+};
 
 const isSavingWork = computed(() => (work.value ? worksStore.isSavingWork(work.value.id) : false));
 const canSaveWork = computed(() => (work.value ? worksStore.isWorkDirty(work.value.id) : false));
@@ -203,10 +292,13 @@ watch(
 
     // 設定フォームを初期化
     settingsForm.workGranularities = workGranularities.value.slice();
-    settingsForm.workStageWorkloads = workStageWorkloads.value.map(stage => ({
-      ...stage,
-      entries: stage.entries.slice()
-    }));
+    settingsForm.workStageWorkloads = workStageWorkloads.value.map(stage => {
+      const entries = 'entries' in stage && Array.isArray(stage.entries) ? stage.entries.slice() : [];
+      return {
+        ...stage,
+        entries
+      };
+    });
 
     // 作品固有設定がない場合は現在の全体設定をコピー
     if ((!next.workGranularities || next.workGranularities.length === 0) &&
@@ -496,6 +588,23 @@ const formatDate = (value: string) => {
                 <div class="col-12 col-md-3 col-xl-2">
                   <label class="form-label">推定残工数</label>
                   <div class="form-control-plaintext fw-semibold">{{ actualWorkHours.remainingEstimatedHours.toFixed(2) }} h</div>
+                </div>
+              </div>
+
+              <!-- 工程別工数表示 -->
+              <div v-if="stageBaseHours.length > 0" class="mt-3 pt-3 border-top">
+                <div class="mb-2">
+                  <small class="text-muted">工程別工数（最低粒度）:</small>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                  <span
+                    v-for="stage in stageBaseHours"
+                    :key="stage.label"
+                    class="badge fs-6 px-3 py-2"
+                    :style="{ backgroundColor: stage.color, color: getContrastColor(stage.color) }"
+                  >
+                    {{ stage.label }}（{{ stage.hours.toFixed(1) }}h）
+                  </span>
                 </div>
               </div>
 

@@ -174,9 +174,7 @@ const copyCurrentSettings = () => {
     id: stage.id,
     label: stage.label,
     color: stage.color,
-    baseHours: stage.baseHours,
-    // 作品作成時の型に合わせて、一時的にentriesを空配列にする
-    entries: [] as { granularityId: string; hours: number | null }[]
+    baseHours: stage.baseHours
   }));
 
   return { workGranularities, workStageWorkloads };

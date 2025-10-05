@@ -33,6 +33,7 @@ export interface WorkStageWorkload {
   label: string;
   color: string;
   baseHours: number | null; // 最低粒度での工数のみ保持
+  entries?: WorkStageWorkloadEntry[]; // 後方互換性のため（古いデータ用）
 }
 
 export interface Work {
@@ -885,35 +886,72 @@ export const useWorksStore = defineStore("works", {
         ? work.workStageWorkloads
         : [];
 
+
+
       if (work.primaryGranularityId && workStageWorkloads.length > 0 && workGranularities.length > 0) {
-        // 各段階の工数を取得（baseHoursから最上位粒度の工数を逆算）
-        const primaryGranularity = workGranularities.find(g => g.id === work.primaryGranularityId);
+        // 各段階の工数を取得（baseHoursは最低粒度での工数）
         const lowestGranularity = workGranularities.reduce((min, current) =>
           current.weight < min.weight ? current : min
         );
 
         const stageWorkloadHours = workStageWorkloads.map(stage => {
-          if (!stage.baseHours || !primaryGranularity || !lowestGranularity) return 0;
-          // 最低粒度の工数から最上位粒度の工数を計算
-          const ratio = primaryGranularity.weight / lowestGranularity.weight;
-          return stage.baseHours * ratio;
+          let baseHours = stage.baseHours;
+
+          // 後方互換性: baseHoursがない場合はentriesから計算
+          if (baseHours === null || baseHours === undefined) {
+            if (stage.entries && Array.isArray(stage.entries)) {
+              // 最低粒度のentriesを探す
+              const lowestEntry = stage.entries.find(entry => entry.granularityId === lowestGranularity.id);
+              if (lowestEntry && lowestEntry.hours !== null && lowestEntry.hours !== undefined) {
+                baseHours = lowestEntry.hours;
+              } else {
+                // 他の粒度から最低粒度の工数に逆算
+                for (const entry of stage.entries) {
+                  if (entry.hours !== null && entry.hours !== undefined) {
+                    const entryGranularity = workGranularities.find(g => g.id === entry.granularityId);
+                    if (entryGranularity) {
+                      baseHours = (entry.hours * lowestGranularity.weight) / entryGranularity.weight;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          if (baseHours === null || baseHours === undefined) {
+            return 0;
+          }
+
+          // baseHoursは最低粒度での工数なので、そのまま使用
+          return baseHours;
         });
 
-        // 各段階の累積工数を計算
+        // 各段階の累積工数を計算（進捗計算用）
         const cumulativeWorkloads = stageWorkloadHours.reduce((acc, hours, index) => {
           const prevTotal = index > 0 ? (acc[index - 1] ?? 0) : 0;
           acc.push(prevTotal + hours);
           return acc;
         }, [] as number[]);
 
+        // 総工数は全段階の工数の合計（累積の最終値）
         const totalWorkHoursPerUnit = cumulativeWorkloads[cumulativeWorkloads.length - 1] || 0;
         const totalEstimatedHours = Number((totalWorkHoursPerUnit * totalUnits).toFixed(2));
 
         // 各ユニットの完了工数を計算
         const completedWorkHours = leafUnits.reduce((sum, unit) => {
           const stageIndex = unit.stageIndex ?? 0;
-          const completedHours = stageIndex < cumulativeWorkloads.length ? (cumulativeWorkloads[stageIndex] || 0) : 0;
-          return sum + completedHours;
+          // stageIndexが段階の完了済み数を示すなら、その段階まで完了した累積工数を使用
+          if (stageIndex >= stageWorkloadHours.length) {
+            // 全段階完了の場合
+            return sum + totalWorkHoursPerUnit;
+          } else if (stageIndex > 0) {
+            // 一部段階完了の場合、その段階まで完了した累積工数
+            return sum + (cumulativeWorkloads[stageIndex - 1] || 0);
+          } else {
+            // 未着手の場合
+            return sum;
+          }
         }, 0);
 
         const remainingEstimatedHours = Number((totalEstimatedHours - completedWorkHours).toFixed(2));
