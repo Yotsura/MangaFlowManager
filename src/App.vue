@@ -86,12 +86,17 @@ const handleLogout = async () => {
         </footer>
       </template>
 
-      <section v-if="initializing" class="py-5 text-center">
+      <div v-if="initializing" class="py-5 text-center">
         <div class="spinner-border text-primary mb-3" role="status">
           <span class="visually-hidden">Loading...</span>
         </div>
         <p class="text-muted">認証状態を確認しています...</p>
-      </section>
+      </div>
+
+      <div v-else-if="!Component" class="py-5 text-center">
+        <p class="text-danger">コンポーネントが読み込まれませんでした</p>
+        <p class="text-muted">ルート: {{ route.path }}</p>
+      </div>
 
       <component :is="Component" v-else />
     </component>

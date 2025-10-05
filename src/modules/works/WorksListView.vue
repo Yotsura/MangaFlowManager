@@ -81,7 +81,12 @@ const topGranularityCount = computed({
   }
 });
 
-const stageLabels = computed(() => stageWorkloads.value.map((stage) => stage.label));
+const stageLabels = computed(() => {
+  if (!stageWorkloads.value || !Array.isArray(stageWorkloads.value)) {
+    return [];
+  }
+  return stageWorkloads.value.map((stage) => stage.label);
+});
 const stageCount = computed(() => stageLabels.value.length);
 
 const unitEstimatedHours = computed(() => {
@@ -90,12 +95,31 @@ const unitEstimatedHours = computed(() => {
     return 0;
   }
 
+  // stageWorkloadsが存在し、配列であることを確認
+  if (!stageWorkloads.value || !Array.isArray(stageWorkloads.value)) {
+    return 0;
+  }
+
   return stageWorkloads.value.reduce((total, stage) => {
-    const entry = stage.entries.find((item) => item.granularityId === primary.id);
-    if (!entry || entry.hours === null || Number.isNaN(Number(entry.hours))) {
+    // 新しい baseHours ベースの構造に対応
+    if (stage.baseHours === null || stage.baseHours === undefined) {
       return total;
     }
-    return total + Number(entry.hours);
+
+    // 最低粒度を取得
+    const lowestGranularity = granularities.value.reduce((min, current) =>
+      current.weight < min.weight ? current : min
+    );
+
+    // primary粒度での工数を計算
+    if (primary.id === lowestGranularity.id) {
+      // primaryが最低粒度の場合、baseHoursをそのまま使用
+      return total + stage.baseHours;
+    } else {
+      // primaryが最低粒度より上位の場合、比重を使って変換
+      const ratio = primary.weight / lowestGranularity.weight;
+      return total + (stage.baseHours * ratio);
+    }
   }, 0);
 });
 
@@ -106,35 +130,25 @@ const settingsError = computed(() => granularitiesLoadError.value ?? stageWorklo
 
 const ensureSettingsLoaded = async () => {
   if (!userId.value) {
-    console.log('WorksListView: ensureSettingsLoaded - no userId');
     return;
   }
 
-  console.log('WorksListView: ensureSettingsLoaded - granularitiesLoaded:', granularitiesLoaded.value, 'stageWorkloadsLoaded:', stageWorkloadsLoaded.value);
-
   if (!granularitiesLoaded.value && !loadingGranularities.value) {
-    console.log('WorksListView: fetching granularities...');
     await settingsStore.fetchGranularities(userId.value);
   }
 
   if (!stageWorkloadsLoaded.value && !loadingStageWorkloads.value) {
-    console.log('WorksListView: fetching stageWorkloads...');
     await settingsStore.fetchStageWorkloads(userId.value);
   }
 };
 
 const ensureWorksLoaded = async () => {
   if (!userId.value) {
-    console.log('WorksListView: ensureWorksLoaded - no userId');
     return;
   }
 
-  console.log('WorksListView: ensureWorksLoaded - worksLoaded:', worksLoaded.value, 'loadingWorks:', loadingWorks.value);
-
   if (!worksLoaded.value && !loadingWorks.value) {
-    console.log('WorksListView: fetching works...');
     await worksStore.fetchWorks(userId.value);
-    console.log('WorksListView: works fetched, works.length:', works.value.length);
   }
 };
 
@@ -152,6 +166,10 @@ const copyCurrentSettings = () => {
     defaultCount: g.defaultCount
   }));
 
+  if (!stageWorkloads.value || !Array.isArray(stageWorkloads.value)) {
+    return { workGranularities, workStageWorkloads: [] };
+  }
+
   const workStageWorkloads = stageWorkloads.value.map(stage => ({
     id: stage.id,
     label: stage.label,
@@ -165,19 +183,13 @@ const copyCurrentSettings = () => {
 };
 
 const loadData = async () => {
-  console.log('WorksListView: loadData called, user:', user.value, 'userId:', userId.value);
-  
   if (!user.value) {
-    console.log('WorksListView: ensureInitialized...');
     await authStore.ensureInitialized();
-    console.log('WorksListView: after ensureInitialized, user:', user.value, 'userId:', userId.value);
   }
-  
-  console.log('WorksListView: loading settings and works...');
+
   await ensureSettingsLoaded();
   await ensureWorksLoaded();
   initializeGranularityForm();
-  console.log('WorksListView: loadData completed');
 };
 
 onMounted(async () => {
@@ -344,7 +356,7 @@ const computeWorkProgress = (work: Work) => {
   }
 
   // 工数ベースの進捗計算
-  if (work.primaryGranularityId && stageWorkloads.value.length > 0) {
+  if (work.primaryGranularityId && stageWorkloads.value && Array.isArray(stageWorkloads.value) && stageWorkloads.value.length > 0) {
     // 各段階の工数を取得（baseHoursから最上位粒度の工数を逆算）
     const primaryGranularity = granularities.value.find(g => g.id === work.primaryGranularityId);
     const lowestGranularity = granularities.value.reduce((min, current) =>
