@@ -456,9 +456,10 @@ const getLeafParentUnits = (unit: WorkUnit): WorkUnit[] => {
 /**
  * WorkUnit配列から構造文字列を生成する
  * @param units WorkUnit配列
+ * @param expectedDepth 期待される階層数（粒度設定から取得）
  * @returns 構造指定文字列
  */
-export const convertWorkUnitsToStructureString = (units: WorkUnit[]): string => {
+export const convertWorkUnitsToStructureString = (units: WorkUnit[], expectedDepth?: number): string => {
   if (!units || units.length === 0) {
     return "構造が設定されていません";
   }
@@ -466,34 +467,64 @@ export const convertWorkUnitsToStructureString = (units: WorkUnit[]): string => 
   const structureParts: string[] = [];
 
   units.forEach(unit => {
-    // 最下位レベルの親ユニットを取得
+    // 実際の構造を分析
     const leafParentUnits = getLeafParentUnits(unit);
-
-    if (leafParentUnits.length > 0) {
-      // 3階層以上の場合：各leaf parentの子要素（leaf units）のstageIndexを取得
-      const subParts: string[] = [];
-      leafParentUnits.forEach(parent => {
-        if (parent.children && parent.children.length > 0) {
-          const stageIndices = parent.children.map(child => (child.stageIndex + 1).toString());
-          subParts.push(stageIndices.join('/'));
-        }
-      });
-
-      // サブパートを角括弧で囲んで結合し、最上位レベルの括弧も追加
-      const structurePart = `[[${subParts.join('][')}]]`;
-      structureParts.push(structurePart);
-    } else {
-      // leaf parentが見つからない場合、直接の子がleaf unitかチェック
+    
+    // 期待される階層数に基づいて処理を分岐
+    if (expectedDepth === 2) {
+      // 2階層構造の場合：直接の子が最下位ユニット
       if (unit.children && unit.children.length > 0) {
         const allChildrenAreLeaves = unit.children.every(child =>
-          typeof child.stageIndex === 'number'
+          typeof child.stageIndex === 'number' && (!child.children || child.children.length === 0)
         );
 
         if (allChildrenAreLeaves) {
-          // 2階層構造の場合
+          // 2階層構造：[1/2/3/4]
           const stageIndices = unit.children.map(child => (child.stageIndex + 1).toString());
           const structurePart = `[${stageIndices.join('/')}]`;
           structureParts.push(structurePart);
+        }
+      }
+    } else if (expectedDepth === 3) {
+      // 3階層構造の場合：中間レベルが存在
+      if (leafParentUnits.length > 0) {
+        const subParts: string[] = [];
+        leafParentUnits.forEach(parent => {
+          if (parent.children && parent.children.length > 0) {
+            const stageIndices = parent.children.map(child => (child.stageIndex + 1).toString());
+            subParts.push(stageIndices.join('/'));
+          }
+        });
+
+        // 3階層構造：[[1/2/3][4/5/6]]
+        const structurePart = `[[${subParts.join('][')}]]`;
+        structureParts.push(structurePart);
+      }
+    } else {
+      // 階層数が不明の場合：構造を自動判定
+      if (leafParentUnits.length > 0) {
+        // 3階層以上と判定
+        const subParts: string[] = [];
+        leafParentUnits.forEach(parent => {
+          if (parent.children && parent.children.length > 0) {
+            const stageIndices = parent.children.map(child => (child.stageIndex + 1).toString());
+            subParts.push(stageIndices.join('/'));
+          }
+        });
+        const structurePart = `[[${subParts.join('][')}]]`;
+        structureParts.push(structurePart);
+      } else {
+        // 2階層と判定
+        if (unit.children && unit.children.length > 0) {
+          const allChildrenAreLeaves = unit.children.every(child =>
+            typeof child.stageIndex === 'number'
+          );
+
+          if (allChildrenAreLeaves) {
+            const stageIndices = unit.children.map(child => (child.stageIndex + 1).toString());
+            const structurePart = `[${stageIndices.join('/')}]`;
+            structureParts.push(structurePart);
+          }
         }
       }
     }

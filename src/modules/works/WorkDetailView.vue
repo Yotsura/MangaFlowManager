@@ -188,7 +188,8 @@ const currentStructureString = computed(() => {
     return "構造が設定されていません";
   }
 
-  return convertWorkUnitsToStructureString(work.value.units);
+  const granularityCount = sortedGranularities.value.length;
+  return convertWorkUnitsToStructureString(work.value.units, granularityCount);
 });const lastSaveStatus = ref<string | null>(null);
 const isEditMode = ref(false);
 const savingPanelIds = ref(new Set<string>());
