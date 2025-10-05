@@ -190,22 +190,22 @@
                   </div>
                 </div>
 
-                <div class="row g-2">
-                  <div v-for="entry in stage.entries" :key="`${stage.id}-${entry.granularityId}`" class="col-md-4">
-                    <label class="form-label text-muted small">{{ getGranularityLabel(entry.granularityId) }}</label>
-                    <div class="input-group input-group-sm">
+                <div class="d-flex flex-wrap gap-3 align-items-start">
+                  <div v-for="entry in stage.entries" :key="`${stage.id}-${entry.granularityId}`" class="granularity-entry">
+                    <div class="d-flex align-items-center gap-1">
+                      <span class="text-muted small">{{ getGranularityLabel(entry.granularityId) }}</span>
                       <input
                         v-model="entry.hours"
-                        :class="['form-control', { 'is-invalid': getEntryError(stage.id, entry.granularityId) }]"
+                        :class="['form-control form-control-sm granularity-input', { 'is-invalid': getEntryError(stage.id, entry.granularityId) }]"
                         type="number"
                         min="0"
                         step="0.1"
                         :disabled="isSaving"
                         @input="(event) => { updateRelatedEntries(stage.id, entry.granularityId, (event.target as HTMLInputElement)?.value || ''); handleStageChange(); }"
                       />
-                      <span class="input-group-text">時間</span>
+                      <span class="text-muted small">h</span>
                     </div>
-                    <div v-if="getEntryError(stage.id, entry.granularityId)" class="invalid-feedback d-block">
+                    <div v-if="getEntryError(stage.id, entry.granularityId)" class="invalid-feedback d-block small">
                       {{ getEntryError(stage.id, entry.granularityId) }}
                     </div>
                   </div>
@@ -1005,5 +1005,14 @@ defineExpose({
 .alert {
   border: none;
   border-radius: 0.375rem;
+}
+
+.granularity-entry {
+  min-width: 120px;
+}
+
+.granularity-input {
+  width: 70px !important;
+  text-align: right;
 }
 </style>
