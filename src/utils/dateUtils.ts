@@ -36,34 +36,34 @@ export const getMondayBasedDayOfWeek = (date: Date): number => {
 export const generateCalendarDays = (year: number, month: number): Date[] => {
   const firstDay = getFirstDayOfMonth(year, month);
   const lastDay = getLastDayOfMonth(year, month);
-  
+
   // 月の最初の日が月曜日から何日目かを計算
   const firstDayOfWeek = getMondayBasedDayOfWeek(firstDay);
-  
+
   // 月の最後の日が月曜日から何日目かを計算
   const lastDayOfWeek = getMondayBasedDayOfWeek(lastDay);
-  
+
   const days: Date[] = [];
-  
+
   // 前月の日付で最初の週を埋める
   for (let i = firstDayOfWeek - 1; i >= 0; i--) {
     const date = new Date(firstDay);
     date.setDate(date.getDate() - i - 1);
     days.push(date);
   }
-  
+
   // 当月の日付を追加
   const daysInMonth = lastDay.getDate();
   for (let day = 1; day <= daysInMonth; day++) {
     days.push(new Date(year, month - 1, day));
   }
-  
+
   // 次月の日付で最後の週を埋める
   const remainingDays = 6 - lastDayOfWeek;
   for (let day = 1; day <= remainingDays; day++) {
     days.push(new Date(year, month, day));
   }
-  
+
   return days;
 };
 
@@ -71,7 +71,7 @@ export const generateCalendarDays = (year: number, month: number): Date[] => {
  * 日付が同じ月かどうかを判定
  */
 export const isSameMonth = (date1: Date, date2: Date): boolean => {
-  return date1.getFullYear() === date2.getFullYear() && 
+  return date1.getFullYear() === date2.getFullYear() &&
          date1.getMonth() === date2.getMonth();
 };
 
@@ -83,4 +83,198 @@ export const isToday = (date: Date): boolean => {
   return date.getFullYear() === today.getFullYear() &&
          date.getMonth() === today.getMonth() &&
          date.getDate() === today.getDate();
+};
+
+/**
+ * 祝日情報の型定義
+ */
+export interface Holiday {
+  name: string;
+  date: Date;
+}
+
+/**
+ * 春分の日を計算（2000年以降の計算式）
+ */
+const calculateVernalEquinox = (year: number): number => {
+  if (year >= 2000 && year <= 2099) {
+    return Math.floor(20.8431 + 0.242194 * (year - 1851) - Math.floor((year - 1851) / 4));
+  } else if (year >= 1900 && year <= 1999) {
+    return Math.floor(21.2422 + 0.242194 * (year - 1851) - Math.floor((year - 1851) / 4));
+  }
+  return 20; // fallback
+};
+
+/**
+ * 秋分の日を計算（2000年以降の計算式）
+ */
+const calculateAutumnalEquinox = (year: number): number => {
+  if (year >= 2000 && year <= 2099) {
+    return Math.floor(23.2488 + 0.242194 * (year - 1851) - Math.floor((year - 1851) / 4));
+  } else if (year >= 1900 && year <= 1999) {
+    return Math.floor(23.7422 + 0.242194 * (year - 1851) - Math.floor((year - 1851) / 4));
+  }
+  return 23; // fallback
+};
+
+/**
+ * n番目の月曜日を取得
+ */
+const getNthMonday = (year: number, month: number, nth: number): number => {
+  const firstDay = new Date(year, month - 1, 1);
+  const firstMonday = firstDay.getDay() === 1 ? 1 : 8 - firstDay.getDay() + 1;
+  return firstMonday + (nth - 1) * 7;
+};
+
+/**
+ * 指定年の祝日を計算で取得
+ */
+export const getHolidays = (year: number): Holiday[] => {
+  const holidays: Holiday[] = [];
+
+  // 元日
+  holidays.push({ name: '元日', date: new Date(year, 0, 1) });
+
+  // 成人の日（1月第2月曜日、2000年以降）
+  if (year >= 2000) {
+    const comingOfAgeDay = getNthMonday(year, 1, 2);
+    holidays.push({ name: '成人の日', date: new Date(year, 0, comingOfAgeDay) });
+  } else {
+    holidays.push({ name: '成人の日', date: new Date(year, 0, 15) });
+  }
+
+  // 建国記念の日
+  holidays.push({ name: '建国記念の日', date: new Date(year, 1, 11) });
+
+  // 天皇誕生日
+  if (year >= 2020) {
+    holidays.push({ name: '天皇誕生日', date: new Date(year, 1, 23) });
+  } else if (year >= 1989) {
+    holidays.push({ name: '天皇誕生日', date: new Date(year, 11, 23) });
+  }
+
+  // 春分の日
+  const vernalEquinox = calculateVernalEquinox(year);
+  holidays.push({ name: '春分の日', date: new Date(year, 2, vernalEquinox) });
+
+  // 昭和の日（2007年以降）
+  if (year >= 2007) {
+    holidays.push({ name: '昭和の日', date: new Date(year, 3, 29) });
+  } else if (year >= 1989) {
+    holidays.push({ name: 'みどりの日', date: new Date(year, 3, 29) });
+  }
+
+  // 憲法記念日
+  holidays.push({ name: '憲法記念日', date: new Date(year, 4, 3) });
+
+  // みどりの日
+  if (year >= 2007) {
+    holidays.push({ name: 'みどりの日', date: new Date(year, 4, 4) });
+  }
+
+  // こどもの日
+  holidays.push({ name: 'こどもの日', date: new Date(year, 4, 5) });
+
+  // 海の日（7月第3月曜日、2003年以降）
+  if (year >= 2021) {
+    // 2021年は五輪特例で7月22日
+    holidays.push({ name: '海の日', date: new Date(year, 6, 22) });
+  } else if (year >= 2003) {
+    const marineDay = getNthMonday(year, 7, 3);
+    holidays.push({ name: '海の日', date: new Date(year, 6, marineDay) });
+  } else if (year >= 1996) {
+    holidays.push({ name: '海の日', date: new Date(year, 6, 20) });
+  }
+
+  // 山の日（2016年以降）
+  if (year >= 2021) {
+    // 2021年は五輪特例で8月8日
+    holidays.push({ name: '山の日', date: new Date(year, 7, 8) });
+  } else if (year >= 2016) {
+    holidays.push({ name: '山の日', date: new Date(year, 7, 11) });
+  }
+
+  // 敬老の日（9月第3月曜日、2003年以降）
+  if (year >= 2003) {
+    const respectForTheAgedDay = getNthMonday(year, 9, 3);
+    holidays.push({ name: '敬老の日', date: new Date(year, 8, respectForTheAgedDay) });
+  } else if (year >= 1966) {
+    holidays.push({ name: '敬老の日', date: new Date(year, 8, 15) });
+  }
+
+  // 秋分の日
+  const autumnalEquinox = calculateAutumnalEquinox(year);
+  holidays.push({ name: '秋分の日', date: new Date(year, 8, autumnalEquinox) });
+
+  // スポーツの日（体育の日）
+  if (year >= 2021) {
+    // 2021年は五輪特例で7月23日
+    holidays.push({ name: 'スポーツの日', date: new Date(year, 6, 23) });
+  } else if (year >= 2020) {
+    const sportsDay = getNthMonday(year, 10, 2);
+    holidays.push({ name: 'スポーツの日', date: new Date(year, 9, sportsDay) });
+  } else if (year >= 2000) {
+    const healthAndSportsDay = getNthMonday(year, 10, 2);
+    holidays.push({ name: '体育の日', date: new Date(year, 9, healthAndSportsDay) });
+  } else if (year >= 1966) {
+    holidays.push({ name: '体育の日', date: new Date(year, 9, 10) });
+  }
+
+  // 文化の日
+  holidays.push({ name: '文化の日', date: new Date(year, 10, 3) });
+
+  // 勤労感謝の日
+  holidays.push({ name: '勤労感謝の日', date: new Date(year, 10, 23) });
+
+  return holidays;
+};
+
+/**
+ * 振替休日を計算
+ */
+const getSubstituteHolidays = (year: number, holidays: Holiday[]): Holiday[] => {
+  const substitutes: Holiday[] = [];
+
+  holidays.forEach(holiday => {
+    const date = new Date(holiday.date);
+
+    // 日曜日の祝日の場合、翌日以降の平日を振替休日とする
+    if (date.getDay() === 0) {
+      const substituteDate = new Date(date);
+      substituteDate.setDate(substituteDate.getDate() + 1);
+
+      // 翌日以降で祝日でない平日を探す
+      while (holidays.some(h => h.date.getTime() === substituteDate.getTime()) ||
+             substitutes.some(s => s.date.getTime() === substituteDate.getTime())) {
+        substituteDate.setDate(substituteDate.getDate() + 1);
+      }
+
+      substitutes.push({ name: '振替休日', date: substituteDate });
+    }
+  });
+
+  return substitutes;
+};
+
+/**
+ * 指定年の全祝日（振替休日含む）を取得
+ */
+export const getAllHolidays = (year: number): Holiday[] => {
+  const holidays = getHolidays(year);
+  const substitutes = getSubstituteHolidays(year, holidays);
+  return [...holidays, ...substitutes].sort((a, b) => a.date.getTime() - b.date.getTime());
+};
+
+/**
+ * 指定日が祝日かどうかを判定
+ */
+export const isHoliday = (date: Date): Holiday | null => {
+  const year = date.getFullYear();
+  const holidays = getAllHolidays(year);
+
+  return holidays.find(holiday =>
+    holiday.date.getFullYear() === date.getFullYear() &&
+    holiday.date.getMonth() === date.getMonth() &&
+    holiday.date.getDate() === date.getDate()
+  ) || null;
 };

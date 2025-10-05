@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { generateCalendarDays, isSameMonth, isToday, isWeekend } from '@/utils/dateUtils';
+import { generateCalendarDays, isSameMonth, isToday, isWeekend, isHoliday } from '@/utils/dateUtils';
 
 interface Props {
   year?: number;
@@ -49,20 +49,31 @@ const onDateClick = (date: Date) => {
 // 日付セルのクラスを取得
 const getDateCellClass = (date: Date) => {
   const classes = ['calendar-date'];
-  
+
   if (!isSameMonth(date, currentMonthDate.value)) {
     classes.push('other-month');
   }
-  
+
   if (isToday(date)) {
     classes.push('today');
   }
-  
+
+  const holiday = isHoliday(date);
+  if (holiday) {
+    classes.push('holiday');
+  }
+
   if (isWeekend(date)) {
     classes.push('weekend');
   }
-  
+
   return classes.join(' ');
+};
+
+// 祝日名を取得
+const getHolidayName = (date: Date) => {
+  const holiday = isHoliday(date);
+  return holiday ? holiday.name : null;
 };
 
 // propsが変更された時の処理
@@ -76,20 +87,20 @@ watch(() => [props.year, props.month], ([newYear, newMonth]) => {
   <div class="workload-calendar border rounded bg-white shadow-sm">
     <!-- カレンダーヘッダー -->
     <div class="calendar-header d-flex justify-content-between align-items-center p-3 border-bottom">
-      <button 
-        class="btn btn-outline-secondary btn-sm" 
+      <button
+        class="btn btn-outline-secondary btn-sm"
         @click="changeMonth(-1)"
         aria-label="前の月"
       >
         <i class="bi bi-chevron-left"></i>
       </button>
-      
+
       <h5 class="mb-0 fw-semibold">
         {{ currentYear }}年 {{ currentMonth }}月
       </h5>
-      
-      <button 
-        class="btn btn-outline-secondary btn-sm" 
+
+      <button
+        class="btn btn-outline-secondary btn-sm"
         @click="changeMonth(1)"
         aria-label="次の月"
       >
@@ -101,8 +112,8 @@ watch(() => [props.year, props.month], ([newYear, newMonth]) => {
     <div class="calendar-body p-3">
       <!-- 曜日ヘッダー -->
       <div class="calendar-weekdays row g-0 mb-2">
-        <div 
-          v-for="weekDay in weekDays" 
+        <div
+          v-for="weekDay in weekDays"
           :key="weekDay"
           class="col calendar-weekday text-center py-2 fw-semibold text-muted"
         >
@@ -112,8 +123,8 @@ watch(() => [props.year, props.month], ([newYear, newMonth]) => {
 
       <!-- 日付グリッド -->
       <div class="calendar-dates">
-        <div 
-          v-for="(week, weekIndex) in Math.ceil(calendarDays.length / 7)" 
+        <div
+          v-for="(week, weekIndex) in Math.ceil(calendarDays.length / 7)"
           :key="weekIndex"
           class="row g-0 calendar-week"
         >
@@ -127,8 +138,17 @@ watch(() => [props.year, props.month], ([newYear, newMonth]) => {
                 v-if="calendarDays[weekIndex * 7 + dayIndex - 1]"
                 :class="getDateCellClass(calendarDays[weekIndex * 7 + dayIndex - 1]!)"
                 @click="onDateClick(calendarDays[weekIndex * 7 + dayIndex - 1]!)"
+                :title="getHolidayName(calendarDays[weekIndex * 7 + dayIndex - 1]!) || ''"
               >
-                {{ calendarDays[weekIndex * 7 + dayIndex - 1]!.getDate() }}
+                <div class="date-number">
+                  {{ calendarDays[weekIndex * 7 + dayIndex - 1]!.getDate() }}
+                </div>
+                <div
+                  v-if="getHolidayName(calendarDays[weekIndex * 7 + dayIndex - 1]!)"
+                  class="holiday-name"
+                >
+                  {{ getHolidayName(calendarDays[weekIndex * 7 + dayIndex - 1]!) }}
+                </div>
               </button>
             </template>
           </div>
@@ -144,7 +164,7 @@ watch(() => [props.year, props.month], ([newYear, newMonth]) => {
 }
 
 .calendar-cell {
-  height: 60px;
+  height: 80px;
   border-right: 1px solid #e9ecef;
   border-bottom: 1px solid #e9ecef;
 }
@@ -163,11 +183,13 @@ watch(() => [props.year, props.month], ([newYear, newMonth]) => {
   border: none;
   background: none;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   transition: background-color 0.2s ease;
   cursor: pointer;
   font-size: 0.875rem;
+  padding: 2px;
 }
 
 .calendar-date:hover {
@@ -195,5 +217,38 @@ watch(() => [props.year, props.month], ([newYear, newMonth]) => {
 
 .calendar-date.other-month.weekend {
   color: #f5c2c7;
+}
+
+.calendar-date.holiday {
+  background-color: #fdf2f2;
+  color: #dc3545;
+}
+
+.calendar-date.holiday:hover {
+  background-color: #f5c2c7;
+}
+
+.calendar-date.other-month.holiday {
+  background-color: transparent;
+  color: #f5c2c7;
+}
+
+.date-number {
+  font-weight: 500;
+  line-height: 1;
+}
+
+.holiday-name {
+  font-size: 0.6rem;
+  line-height: 0.8;
+  text-align: center;
+  margin-top: 1px;
+  font-weight: 400;
+  word-break: break-all;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 </style>
