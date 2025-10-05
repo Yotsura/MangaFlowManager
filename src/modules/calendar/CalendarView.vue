@@ -1,5 +1,17 @@
 <script setup lang="ts">
-// TODO: implement calendar view logic and integrate with calendar store
+import { ref } from 'vue';
+import WorkloadCalendar from './components/WorkloadCalendar.vue';
+
+const selectedDate = ref<Date | null>(null);
+
+const onDateClick = (date: Date) => {
+  selectedDate.value = date;
+  console.log('Selected date:', date);
+};
+
+const onMonthChange = (year: number, month: number) => {
+  console.log('Month changed:', year, month);
+};
 </script>
 
 <template>
@@ -9,6 +21,33 @@
       <p class="text-muted">制作スケジュールや作業不可時間をカレンダーで管理します。</p>
     </div>
 
-    <div class="alert alert-info">カレンダー機能は現在設計中です。今後、作業不可時間の設定や工数計算を実装予定です。</div>
+    <div class="row">
+      <div class="col-lg-8">
+        <WorkloadCalendar 
+          @date-click="onDateClick"
+          @month-change="onMonthChange"
+        />
+      </div>
+      
+      <div class="col-lg-4">
+        <div class="card">
+          <div class="card-header">
+            <h6 class="card-title mb-0">選択された日付</h6>
+          </div>
+          <div class="card-body">
+            <div v-if="selectedDate" class="text-center">
+              <div class="h4 mb-2">{{ selectedDate.getDate() }}</div>
+              <div class="text-muted">
+                {{ selectedDate.getFullYear() }}年{{ selectedDate.getMonth() + 1 }}月
+                {{ ['日', '月', '火', '水', '木', '金', '土'][selectedDate.getDay()] }}曜日
+              </div>
+            </div>
+            <div v-else class="text-muted text-center">
+              カレンダーから日付を選択してください
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
