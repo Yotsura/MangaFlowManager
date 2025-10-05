@@ -262,10 +262,7 @@ const progressInfo = computed(() => {
 // イベントハンドラー
 
 const handleRemove = () => {
-  const typeName = panelTypeLabel.value;
-  if (confirm(`${typeName} #${props.unit.index}を削除しますか？${hasChildren.value ? '\n\n子要素も一緒に削除されます。' : ''}`)) {
-    emit("remove-unit", { unitId: props.unit.id });
-  }
+  emit("remove-unit", { unitId: props.unit.id });
 };
 
 

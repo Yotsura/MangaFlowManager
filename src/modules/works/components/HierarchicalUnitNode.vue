@@ -180,9 +180,7 @@ const handleAdvanceStage = () => {
 };
 
 const handleRemove = () => {
-  if (confirm(`${unitDisplayName.value}を削除しますか？${hasChildren.value ? "\n\n子要素も一緒に削除されます。" : ""}`)) {
-    emit("remove-unit", { unitId: props.unit.id });
-  }
+  emit("remove-unit", { unitId: props.unit.id });
 };
 
 const handleChildrenCountChange = (event: Event) => {

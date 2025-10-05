@@ -99,9 +99,7 @@ const handleAdvanceStage = () => {
 
 // 削除ハンドラー
 const handleRemove = () => {
-  if (confirm(`コマ #${props.unit.index}を削除しますか？`)) {
-    emit("remove-unit", { unitId: props.unit.id });
-  }
+  emit("remove-unit", { unitId: props.unit.id });
 };
 </script>
 
