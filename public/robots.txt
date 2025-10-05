@@ -1,0 +1,28 @@
+User-agent: *
+Disallow: /
+
+# 検索エンジンのクローリングを完全に禁止
+# すべてのページへのアクセスを拒否
+Crawl-delay: 86400
+
+# 主要な検索エンジンボットを明示的に禁止
+User-agent: Googlebot
+Disallow: /
+
+User-agent: Bingbot
+Disallow: /
+
+User-agent: Slurp
+Disallow: /
+
+User-agent: DuckDuckBot
+Disallow: /
+
+User-agent: Baiduspider
+Disallow: /
+
+User-agent: facebookexternalhit
+Disallow: /
+
+User-agent: Twitterbot
+Disallow: /

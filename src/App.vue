@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 
@@ -27,6 +27,33 @@ const handleLogout = async () => {
     console.error(error);
   }
 };
+
+// 検索エンジン対策のメタタグを動的に設定
+onMounted(() => {
+  // 既存のrobotsメタタグがない場合のみ追加
+  if (!document.querySelector('meta[name="robots"]')) {
+    const robotsMeta = document.createElement('meta');
+    robotsMeta.name = 'robots';
+    robotsMeta.content = 'noindex, nofollow, noarchive, nosnippet, noimageindex, nocache';
+    document.head.appendChild(robotsMeta);
+  }
+
+  // GoogleBotメタタグ
+  if (!document.querySelector('meta[name="googlebot"]')) {
+    const googlebotMeta = document.createElement('meta');
+    googlebotMeta.name = 'googlebot';
+    googlebotMeta.content = 'noindex, nofollow, noarchive, nosnippet, noimageindex';
+    document.head.appendChild(googlebotMeta);
+  }
+
+  // BingBotメタタグ
+  if (!document.querySelector('meta[name="bingbot"]')) {
+    const bingbotMeta = document.createElement('meta');
+    bingbotMeta.name = 'bingbot';
+    bingbotMeta.content = 'noindex, nofollow, noarchive, nosnippet, noimageindex';
+    document.head.appendChild(bingbotMeta);
+  }
+});
 </script>
 
 <template>
