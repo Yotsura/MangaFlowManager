@@ -469,7 +469,7 @@ export const convertWorkUnitsToStructureString = (units: WorkUnit[], expectedDep
   units.forEach(unit => {
     // 実際の構造を分析
     const leafParentUnits = getLeafParentUnits(unit);
-    
+
     // 期待される階層数に基づいて処理を分岐
     if (expectedDepth === 2) {
       // 2階層構造の場合：直接の子が最下位ユニット

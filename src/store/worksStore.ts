@@ -851,16 +851,47 @@ export const useWorksStore = defineStore("works", {
         });
       };
 
-      // 現在の作品固有粒度設定からdefaultCountsを計算
-      const currentGranularities = target.workGranularities && target.workGranularities.length > 0
-        ? target.workGranularities
-        : [];
-      const currentDefaultCounts = currentGranularities
-        .sort((a, b) => b.weight - a.weight) // 上位から下位の順にソート
-        .map(g => g.defaultCount);
+      // 作品の実際の階層深度を検出して適切なdefaultCountsを決定
+      const getActualWorkDepth = (units: WorkUnit[]): number => {
+        if (units.length === 0) return 0;
+        let maxDepth = 0;
+        const traverse = (units: WorkUnit[], currentDepth: number) => {
+          for (const unit of units) {
+            if (unit.stageIndex !== undefined) {
+              // 最下位ユニット（葉ノード）に到達
+              maxDepth = Math.max(maxDepth, currentDepth);
+            } else if (unit.children) {
+              traverse(unit.children, currentDepth + 1);
+            }
+          }
+        };
+        traverse(units, 1);
+        return maxDepth;
+      };
 
-      // defaultCountsが空の場合は既存の値を使用
-      const defaultCounts = currentDefaultCounts.length > 0 ? currentDefaultCounts : target.defaultCounts;
+      const actualDepth = getActualWorkDepth(target.units);
+
+      // 作品固有の粒度設定を優先、なければ実際の深度に基づくデフォルト値を使用
+      let defaultCounts: number[];
+
+      if (target.workGranularities && target.workGranularities.length > 0) {
+        // 作品固有設定がある場合：それを使用
+        defaultCounts = target.workGranularities
+          .sort((a, b) => b.weight - a.weight)
+          .map(g => g.defaultCount);
+      } else {
+        // 作品固有設定がない場合：実際の階層深度に基づくデフォルト値を使用
+        if (actualDepth === 2) {
+          // 2階層作品：ページ→コマ構造
+          defaultCounts = [4]; // デフォルト4コマ
+        } else if (actualDepth === 3) {
+          // 3階層作品：見開き→ページ→コマ構造
+          defaultCounts = [2, 4]; // デフォルト2ページ、4コマ
+        } else {
+          // その他：既存の設定をフォールバック
+          defaultCounts = target.defaultCounts;
+        }
+      }
 
       // 粒度設定に基づいて適切な階層構造を作成
       // ルートユニット追加時は、最上位の粒度単位を1つ追加する
@@ -934,16 +965,46 @@ export const useWorksStore = defineStore("works", {
 
       const parentDepth = getUnitDepthInHierarchy(parentUnit, target.units);
 
-      // 現在の作品固有粒度設定からdefaultCountsを計算
-      const currentGranularities = target.workGranularities && target.workGranularities.length > 0
-        ? target.workGranularities
-        : [];
-      const currentDefaultCounts = currentGranularities
-        .sort((a, b) => b.weight - a.weight) // 上位から下位の順にソート
-        .map(g => g.defaultCount);
+      // 作品の実際の階層深度を検出して適切なdefaultCountsを決定
+      const getActualWorkDepth = (units: WorkUnit[]): number => {
+        let maxDepth = 0;
+        const traverse = (units: WorkUnit[], currentDepth: number) => {
+          for (const unit of units) {
+            if (unit.stageIndex !== undefined) {
+              // 最下位ユニット（葉ノード）に到達
+              maxDepth = Math.max(maxDepth, currentDepth);
+            } else if (unit.children) {
+              traverse(unit.children, currentDepth + 1);
+            }
+          }
+        };
+        traverse(units, 1);
+        return maxDepth;
+      };
 
-      // defaultCountsが空の場合は既存の値を使用
-      const defaultCounts = currentDefaultCounts.length > 0 ? currentDefaultCounts : target.defaultCounts;
+      const actualDepth = getActualWorkDepth(target.units);
+
+      // 作品固有の粒度設定を優先、なければ実際の深度に基づくデフォルト値を使用
+      let defaultCounts: number[];
+
+      if (target.workGranularities && target.workGranularities.length > 0) {
+        // 作品固有設定がある場合：それを使用
+        defaultCounts = target.workGranularities
+          .sort((a, b) => b.weight - a.weight)
+          .map(g => g.defaultCount);
+      } else {
+        // 作品固有設定がない場合：実際の階層深度に基づくデフォルト値を使用
+        if (actualDepth === 2) {
+          // 2階層作品：ページ→コマ構造
+          defaultCounts = [4]; // デフォルト4コマ
+        } else if (actualDepth === 3) {
+          // 3階層作品：見開き→ページ→コマ構造
+          defaultCounts = [2, 4]; // デフォルト2ページ、4コマ
+        } else {
+          // その他：既存の設定をフォールバック
+          defaultCounts = target.defaultCounts;
+        }
+      }
 
       // 新しいユニットの子構造を決定
       // defaultCounts = [見開き数, ページ数, コマ数]
@@ -953,13 +1014,48 @@ export const useWorksStore = defineStore("works", {
       const newUnitDepth = parentDepth + 1;
       let childCount = 0;
 
-      if (newUnitDepth === 1) {
-        // 見開きレベルに追加 → ページが追加される
-        // ページは最後のdefaultCounts要素個のコマを持つ
-        childCount = defaultCounts[defaultCounts.length - 1] ?? 0;  // 最後の要素（コマ数）
+      console.log('DEBUG: Child creation logic:', {
+        newUnitDepth: newUnitDepth,
+        actualDepth: actualDepth,
+        defaultCounts: defaultCounts
+      });
+
+      // 実際の階層深度に基づいて子の数を決定
+      if (actualDepth === 2) {
+        // 2階層作品の場合
+        if (newUnitDepth === 1) {
+          // ページレベルに追加 → コマが追加される（最下位なので子なし）
+          childCount = 0;
+          console.log('DEBUG: 2-layer work - adding leaf unit (no children)');
+        } else {
+          // それ以外は追加不可
+          childCount = 0;
+          console.log('DEBUG: 2-layer work - invalid depth for adding');
+        }
+      } else if (actualDepth === 3) {
+        // 3階層作品の場合
+        if (newUnitDepth === 1) {
+          // 見開きレベルに追加 → ページが追加される
+          // ページは最後のdefaultCounts要素個のコマを持つ
+          childCount = defaultCounts[defaultCounts.length - 1] ?? 0;
+          console.log('DEBUG: 3-layer work - adding intermediate unit with', childCount, 'children');
+        } else if (newUnitDepth === 2) {
+          // ページレベルに追加 → コマが追加される（最下位なので子なし）
+          childCount = 0;
+          console.log('DEBUG: 3-layer work - adding leaf unit (no children)');
+        } else {
+          // それ以外は追加不可
+          childCount = 0;
+          console.log('DEBUG: 3-layer work - invalid depth for adding');
+        }
       } else {
-        // ページレベル以下でコマ追加 → コマは最下位なので子を持たない
-        childCount = 0;
+        // フォールバック：従来のロジック
+        if (newUnitDepth === 1) {
+          childCount = defaultCounts[defaultCounts.length - 1] ?? 0;
+        } else {
+          childCount = 0;
+        }
+        console.log('DEBUG: Fallback logic - childCount:', childCount);
       }
 
 
