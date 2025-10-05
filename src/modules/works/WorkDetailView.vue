@@ -673,10 +673,16 @@ const formatDate = (value: string) => {
           <div class="card shadow-sm">
             <div class="card-body">
               <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2 class="h5 mb-0">進捗ヒートマップ</h2>
+                <h2 class="h5 mb-0">工程別進捗</h2>
                 <span class="badge text-bg-light">更新: {{ formatDate(work.updatedAt) }}</span>
               </div>
-              <ProgressHeatmap :units="work.units" :stage-count="stageCount" :stage-labels="stageLabels" :stage-colors="stageColors" />
+              <ProgressHeatmap
+                :units="work.units"
+                :stage-count="stageCount"
+                :stage-labels="stageLabels"
+                :stage-colors="stageColors"
+                :stage-workload-hours="stageWorkloadHours"
+              />
             </div>
           </div>
         </div>
