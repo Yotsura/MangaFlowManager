@@ -587,20 +587,42 @@ export const useWorksStore = defineStore("works", {
         return;
       }
 
-      const newUnit: WorkUnit = {
-        id: generateId(),
-        index: target.units.length + 1,
-        children: [
-          {
+      // 階層構造を動的に作成するヘルパー関数（createWorkで使用されているものと同じロジック）
+      const createHierarchy = (counts: number[], depth: number = 0): WorkUnit[] => {
+        if (counts.length === 0) {
+          return [];
+        }
+
+        const currentCount = normalizePositiveInteger(counts[0] ?? 1, 1);
+        const remainingCounts = counts.slice(1);
+
+        return Array.from({ length: currentCount }, (_, index) => {
+          const unit: WorkUnit = {
             id: generateId(),
-            index: 1,
-            stageIndex: 0,
-          },
-        ],
+            index: index + 1,
+          };
+
+          if (remainingCounts.length > 0) {
+            // 中間レベル：子要素を持つ
+            unit.children = createHierarchy(remainingCounts, depth + 1);
+          } else {
+            // 最下位レベル：stageIndexを持つ
+            unit.stageIndex = 0;
+          }
+
+          return unit;
+        });
       };
 
-      target.units.push(newUnit);
-      recalculateUnitIndices(target.units);
+      // 作品のdefaultCountsに基づいて新しいルートユニットを作成
+      const newUnits = createHierarchy([1, ...target.defaultCounts]);
+      const newUnit = newUnits[0];
+
+      if (newUnit) {
+        newUnit.index = target.units.length + 1;
+        target.units.push(newUnit);
+        recalculateUnitIndices(target.units);
+      }
 
       target.updatedAt = new Date().toISOString();
       this.recalculateTotals(target.id);
@@ -618,16 +640,91 @@ export const useWorksStore = defineStore("works", {
         return;
       }
 
+      // デバッグ：子要素追加前の作品構造を出力
+
+
       // 親ユニットに子配列がない場合は作成
       if (!parentUnit.children) {
         parentUnit.children = [];
       }
 
-      const newChild: WorkUnit = {
-        id: generateId(),
-        index: parentUnit.children.length + 1,
-        stageIndex: 0, // 最下位として作成
+      // 親ユニットの階層レベルを計算
+      // 階層構造: [totalUnits, ...defaultCounts]
+      // レベル0=totalUnits, レベル1=defaultCounts[0], レベル2=defaultCounts[1], ...
+      const getUnitDepthInHierarchy = (targetUnit: WorkUnit, rootUnits: WorkUnit[], currentDepth: number = 0): number => {
+        // ルートレベルで見つかった場合
+        if (rootUnits.includes(targetUnit)) {
+          console.log("getUnitDepthInHierarchy: found", targetUnit.id, "at depth", currentDepth);
+          return currentDepth;
+        }
+
+        // 子レベルを再帰的に検索
+        for (const unit of rootUnits) {
+          if (unit.children) {
+            const foundDepth = getUnitDepthInHierarchy(targetUnit, unit.children, currentDepth + 1);
+            if (foundDepth !== -1) {
+              console.log("getUnitDepthInHierarchy: found in children", targetUnit.id, "at depth", foundDepth);
+              return foundDepth;
+            }
+          }
+        }
+        console.log("getUnitDepthInHierarchy: not found", targetUnit.id);
+        return -1; // 見つからない場合
       };
+
+      const parentDepth = getUnitDepthInHierarchy(parentUnit, target.units);
+
+      // 新しいユニットの子構造を決定
+      // defaultCounts = [見開き数, ページ数, コマ数]
+      // parentDepth=0（見開きレベル）で追加 → ページを追加（ページはdefaultCounts[2]=コマ数個の子を持つ）
+      // parentDepth=1（ページレベル）で追加 → コマを追加（コマは最下位なので子なし）
+
+      const newUnitDepth = parentDepth + 1;
+      let childCount = 0;
+
+      if (newUnitDepth === 1) {
+        // 見開きレベルに追加 → ページが追加される
+        // ページは最後のdefaultCounts要素個のコマを持つ
+        childCount = target.defaultCounts[target.defaultCounts.length - 1] ?? 0;  // 最後の要素（コマ数）
+      } else {
+        // ページレベル以下でコマ追加 → コマは最下位なので子を持たない
+        childCount = 0;
+      }
+
+
+
+      // 新しい子ユニットを作成
+      let newChild: WorkUnit;
+
+      if (childCount === 0) {
+
+        // 最下位レベル：stageIndexを持つ
+        newChild = {
+          id: generateId(),
+          index: parentUnit.children.length + 1,
+          stageIndex: 0,
+        };
+      } else {
+
+
+        // 1つの新しいユニットの子構造を作成
+        const children: WorkUnit[] = [];
+        for (let i = 0; i < childCount; i++) {
+          // 子要素は常に最下位（コマ）なのでstageIndexを持つ
+          children.push({
+            id: generateId(),
+            index: i + 1,
+            stageIndex: 0,
+          });
+        }
+
+        // 1つの新しいユニットを作成
+        newChild = {
+          id: generateId(),
+          index: parentUnit.children.length + 1,
+          children: children,
+        };
+      }
 
       parentUnit.children.push(newChild);
 
