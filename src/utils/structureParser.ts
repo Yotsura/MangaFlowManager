@@ -405,28 +405,6 @@ export const convertSystemStageToUserStage = (systemStageIndex: number): number 
 };
 
 /**
- * 最下位ユニット（leaf units）を再帰的に取得する関数
- * @param unit WorkUnit
- * @returns 最下位ユニットの配列
- */
-const getLeafUnits = (unit: WorkUnit): WorkUnit[] => {
-  if (!unit.children || unit.children.length === 0) {
-    // stageIndexが定義されている場合は leaf unit
-    if (typeof unit.stageIndex === 'number') {
-      return [unit];
-    }
-    return [];
-  }
-
-  // 子がある場合は再帰的に処理
-  const leafUnits: WorkUnit[] = [];
-  unit.children.forEach(child => {
-    leafUnits.push(...getLeafUnits(child));
-  });
-  return leafUnits;
-};
-
-/**
  * 最下位レベルの親ユニット（leaf unitを直接持つユニット）を取得する関数
  * @param unit WorkUnit
  * @returns 最下位レベルの親ユニットの配列

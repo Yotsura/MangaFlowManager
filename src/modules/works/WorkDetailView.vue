@@ -16,8 +16,7 @@ import {
   parseStructureString,
   validateStructureString,
   convertToWorkStructure,
-  convertWorkUnitsToStructureString,
-  type WorkStructure
+  convertWorkUnitsToStructureString
 } from "@/utils/structureParser";
 
 const route = useRoute();

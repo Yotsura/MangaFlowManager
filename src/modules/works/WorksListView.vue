@@ -10,9 +10,7 @@ import {
   parseStructureString as parseStructure,
   validateStructureString as validateStructure,
   convertToWorkStructure,
-  type ParsedStructure,
-  type TopLevelUnit,
-  type WorkStructure
+  type TopLevelUnit
 } from "@/utils/structureParser";
 
 const authStore = useAuthStore();
