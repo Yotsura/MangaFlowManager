@@ -36,6 +36,27 @@ export interface WorkStageWorkload {
   entries?: WorkStageWorkloadEntry[]; // 後方互換性のため（古いデータ用）
 }
 
+// レガシーデータの型定義
+interface LegacyPanel {
+  id?: string;
+  stageIndex?: number;
+}
+
+interface LegacyPage {
+  id?: string;
+  panels?: LegacyPanel[];
+  panelCount?: number;
+  stageIndex?: number;
+}
+
+interface LegacyWork {
+  units?: unknown[];
+  defaultCounts?: unknown[];
+  pages?: LegacyPage[];
+  defaultPanelsPerPage?: unknown;
+  [key: string]: unknown;
+}
+
 export interface Work {
   id: string;
   title: string;
@@ -188,26 +209,28 @@ const mapDocumentToWork = (item: WorkDocument & { id: string }): Work => {
   let units: WorkUnit[] = [];
   let defaultCounts: number[] = [];
 
-  if (Array.isArray((item as any).units)) {
+  const legacyItem = item as LegacyWork;
+
+  if (Array.isArray(legacyItem.units)) {
     // 新形式: unitsプロパティがある場合
-    units = (item as any).units
+    units = legacyItem.units
       .map((unitRaw: unknown, index: number) => normalizeUnit(unitRaw, index + 1))
       .filter((unit: WorkUnit | null): unit is WorkUnit => unit !== null)
       .map((unit: WorkUnit, index: number) => ({ ...unit, index: index + 1 }));
 
-    defaultCounts = Array.isArray((item as any).defaultCounts) ? (item as any).defaultCounts : [1];
-  } else if (Array.isArray((item as any).pages)) {
+    defaultCounts = Array.isArray(legacyItem.defaultCounts) ? legacyItem.defaultCounts as number[] : [1];
+  } else if (Array.isArray(legacyItem.pages)) {
     // 旧形式からの移行: pagesをunitsに変換
-    const pagesRaw = (item as any).pages;
+    const pagesRaw = legacyItem.pages;
     units = pagesRaw
-      .map((pageRaw: any, index: number) => {
+      .map((pageRaw: LegacyPage, index: number) => {
         // 旧形式のpageをunit構造に変換
         return normalizeUnit(
           {
             id: pageRaw.id || generateId(),
             index: index + 1,
             children: Array.isArray(pageRaw.panels)
-              ? pageRaw.panels.map((panel: any, panelIndex: number) => ({
+              ? pageRaw.panels.map((panel: LegacyPanel, panelIndex: number) => ({
                   id: panel.id || generateId(),
                   index: panelIndex + 1,
                   stageIndex: panel.stageIndex || 0,
@@ -224,7 +247,7 @@ const mapDocumentToWork = (item: WorkDocument & { id: string }): Work => {
       })
       .filter((unit: WorkUnit | null): unit is WorkUnit => unit !== null);
 
-    const defaultPanels = Number.isFinite(Number((item as any).defaultPanelsPerPage)) && Number((item as any).defaultPanelsPerPage) > 0 ? Math.floor(Number((item as any).defaultPanelsPerPage)) : 1;
+    const defaultPanels = Number.isFinite(Number(legacyItem.defaultPanelsPerPage)) && Number(legacyItem.defaultPanelsPerPage) > 0 ? Math.floor(Number(legacyItem.defaultPanelsPerPage)) : 1;
     defaultCounts = [defaultPanels];
   }
 
@@ -252,8 +275,15 @@ const mapDocumentToWork = (item: WorkDocument & { id: string }): Work => {
   };
 };
 
-const serializeWorkUnit = (unit: WorkUnit): any => {
-  const result: any = {
+interface SerializedWorkUnit {
+  id: string;
+  index: number;
+  children?: SerializedWorkUnit[];
+  stageIndex?: number;
+}
+
+const serializeWorkUnit = (unit: WorkUnit): SerializedWorkUnit => {
+  const result: SerializedWorkUnit = {
     id: unit.id,
     index: unit.index,
   };

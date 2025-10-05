@@ -53,14 +53,6 @@ const isLoading = computed(() => loadingStageWorkloads.value || !stageWorkloadsL
 const isSaving = computed(() => savingStageWorkloads.value);
 const showValidation = computed(() => saveAttempted.value);
 
-const granularityIndexMap = computed(() => {
-  const map = new Map<string, number>();
-  granularities.value.forEach((granularity, index) => {
-    map.set(granularity.id, index + 1);
-  });
-  return map;
-});
-
 const ensureLoaded = async () => {
   if (!userId.value) {
     return;
