@@ -36,6 +36,7 @@ const fieldErrors = reactive<Record<string, string | null>>({
 const creationError = ref<string | null>(null);
 const isSubmitting = ref(false);
 const attempted = ref(false);
+const showCreateForm = ref(false);
 
 // 粒度を重みの高い順でソート
 const sortedGranularities = computed(() => {
@@ -233,11 +234,6 @@ const validate = () => {
     hasError = true;
   }
 
-  if (!creationForm.deadline) {
-    fieldErrors.deadline = "締め切りを入力してください。";
-    hasError = true;
-  }
-
   if (!creationForm.startDate) {
     fieldErrors.startDate = "開始日時を入力してください。";
     hasError = true;
@@ -275,6 +271,40 @@ const validate = () => {
   return !hasError;
 };
 
+// 新規作成フォームの表示切り替え
+const toggleCreateForm = () => {
+  if (!showCreateForm.value) {
+    // フォームを開く際は初期化
+    showCreateForm.value = true;
+    initializeGranularityForm();
+  } else {
+    // フォームを閉じる際はフォームをリセット
+    resetCreateForm();
+  }
+};
+
+// フォームのリセット
+const resetCreateForm = () => {
+  creationForm.title = "";
+  creationForm.status = WORK_STATUSES[0] as WorkStatus;
+  creationForm.granularityCounts = {};
+  creationForm.startDate = new Date().toISOString().slice(0, 10);
+  creationForm.deadline = "";
+
+  // エラー状態もリセット
+  Object.keys(fieldErrors).forEach(key => {
+    fieldErrors[key] = null;
+  });
+  Object.keys(granularityFieldErrors).forEach(key => {
+    granularityFieldErrors[key] = null;
+  });
+  creationError.value = null;
+  attempted.value = false;
+
+  // フォームを非表示にする
+  showCreateForm.value = false;
+};
+
 const handleCreate = () => {
   attempted.value = true;
   if (!validate()) {
@@ -286,7 +316,7 @@ const handleCreate = () => {
   }
 
   const startDate = creationForm.startDate || new Date().toISOString().slice(0, 10);
-  const deadline = creationForm.deadline;
+  const deadline = creationForm.deadline || "";
 
   isSubmitting.value = true;
 
@@ -320,6 +350,9 @@ const handleCreate = () => {
     initializeGranularityForm();
     attempted.value = false;
     resetErrors();
+
+    // フォームを非表示にする
+    showCreateForm.value = false;
 
     router.push({ name: "work-detail", params: { id: work.id } });
   } finally {
@@ -457,14 +490,18 @@ const navigateToDetail = (id: string) => {
 
     <div v-else-if="settingsError" class="alert alert-danger" role="alert">設定を読み込めませんでした: {{ settingsError }}</div>
 
-    <div v-else class="card shadow-sm mb-5">
+    <!-- 新規作品作成フォーム -->
+    <div v-if="showCreateForm && userId && (granularitiesLoaded || stageWorkloadsLoaded)" class="card shadow-sm mb-5">
       <div class="card-body">
         <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-3">
           <div>
             <h2 class="h5 fw-semibold mb-1">新規作品を登録</h2>
-            <p class="text-muted mb-0">タイトル・締め切り・粒度の数などを設定し、作品を作成します。</p>
+            <p class="text-muted mb-0">タイトル・粒度の数などを設定し、作品を作成します。</p>
           </div>
-          <button type="button" class="btn btn-primary" :disabled="isSubmitting || isSettingsLoading" @click="handleCreate">作品を作成</button>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary" @click="resetCreateForm">キャンセル</button>
+            <button type="button" class="btn btn-primary" :disabled="isSubmitting || isSettingsLoading" @click="handleCreate">作品を作成</button>
+          </div>
         </div>
 
         <div v-if="creationError && attempted" class="alert alert-danger" role="alert">{{ creationError }}</div>
@@ -504,16 +541,18 @@ const navigateToDetail = (id: string) => {
           </div>
 
           <div class="col-12 col-md-3">
-            <label class="form-label" for="work-deadline">締め切り</label>
+            <label class="form-label" for="work-deadline">
+              締め切り
+              <span class="text-muted small">(任意)</span>
+            </label>
             <input
               id="work-deadline"
               v-model="creationForm.deadline"
-              :class="['form-control', attempted && fieldErrors.deadline ? 'is-invalid' : '']"
+              class="form-control"
               type="date"
               :min="creationForm.startDate || undefined"
               :disabled="isSubmitting || isSettingsLoading"
             />
-            <div v-if="attempted && fieldErrors.deadline" class="invalid-feedback">{{ fieldErrors.deadline }}</div>
           </div>
 
           <!-- 動的粒度フィールド -->
@@ -572,9 +611,27 @@ const navigateToDetail = (id: string) => {
 
       <div v-else-if="loadError" class="alert alert-danger" role="alert">{{ loadError }}</div>
 
-      <div v-else-if="sortedWorks.length === 0" class="alert alert-info" role="status">現在登録されている作品はありません。フォームから作品を作成してください。</div>
+      <div class="row g-4">
+        <!-- 新規作成ボタン -->
+        <div class="col-12 col-lg-6 col-xl-4">
+          <div class="card h-100 shadow-sm border-2 border-dashed border-primary bg-light">
+            <div class="card-body d-flex flex-column align-items-center justify-content-center text-center">
+              <button
+                type="button"
+                class="btn btn-primary btn-lg"
+                :disabled="isSubmitting || isSettingsLoading"
+                @click="toggleCreateForm"
+              >
+                <i class="bi bi-plus-circle me-2"></i>
+                新規作成
+              </button>
+              <p class="text-muted mt-3 mb-0 small">
+                新しい作品を作成します
+              </p>
+            </div>
+          </div>
+        </div>
 
-      <div v-else class="row g-4">
         <div v-for="work in sortedWorks" :key="work.id" class="col-12 col-lg-6 col-xl-4">
           <div class="card h-100 shadow-sm">
             <div class="card-body d-flex flex-column">
@@ -589,7 +646,7 @@ const navigateToDetail = (id: string) => {
               <dl class="row g-2 small mb-4">
                 <div class="col-6">
                   <dt class="text-muted">締め切り</dt>
-                  <dd class="mb-0">{{ formatDate(work.deadline) }}</dd>
+                  <dd class="mb-0">{{ work.deadline ? formatDate(work.deadline) : '未設定' }}</dd>
                 </div>
                 <div class="col-6">
                   <dt class="text-muted">進捗率</dt>
@@ -615,6 +672,14 @@ const navigateToDetail = (id: string) => {
 
               <button type="button" class="btn btn-outline-primary mt-auto" @click="navigateToDetail(work.id)">詳細を開く</button>
             </div>
+          </div>
+        </div>
+
+        <!-- 作品が0件の場合のメッセージ -->
+        <div v-if="sortedWorks.length === 0" class="col-12">
+          <div class="alert alert-info text-center" role="status">
+            <i class="bi bi-info-circle me-2"></i>
+            現在登録されている作品はありません。新規作成ボタンから作品を作成してください。
           </div>
         </div>
       </div>
