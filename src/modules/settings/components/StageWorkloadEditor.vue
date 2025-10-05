@@ -16,6 +16,7 @@ interface EditableStage {
   label: string;
   color: string;
   entries: EditableEntry[];
+  baseHours: number | null; // 現在のbaseHours値を保持
 }
 
 interface StageError {
@@ -51,7 +52,7 @@ const colorInputRefs = new Map<number, HTMLInputElement>();
 const isLoading = computed(() => loadingStageWorkloads.value || !stageWorkloadsLoaded.value);
 const isSaving = computed(() => savingStageWorkloads.value);
 const showValidation = computed(() => saveAttempted.value);
-const weightMap = computed(() => new Map<string, number>(granularities.value.map((granularity) => [granularity.id, granularity.weight])));
+
 const granularityIndexMap = computed(() => {
   const map = new Map<string, number>();
   granularities.value.forEach((granularity, index) => {
@@ -115,15 +116,30 @@ const syncEditableStages = () => {
 
   const totalStages = stageWorkloads.value.length;
 
+  // 最低粒度を取得
+  const lowestGranularity = granularities.value.reduce((min, current) =>
+    current.weight < min.weight ? current : min
+  );
+
+  console.log("syncEditableStages: stageWorkloads=", stageWorkloads.value);
+  console.log("syncEditableStages: lowestGranularity=", lowestGranularity);
+
   const mapped: EditableStage[] = stageWorkloads.value.map((stage, index) => ({
     id: index + 1,
     label: stage.label,
     color: normalizeStageColorValue(stage.color, index, totalStages),
+    baseHours: stage.baseHours,
     entries: granularities.value.map((granularity) => {
-      const entry = stage.entries.find((item) => item.granularityId === granularity.id);
+      // baseHoursから各粒度の工数を逆算
+      let hours: number | null = null;
+      if (stage.baseHours !== null && lowestGranularity) {
+        const ratio = granularity.weight / lowestGranularity.weight;
+        hours = stage.baseHours * ratio;
+      }
+
       return {
         granularityId: granularity.id,
-        hours: formatHours(entry?.hours ?? null),
+        hours: formatHours(hours),
       };
     }),
   }));
@@ -144,6 +160,69 @@ watch(
   },
   { deep: true, immediate: true },
 );
+
+// 工数の値が変更されたときに他の粒度の値を更新する関数
+const updateRelatedEntries = (stageId: number, changedGranularityId: string, newValue: string) => {
+  if (isSyncingFromStore.value || granularities.value.length === 0) {
+    return;
+  }
+
+  const stage = editableStages.value.find(s => s.id === stageId);
+  if (!stage) return;
+
+  const changedEntry = stage.entries.find(e => e.granularityId === changedGranularityId);
+  if (!changedEntry) return;
+
+  // 変更された値が有効な数値かチェック
+  const newHours = parseFloat(newValue);
+  if (isNaN(newHours) || newHours < 0) {
+    // 無効な値の場合は、空文字の場合は他の粒度もクリア
+    if (newValue === '' || newValue.trim() === '') {
+      isSyncingFromStore.value = true;
+      stage.baseHours = null;
+      stage.entries.forEach(entry => {
+        if (entry.granularityId !== changedGranularityId) {
+          entry.hours = '';
+        }
+      });
+      nextTick(() => {
+        isSyncingFromStore.value = false;
+      });
+    }
+    return;
+  }
+
+  // 変更された粒度を取得
+  const changedGranularity = granularities.value.find(g => g.id === changedGranularityId);
+  if (!changedGranularity) return;
+
+  // 最低粒度を取得
+  const lowestGranularity = granularities.value.reduce((min, current) =>
+    current.weight < min.weight ? current : min
+  );
+
+  // 変更された値から基準工数を計算（最低粒度での工数）
+  const baseHours = (newHours * lowestGranularity.weight) / changedGranularity.weight;
+
+  // ステージのbaseHoursを更新
+  stage.baseHours = baseHours;
+
+  // 他の粒度の値を更新
+  isSyncingFromStore.value = true;
+  stage.entries.forEach(entry => {
+    if (entry.granularityId !== changedGranularityId) {
+      const granularity = granularities.value.find(g => g.id === entry.granularityId);
+      if (granularity) {
+        const calculatedHours = (baseHours * granularity.weight) / lowestGranularity.weight;
+        entry.hours = formatHours(calculatedHours);
+      }
+    }
+  });
+
+  nextTick(() => {
+    isSyncingFromStore.value = false;
+  });
+};
 
 watch(
   editableStages,
@@ -172,6 +251,7 @@ const addStage = () => {
       id: nextId,
       label: "",
       color,
+      baseHours: null,
       entries: granularities.value.map((granularity) => ({
         granularityId: granularity.id,
         hours: "",
@@ -256,8 +336,6 @@ const granularityLabel = (granularityId: string) => {
 
 const stageCountForColor = () => Math.max(editableStages.value.length || stageWorkloads.value.length || 1, 1);
 
-const resolvedStageColor = (stage: EditableStage) => normalizeStageColorValue(stage.color, stage.id - 1, stageCountForColor());
-
 const stageBadgeStyle = (stage: EditableStage) => {
   const { backgroundColor, textColor } = stageColorFor(stage.id - 1, stageCountForColor(), stage.color);
   return {
@@ -266,8 +344,6 @@ const stageBadgeStyle = (stage: EditableStage) => {
     borderColor: backgroundColor,
   };
 };
-
-const stageColorCode = (stage: EditableStage) => resolvedStageColor(stage).toUpperCase();
 
 const setColorInputRef = (stageId: number, el: HTMLInputElement | null) => {
   if (el) {
@@ -320,48 +396,52 @@ const handleSave = async () => {
   }
 
   const totalStages = editableStages.value.length;
-  const payload = editableStages.value.map((stage, index) => ({
-    id: index + 1,
-    label: stage.label.trim(),
-    color: normalizeStageColorValue(stage.color, index, totalStages),
-    entries: stage.entries.map((entry) => ({
-      granularityId: entry.granularityId,
-      hours: entry.hours === "" ? null : Number(entry.hours),
-    })),
-  }));
+  // 粒度の比重を使って最低粒度の工数を計算
+  const calculateBaseHours = (entries: { granularityId: string; hours: number | null }[]): number | null => {
+    if (!granularities.value.length) return null;
 
-  payload.forEach((stage) => {
-    const baseCandidates: number[] = [];
+    // 最低粒度（最も比重の小さい粒度）を取得
+    const lowestGranularity = granularities.value.reduce((min, current) =>
+      current.weight < min.weight ? current : min
+    );
 
-    stage.entries.forEach((entry) => {
-      if (entry.hours === null) {
-        return;
-      }
-
-      const weight = weightMap.value.get(entry.granularityId) ?? 1;
-      if (weight <= 0) {
-        return;
-      }
-
-      baseCandidates.push(entry.hours / weight);
-    });
-
-    if (baseCandidates.length === 0) {
-      return;
+    // 最低粒度に直接設定されている場合
+    const directEntry = entries.find(e => e.granularityId === lowestGranularity.id);
+    if (directEntry && directEntry.hours !== null) {
+      return directEntry.hours;
     }
 
-    const base = baseCandidates.reduce((total, value) => total + value, 0) / baseCandidates.length;
+    // より上位の粒度から計算
+    for (const entry of entries) {
+      if (entry.hours === null) continue;
 
-    stage.entries.forEach((entry) => {
-      if (entry.hours !== null) {
-        return;
-      }
+      const granularity = granularities.value.find(g => g.id === entry.granularityId);
+      if (!granularity) continue;
 
-      const weight = weightMap.value.get(entry.granularityId) ?? 1;
-      const estimate = base * weight;
-      const rounded = Math.round(estimate * 10) / 10;
-      entry.hours = rounded;
-    });
+      // 比重の比率で最低粒度の工数を計算
+      const ratio = lowestGranularity.weight / granularity.weight;
+      return entry.hours * ratio;
+    }
+
+    return null;
+  };
+
+  const payload = editableStages.value.map((stage, index) => {
+    const entries = stage.entries.map((entry) => ({
+      granularityId: entry.granularityId,
+      hours: entry.hours === "" ? null : Number(entry.hours),
+    }));
+
+    // リアルタイムに計算されたbaseHoursを使用、なければ従来の方法で計算
+    const baseHours = stage.baseHours !== null ? stage.baseHours : calculateBaseHours(entries);
+
+    return {
+      id: index + 1,
+      label: stage.label.trim(),
+      color: normalizeStageColorValue(stage.color, index, totalStages),
+      baseHours,
+      entries,
+    };
   });
 
   try {
@@ -454,6 +534,7 @@ defineExpose({
                     min="0"
                     step="0.1"
                     :disabled="isSaving"
+                    @input="(event) => updateRelatedEntries(stage.id, entry.granularityId, (event.target as HTMLInputElement)?.value || '')"
                   />
                   <span class="input-group-text">h</span>
                 </div>

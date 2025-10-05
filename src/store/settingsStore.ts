@@ -34,13 +34,14 @@ interface StageWorkload {
   id: number;
   label: string;
   color: string;
-  entries: StageWorkloadEntry[];
+  baseHours: number | null; // 最低粒度での工数のみ保持
 }
 
 interface StageWorkloadCandidate {
   id: number;
   label: string;
   color: string | null;
+  baseHours: number | null;
   entries: StageWorkloadEntry[];
 }
 
@@ -158,14 +159,42 @@ const createDefaultGranularities = (): Granularity[] =>
     defaultCount: template.defaultCount,
   }));
 
+// 粒度の比重を使って最低粒度の工数を計算
+const calculateBaseHours = (entries: StageWorkloadEntry[], granularities: Granularity[]): number | null => {
+  if (!granularities.length) return null;
+
+  // 最低粒度（最も比重の小さい粒度）を取得
+  const lowestGranularity = granularities.reduce((min, current) =>
+    current.weight < min.weight ? current : min
+  );
+
+  // 最低粒度に直接設定されている場合
+  const directEntry = entries.find(e => e.granularityId === lowestGranularity.id);
+  if (directEntry && directEntry.hours !== null) {
+    return directEntry.hours;
+  }
+
+  // より上位の粒度から計算
+  for (const entry of entries) {
+    if (entry.hours === null) continue;
+
+    const granularity = granularities.find(g => g.id === entry.granularityId);
+    if (!granularity) continue;
+
+    // 比重の比率で最低粒度の工数を計算
+    const ratio = lowestGranularity.weight / granularity.weight;
+    return entry.hours * ratio;
+  }
+
+  return null;
+};
+
 const createDefaultStageWorkloads = (granularities: Granularity[]): StageWorkload[] => {
   const totalStages = DEFAULT_STAGE_TEMPLATES.length;
 
-  return DEFAULT_STAGE_TEMPLATES.map((template, stageIndex) => ({
-    id: stageIndex + 1,
-    label: template.label,
-    color: getDefaultStageColor(stageIndex, totalStages),
-    entries: template.entries
+  return DEFAULT_STAGE_TEMPLATES.map((template, stageIndex) => {
+    // テンプレートから一時的なentriesを作成して baseHours を計算
+    const tempEntries = template.entries
       .map((entry) => {
         const target = granularities[entry.granularityIndex];
         if (!target) {
@@ -176,8 +205,17 @@ const createDefaultStageWorkloads = (granularities: Granularity[]): StageWorkloa
           hours: entry.hours,
         } satisfies StageWorkloadEntry;
       })
-      .filter((item): item is StageWorkloadEntry => item !== null),
-  }));
+      .filter((item): item is StageWorkloadEntry => item !== null);
+
+    const baseHours = calculateBaseHours(tempEntries, granularities);
+
+    return {
+      id: stageIndex + 1,
+      label: template.label,
+      color: getDefaultStageColor(stageIndex, totalStages),
+      baseHours,
+    };
+  });
 };
 
 interface NormalizedGranularitiesResult {
@@ -275,6 +313,9 @@ const normalizeStageWorkloads = (items: unknown, granularities: Granularity[], m
 
       const colorValue = typeof rawStage.color === "string" ? rawStage.color : null;
 
+      // 既にbaseHoursが存在する場合はそれを使用
+      const existingBaseHours = typeof rawStage.baseHours === "number" ? rawStage.baseHours : null;
+
       const entriesRaw = Array.isArray(rawStage.entries) ? rawStage.entries : [];
       const entries: StageWorkloadEntry[] = entriesRaw
         .map((item) => {
@@ -314,6 +355,7 @@ const normalizeStageWorkloads = (items: unknown, granularities: Granularity[], m
         id: stageId,
         label,
         color: colorValue,
+        baseHours: existingBaseHours,
         entries,
       } as StageWorkloadCandidate;
     })
@@ -321,28 +363,27 @@ const normalizeStageWorkloads = (items: unknown, granularities: Granularity[], m
 
   const totalStages = normalized.length;
 
-  return normalized.map((stage, index) => ({
-    id: index + 1,
-    label: stage.label,
-    color: normalizeStageColorValue(stage.color, index, totalStages),
-    entries: stage.entries,
-  }));
+  return normalized.map((stage, index) => {
+    // 既にbaseHoursが存在する場合はそれを使用、なければentriesから計算
+    const baseHours = stage.baseHours !== null ? stage.baseHours : calculateBaseHours(stage.entries, granularities);
+    console.log(`Stage "${stage.label}": existing baseHours=`, stage.baseHours, "entries=", stage.entries, "final baseHours=", baseHours);
+    return {
+      id: index + 1,
+      label: stage.label,
+      color: normalizeStageColorValue(stage.color, index, totalStages),
+      baseHours,
+    };
+  });
 };
 
-const alignStageEntries = (stages: StageWorkload[], granularities: Granularity[]): StageWorkload[] => {
+const alignStageEntries = (stages: StageWorkload[]): StageWorkload[] => {
   const totalStages = stages.length;
 
   return stages.map((stage, index) => ({
     id: index + 1,
     label: stage.label,
     color: normalizeStageColorValue(stage.color, index, totalStages),
-    entries: granularities.map((granularity) => {
-      const existing = stage.entries.find((entry) => entry.granularityId === granularity.id);
-      return {
-        granularityId: granularity.id,
-        hours: existing?.hours ?? null,
-      } satisfies StageWorkloadEntry;
-    }),
+    baseHours: stage.baseHours, // baseHoursはそのまま保持
   }));
 };
 
@@ -435,7 +476,7 @@ export const useSettingsStore = defineStore("settings", {
         }
 
         if (this.stageWorkloadsLoaded) {
-          this.stageWorkloads = alignStageEntries(this.stageWorkloads, this.granularities);
+          this.stageWorkloads = alignStageEntries(this.stageWorkloads);
         }
 
         this.granularitiesLoaded = true;
@@ -473,7 +514,7 @@ export const useSettingsStore = defineStore("settings", {
         this.granularityIdMigrationMap = {};
 
         if (this.stageWorkloadsLoaded) {
-          this.stageWorkloads = alignStageEntries(this.stageWorkloads, this.granularities);
+          this.stageWorkloads = alignStageEntries(this.stageWorkloads);
         }
       } catch (error) {
         this.granularitiesSaveError = mapError(error);
@@ -499,10 +540,10 @@ export const useSettingsStore = defineStore("settings", {
         const normalized = normalizeStageWorkloads(document?.stages, this.granularities, this.granularityIdMigrationMap);
 
         if (normalized.length > 0) {
-          this.stageWorkloads = alignStageEntries(normalized, this.granularities);
+          this.stageWorkloads = alignStageEntries(normalized);
         } else {
           const defaults = createDefaultStageWorkloads(this.granularities);
-          this.stageWorkloads = alignStageEntries(defaults, this.granularities);
+          this.stageWorkloads = alignStageEntries(defaults);
         }
 
         this.stageWorkloadsLoaded = true;
@@ -523,7 +564,7 @@ export const useSettingsStore = defineStore("settings", {
       this.stageWorkloadsSaveError = null;
 
       try {
-        const sequencedStages = alignStageEntries(stages, this.granularities);
+        const sequencedStages = alignStageEntries(stages);
 
         await setDocument(buildStageWorkloadPath(userId), { stages: sequencedStages });
         this.stageWorkloads = sequencedStages;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch, onActivated } from "vue";
 import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 
@@ -106,25 +106,35 @@ const settingsError = computed(() => granularitiesLoadError.value ?? stageWorklo
 
 const ensureSettingsLoaded = async () => {
   if (!userId.value) {
+    console.log('WorksListView: ensureSettingsLoaded - no userId');
     return;
   }
 
+  console.log('WorksListView: ensureSettingsLoaded - granularitiesLoaded:', granularitiesLoaded.value, 'stageWorkloadsLoaded:', stageWorkloadsLoaded.value);
+
   if (!granularitiesLoaded.value && !loadingGranularities.value) {
+    console.log('WorksListView: fetching granularities...');
     await settingsStore.fetchGranularities(userId.value);
   }
 
   if (!stageWorkloadsLoaded.value && !loadingStageWorkloads.value) {
+    console.log('WorksListView: fetching stageWorkloads...');
     await settingsStore.fetchStageWorkloads(userId.value);
   }
 };
 
 const ensureWorksLoaded = async () => {
   if (!userId.value) {
+    console.log('WorksListView: ensureWorksLoaded - no userId');
     return;
   }
 
+  console.log('WorksListView: ensureWorksLoaded - worksLoaded:', worksLoaded.value, 'loadingWorks:', loadingWorks.value);
+
   if (!worksLoaded.value && !loadingWorks.value) {
+    console.log('WorksListView: fetching works...');
     await worksStore.fetchWorks(userId.value);
+    console.log('WorksListView: works fetched, works.length:', works.value.length);
   }
 };
 
@@ -133,46 +143,57 @@ watch(granularities, () => {
   initializeGranularityForm();
 }, { deep: true });
 
-onMounted(async () => {
-  if (!user.value) {
-    await authStore.ensureInitialized();
-  }
-  await ensureSettingsLoaded();
-  await ensureWorksLoaded();
-  initializeGranularityForm();
-});
-
 // 設定をコピーする関数
 const copyCurrentSettings = () => {
   const workGranularities = granularities.value.map(g => ({
     id: g.id,
     label: g.label,
-    weight: g.weight
+    weight: g.weight,
+    defaultCount: g.defaultCount
   }));
 
   const workStageWorkloads = stageWorkloads.value.map(stage => ({
     id: stage.id,
     label: stage.label,
     color: stage.color,
-    entries: stage.entries.map(entry => ({
-      granularityId: entry.granularityId,
-      hours: entry.hours
-    }))
+    baseHours: stage.baseHours,
+    // 作品作成時の型に合わせて、一時的にentriesを空配列にする
+    entries: [] as { granularityId: string; hours: number | null }[]
   }));
 
   return { workGranularities, workStageWorkloads };
 };
 
-onMounted(async () => {
-  await authStore.ensureInitialized();
+const loadData = async () => {
+  console.log('WorksListView: loadData called, user:', user.value, 'userId:', userId.value);
+  
+  if (!user.value) {
+    console.log('WorksListView: ensureInitialized...');
+    await authStore.ensureInitialized();
+    console.log('WorksListView: after ensureInitialized, user:', user.value, 'userId:', userId.value);
+  }
+  
+  console.log('WorksListView: loading settings and works...');
   await ensureSettingsLoaded();
   await ensureWorksLoaded();
+  initializeGranularityForm();
+  console.log('WorksListView: loadData completed');
+};
+
+onMounted(async () => {
+  await loadData();
+});
+
+// ページ遷移やコンポーネント再活性化時にもデータを確認
+onActivated(async () => {
+  await loadData();
 });
 
 watch(userId, async (next, prev) => {
   if (next && next !== prev) {
     await ensureSettingsLoaded();
-    await worksStore.fetchWorks(next);
+    await ensureWorksLoaded();
+    initializeGranularityForm();
   }
 });
 
@@ -324,10 +345,17 @@ const computeWorkProgress = (work: Work) => {
 
   // 工数ベースの進捗計算
   if (work.primaryGranularityId && stageWorkloads.value.length > 0) {
-    // 各段階の工数を取得
+    // 各段階の工数を取得（baseHoursから最上位粒度の工数を逆算）
+    const primaryGranularity = granularities.value.find(g => g.id === work.primaryGranularityId);
+    const lowestGranularity = granularities.value.reduce((min, current) =>
+      current.weight < min.weight ? current : min
+    );
+
     const stageHours = stageWorkloads.value.map(stage => {
-      const entry = stage.entries.find(e => e.granularityId === work.primaryGranularityId);
-      return entry?.hours ?? 0;
+      if (!stage.baseHours || !primaryGranularity || !lowestGranularity) return 0;
+      // 最低粒度の工数から最上位粒度の工数を計算
+      const ratio = primaryGranularity.weight / lowestGranularity.weight;
+      return stage.baseHours * ratio;
     });
 
     // 各段階の累積工数を計算
@@ -388,9 +416,28 @@ const navigateToDetail = (id: string) => {
       </div>
     </header>
 
-    <div v-if="settingsError" class="alert alert-danger" role="alert">設定を読み込めませんでした: {{ settingsError }}</div>
+    <!-- 全体のローディング状態 -->
+    <div v-if="!userId" class="alert alert-warning" role="alert">
+      <div class="d-flex align-items-center">
+        <div class="spinner-border spinner-border-sm me-2" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        ユーザー情報を確認中...
+      </div>
+    </div>
 
-    <div class="card shadow-sm mb-5">
+    <div v-else-if="isSettingsLoading && !granularitiesLoaded && !stageWorkloadsLoaded" class="alert alert-info" role="alert">
+      <div class="d-flex align-items-center">
+        <div class="spinner-border spinner-border-sm me-2" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        設定を読み込み中...
+      </div>
+    </div>
+
+    <div v-else-if="settingsError" class="alert alert-danger" role="alert">設定を読み込めませんでした: {{ settingsError }}</div>
+
+    <div v-else class="card shadow-sm mb-5">
       <div class="card-body">
         <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-3">
           <div>
@@ -488,13 +535,20 @@ const navigateToDetail = (id: string) => {
       </div>
     </div>
 
-    <section>
+    <section v-if="userId && (granularitiesLoaded || stageWorkloadsLoaded)">
       <div class="d-flex align-items-center justify-content-between mb-3">
         <h2 class="h5 fw-semibold mb-0">登録済みの作品</h2>
         <span class="badge text-bg-light">{{ works.length }} 件</span>
       </div>
 
-      <div v-if="loadingWorks" class="alert alert-info" role="status">作品一覧を読み込み中です...</div>
+      <div v-if="loadingWorks" class="alert alert-info" role="status">
+        <div class="d-flex align-items-center">
+          <div class="spinner-border spinner-border-sm me-2" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          作品一覧を読み込み中です...
+        </div>
+      </div>
 
       <div v-else-if="loadError" class="alert alert-danger" role="alert">{{ loadError }}</div>
 

@@ -32,7 +32,7 @@ export interface WorkStageWorkload {
   id: number;
   label: string;
   color: string;
-  entries: WorkStageWorkloadEntry[];
+  baseHours: number | null; // 最低粒度での工数のみ保持
 }
 
 export interface Work {
@@ -839,10 +839,7 @@ export const useWorksStore = defineStore("works", {
         id: s.id,
         label: s.label,
         color: s.color,
-        entries: s.entries.map(e => ({
-          granularityId: e.granularityId,
-          hours: e.hours
-        }))
+        baseHours: s.baseHours, // 既に計算済みのbaseHoursを使用
       }));
 
       // 作品を直接更新
@@ -881,15 +878,25 @@ export const useWorksStore = defineStore("works", {
       }
 
       // 作品固有設定または全体設定を使用
+      const workGranularities = work.workGranularities && work.workGranularities.length > 0
+        ? work.workGranularities
+        : [];
       const workStageWorkloads = work.workStageWorkloads && work.workStageWorkloads.length > 0
         ? work.workStageWorkloads
         : [];
 
-      if (work.primaryGranularityId && workStageWorkloads.length > 0) {
-        // 各段階の工数を取得
+      if (work.primaryGranularityId && workStageWorkloads.length > 0 && workGranularities.length > 0) {
+        // 各段階の工数を取得（baseHoursから最上位粒度の工数を逆算）
+        const primaryGranularity = workGranularities.find(g => g.id === work.primaryGranularityId);
+        const lowestGranularity = workGranularities.reduce((min, current) =>
+          current.weight < min.weight ? current : min
+        );
+
         const stageWorkloadHours = workStageWorkloads.map(stage => {
-          const entry = stage.entries.find(e => e.granularityId === work.primaryGranularityId);
-          return entry?.hours ?? 0;
+          if (!stage.baseHours || !primaryGranularity || !lowestGranularity) return 0;
+          // 最低粒度の工数から最上位粒度の工数を計算
+          const ratio = primaryGranularity.weight / lowestGranularity.weight;
+          return stage.baseHours * ratio;
         });
 
         // 各段階の累積工数を計算
