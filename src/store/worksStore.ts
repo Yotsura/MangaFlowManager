@@ -941,15 +941,17 @@ export const useWorksStore = defineStore("works", {
         // 各ユニットの完了工数を計算
         const completedWorkHours = leafUnits.reduce((sum, unit) => {
           const stageIndex = unit.stageIndex ?? 0;
-          // stageIndexが段階の完了済み数を示すなら、その段階まで完了した累積工数を使用
+          // stageIndexは現在の段階を示す (0=未着手, 1=ネーム済, 2=下書済, 3=ペン入済, 4=仕上済)
+          // stageIndexが指す段階まで完了しているので、その段階の累積工数を使用
           if (stageIndex >= stageWorkloadHours.length) {
-            // 全段階完了の場合
+            // 全段階完了の場合（最終段階を超えている場合）
             return sum + totalWorkHoursPerUnit;
           } else if (stageIndex > 0) {
-            // 一部段階完了の場合、その段階まで完了した累積工数
-            return sum + (cumulativeWorkloads[stageIndex - 1] || 0);
+            // stageIndexが1以上の場合、その段階の累積工数を使用
+            // 例: stageIndex=4(仕上済)なら cumulativeWorkloads[4] を使用
+            return sum + (cumulativeWorkloads[stageIndex] || 0);
           } else {
-            // 未着手の場合
+            // 未着手の場合 (stageIndex=0)
             return sum;
           }
         }, 0);
