@@ -1015,52 +1015,44 @@ export const useWorksStore = defineStore("works", {
       let childCount = 0;
 
       console.log('DEBUG: Child creation logic:', {
+        workTitle: target.title,
+        parentDepth: parentDepth,
         newUnitDepth: newUnitDepth,
         actualDepth: actualDepth,
-        defaultCounts: defaultCounts
+        defaultCounts: defaultCounts,
+        hasWorkGranularities: !!(target.workGranularities && target.workGranularities.length > 0),
+        workGranularities: target.workGranularities
       });
 
-      // 実際の階層深度に基づいて子の数を決定
-      if (actualDepth === 2) {
-        // 2階層作品の場合
-        if (newUnitDepth === 1) {
-          // ページレベルに追加 → コマが追加される（最下位なので子なし）
-          childCount = 0;
-          console.log('DEBUG: 2-layer work - adding leaf unit (no children)');
-        } else {
-          // それ以外は追加不可
-          childCount = 0;
-          console.log('DEBUG: 2-layer work - invalid depth for adding');
-        }
-      } else if (actualDepth === 3) {
-        // 3階層作品の場合
-        if (newUnitDepth === 1) {
-          // 見開きレベルに追加 → ページが追加される
-          // ページは最後のdefaultCounts要素個のコマを持つ
-          childCount = defaultCounts[defaultCounts.length - 1] ?? 0;
-          console.log('DEBUG: 3-layer work - adding intermediate unit with', childCount, 'children');
-        } else if (newUnitDepth === 2) {
-          // ページレベルに追加 → コマが追加される（最下位なので子なし）
-          childCount = 0;
-          console.log('DEBUG: 3-layer work - adding leaf unit (no children)');
-        } else {
-          // それ以外は追加不可
-          childCount = 0;
-          console.log('DEBUG: 3-layer work - invalid depth for adding');
-        }
+      // 汎用的な階層構造判定：新しいユニットが最下位レベルかどうかを動的に判定
+      // actualDepth=3の場合、最下位はdepth=2（0ベース）
+      const isLeafLevel = newUnitDepth >= (actualDepth - 1);
+
+      console.log('DEBUG: Depth analysis:', {
+        newUnitDepth: newUnitDepth,
+        actualDepth: actualDepth,
+        maxIntermediateDepth: actualDepth - 1,
+        isLeafLevel: isLeafLevel
+      });
+
+      if (isLeafLevel) {
+        // 最下位レベル：子を持たない（コマレベル）
+        childCount = 0;
+        console.log('DEBUG: Adding leaf unit (no children) at depth', newUnitDepth);
       } else {
-        // フォールバック：従来のロジック
-        if (newUnitDepth === 1) {
-          childCount = defaultCounts[defaultCounts.length - 1] ?? 0;
+        // 中間レベル：次の階層のデフォルト数だけ子を持つ
+        // defaultCountsは [階層1のデフォルト数, 階層2のデフォルト数, ...] の順
+        // newUnitDepth=0なら、その子（階層1）のデフォルト数 = defaultCounts[0]
+        // newUnitDepth=1なら、その子（階層2）のデフォルト数 = defaultCounts[1]
+        const childCountIndex = newUnitDepth;
+        if (childCountIndex < defaultCounts.length) {
+          childCount = defaultCounts[childCountIndex] ?? 0;
         } else {
-          childCount = 0;
+          // デフォルト設定がない場合は最後の値を使用
+          childCount = defaultCounts[defaultCounts.length - 1] ?? 0;
         }
-        console.log('DEBUG: Fallback logic - childCount:', childCount);
-      }
-
-
-
-      // 新しい子ユニットを作成
+        console.log('DEBUG: Adding intermediate unit with', childCount, 'children at depth', newUnitDepth, 'using defaultCounts[' + childCountIndex + ']');
+      }      // 新しい子ユニットを作成
       let newChild: WorkUnit;
 
       if (childCount === 0) {
