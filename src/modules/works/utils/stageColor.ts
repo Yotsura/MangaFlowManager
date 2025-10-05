@@ -97,7 +97,7 @@ export const getDefaultStageColor = (stageIndex: number, stageCount: number): st
   const startR = 255;
   const startG = 77;
   const startB = 77;
-  
+
   const endR = 77;
   const endG = 255;
   const endB = 77;

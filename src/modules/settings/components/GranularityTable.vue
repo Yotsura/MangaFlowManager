@@ -219,10 +219,12 @@ const submitNewGranularity = () => {
   saved.value = false;
   resetNewGranularity();
   isAddingNew.value = false;
+  emit("granularity-changed");
 };
 
 interface Emits {
   (event: "granularity-removed", granularityId: string): void;
+  (event: "granularity-changed"): void;
 }
 
 const emit = defineEmits<Emits>();
@@ -234,6 +236,7 @@ const removeRow = (id: string) => {
 
   // 削除された粒度IDをイベントで通知
   emit("granularity-removed", id);
+  emit("granularity-changed");
 };
 
 const getFieldError = (id: string, field: keyof FieldError) => rowErrors.value.get(id)?.[field] ?? null;
@@ -298,10 +301,10 @@ defineExpose({
                 <span class="fw-semibold text-muted">#{{ index + 1 }}</span>
               </td>
               <td>
-                <input v-model="row.label" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'label') }]" type="text" placeholder="例: ページ単位" :disabled="isSaving" />
+                <input v-model="row.label" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'label') }]" type="text" placeholder="例: ページ単位" :disabled="isSaving" @input="emit('granularity-changed')" />
               </td>
               <td>
-                <input v-model="row.weight" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'weight') }]" type="number" min="1" step="1" :disabled="isSaving" />
+                <input v-model="row.weight" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'weight') }]" type="number" min="1" step="1" :disabled="isSaving" @input="emit('granularity-changed')" />
               </td>
               <td>
                 <input v-model="row.defaultCount" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'defaultCount') }]" type="number" min="1" step="1" :disabled="isSaving" />
@@ -321,13 +324,14 @@ defineExpose({
                   type="text"
                   placeholder="例: カット単位"
                   :disabled="isSaving"
+                  @input="emit('granularity-changed')"
                 />
               </td>
               <td>
-                <input v-model="newGranularity.weight" :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]" type="number" min="1" step="1" :disabled="isSaving" />
+                <input v-model="newGranularity.weight" :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]" type="number" min="1" step="1" :disabled="isSaving" @input="emit('granularity-changed')" />
               </td>
               <td>
-                <input v-model="newGranularity.defaultCount" :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]" type="number" min="1" step="1" :disabled="isSaving" />
+                <input v-model="newGranularity.defaultCount" :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]" type="number" min="1" step="1" :disabled="isSaving" @input="emit('granularity-changed')" />
               </td>
               <td class="text-end text-nowrap">
                 <div class="d-flex justify-content-end gap-2">

@@ -1,99 +1,25 @@
 <script setup lang="ts">
-// TODO: 設定フォームの状態管理と保存処理を実装
-
-import { computed, ref, watch } from "vue";
+import { ref } from "vue";
 import { storeToRefs } from "pinia";
+import { useAuthStore } from "@/store/authStore";
+import WorkloadSettingsEditor from "@/components/common/WorkloadSettingsEditor.vue";
 
-import GranularityTable from "./components/GranularityTable.vue";
-import StageWorkloadEditor from "./components/StageWorkloadEditor.vue";
-
-interface GranularityTableExposed {
-  save: () => void;
+interface WorkloadSettingsEditorExposed {
+  save: () => Promise<void>;
   isSaving: () => boolean;
   canSave: () => boolean;
+  hasChanges: () => boolean;
+  resetChanges: () => void;
 }
 
-interface StageWorkloadEditorExposed {
-  save: () => void;
-  isSaving: () => boolean;
-  canSave: () => boolean;
-  resetColors: () => void;
-  removeGranularityEntries: (granularityId: string) => void;
-}
-
-const granularityRef = ref<GranularityTableExposed | null>(null);
-const stageEditorRef = ref<StageWorkloadEditorExposed | null>(null);
-
-const granularitySaving = computed(() => granularityRef.value?.isSaving() ?? false);
-const granularityCanSave = computed(() => granularityRef.value?.canSave() ?? false);
-const stageSaving = computed(() => stageEditorRef.value?.isSaving() ?? false);
-const stageCanSave = computed(() => stageEditorRef.value?.canSave() ?? false);
-
-const saveGranularities = () => {
-  granularityRef.value?.save();
-};
-
-const saveStageWorkloads = () => {
-  stageEditorRef.value?.save();
-};
-
-const resetStageColors = () => {
-  stageEditorRef.value?.resetColors();
-};
-
-const handleGranularityRemoved = (granularityId: string) => {
-  // StageWorkloadEditorに粒度削除を通知
-  stageEditorRef.value?.removeGranularityEntries(granularityId);
-};
-
-// 祝日データ管理
-const holidayUpdating = ref(false);
-const holidayLastUpdated = ref<Date | null>(null);
-
-const updateHolidays = async () => {
-  holidayUpdating.value = true;
-  try {
-    const { globalHolidayService } = await import('@/services/globalHolidayService');
-    await globalHolidayService.forceUpdate();
-    holidayLastUpdated.value = new Date();
-    console.log('祝日データを更新しました');
-  } catch (error) {
-    console.error('祝日データの更新に失敗しました:', error);
-  } finally {
-    holidayUpdating.value = false;
-  }
-};
-
-const checkHolidayStatus = async () => {
-  try {
-    const { globalHolidayService } = await import('@/services/globalHolidayService');
-    const holidays = await globalHolidayService.getHolidays();
-    if (holidays.length > 0) {
-      // 最新の祝日から更新日時を推定
-      holidayLastUpdated.value = new Date();
-    }
-  } catch (error) {
-    console.warn('祝日データの状態確認に失敗しました:', error);
-  }
-};
-
-// 初期化時に祝日状態をチェック
-checkHolidayStatus();
-
-// デバッグ情報
-import { useAuthStore } from '@/store/authStore';
 const authStore = useAuthStore();
-const { user, isAuthenticated } = storeToRefs(authStore);
+const { user } = storeToRefs(authStore);
 
-// 認証状態をログ出力
-watch([user, isAuthenticated], ([newUser, newAuth]) => {
-  console.log('認証状態変更:', {
-    user: newUser?.uid || 'なし',
-    email: newUser?.email || 'なし',
-    authenticated: newAuth,
-    timestamp: new Date().toISOString()
-  });
-}, { immediate: true });
+const workloadSettingsRef = ref<WorkloadSettingsEditorExposed | null>(null);
+
+const handleSettingsSaved = () => {
+  console.log('設定が保存されました');
+};
 
 // 設定保存のテスト関数
 const testSettingsSave = async () => {
@@ -141,88 +67,32 @@ const updateHolidaysGlobally = async () => {
       <p class="text-muted">作業粒度と工数設定を管理します。作業可能時間の設定はカレンダー画面で行えます。</p>
     </div>
 
-    <div class="row g-3">
-      <div class="col-12 col-lg-6">
-        <div class="card shadow-sm h-100">
-          <div class="card-body">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-              <h2 class="h5 mb-0">作業粒度の設定</h2>
-              <button class="btn btn-primary" type="button" :disabled="granularitySaving || !granularityCanSave" @click="saveGranularities">
-                {{ granularitySaving ? "保存中..." : "変更を保存" }}
-              </button>
-            </div>
-            <GranularityTable ref="granularityRef" @granularity-removed="handleGranularityRemoved" />
-          </div>
-        </div>
-      </div>
+    <!-- 統合設定エディター -->
+    <WorkloadSettingsEditor
+      ref="workloadSettingsRef"
+      @settings-saved="handleSettingsSaved"
+    />
 
+    <!-- 祝日データ管理 -->
+    <div class="row g-3 mt-4">
       <div class="col-12">
         <div class="card shadow-sm">
-          <div class="card-body">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-              <h2 class="h5 mb-0">作業工数の設定</h2>
-              <div class="d-flex flex-wrap gap-2">
-                <button class="btn btn-outline-secondary" type="button" :disabled="stageSaving" @click="resetStageColors">色を再設定</button>
-                <button class="btn btn-primary" type="button" :disabled="stageSaving || !stageCanSave" @click="saveStageWorkloads">
-                  {{ stageSaving ? "保存中..." : "設定を保存" }}
-                </button>
-              </div>
-            </div>
-            <StageWorkloadEditor ref="stageEditorRef" />
+          <div class="card-header">
+            <h6 class="mb-0">祝日データ管理</h6>
           </div>
-        </div>
-      </div>
-
-      <!-- 祝日データ管理 -->
-      <div class="col-12">
-        <div class="card shadow-sm">
           <div class="card-body">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-              <div>
-                <h2 class="h5 mb-1">祝日データ管理</h2>
-                <p class="text-muted small mb-0">
-                  内閣府の祝日データをFirestoreで全ユーザー共通管理
-                  <span v-if="holidayLastUpdated" class="ms-2">
-                    (最終確認: {{ holidayLastUpdated.toLocaleString() }})
-                  </span>
-                </p>
-              </div>
-              <button
-                class="btn btn-outline-primary"
-                type="button"
-                :disabled="holidayUpdating"
-                @click="updateHolidays"
-              >
-                <i class="bi bi-arrow-clockwise me-1"></i>
-                {{ holidayUpdating ? "更新中..." : "祝日データ更新" }}
-              </button>
-            </div>
-
-            <div class="alert alert-info">
-              <i class="bi bi-info-circle me-2"></i>
-              祝日データは月1回自動更新されます。手動更新は内閣府の最新データを即座に取得します。
-            </div>
-
-            <!-- 設定保存テスト用 -->
-            <div class="mt-3">
-              <h6 class="text-muted">設定保存テスト</h6>
-              <div class="d-flex gap-2">
-                <button
-                  class="btn btn-sm btn-outline-success"
-                  @click="saveGranularities"
-                  :disabled="granularitySaving"
-                >
-                  粒度保存テスト
-                </button>
-                <button
-                  class="btn btn-sm btn-outline-success"
-                  @click="saveStageWorkloads"
-                  :disabled="stageSaving"
-                >
-                  工数保存テスト
-                </button>
-              </div>
-            </div>
+            <p class="text-muted mb-3">
+              祝日データは内閣府の公式データから自動取得されます。<br>
+              手動で最新データを取得する場合は下記ボタンを使用してください。
+            </p>
+            <button
+              type="button"
+              class="btn btn-outline-info"
+              @click="updateHolidaysGlobally"
+            >
+              <i class="bi bi-arrow-clockwise me-1"></i>
+              祝日データ更新
+            </button>
           </div>
         </div>
       </div>
@@ -238,9 +108,6 @@ const updateHolidaysGlobally = async () => {
           <div class="card-body">
             <button type="button" class="btn btn-outline-warning me-2" @click="testSettingsSave">
               設定保存テスト
-            </button>
-            <button type="button" class="btn btn-outline-info" @click="updateHolidaysGlobally">
-              祝日データ更新
             </button>
           </div>
         </div>

@@ -49,6 +49,12 @@ const saveAttempted = ref(false);
 const isSyncingFromStore = ref(false);
 const colorInputRefs = new Map<number, HTMLInputElement>();
 
+interface Emits {
+  (event: "stage-changed"): void;
+}
+
+const emit = defineEmits<Emits>();
+
 const isLoading = computed(() => loadingStageWorkloads.value || !stageWorkloadsLoaded.value);
 const isSaving = computed(() => savingStageWorkloads.value);
 const showValidation = computed(() => saveAttempted.value);
@@ -250,6 +256,7 @@ const addStage = () => {
       })),
     },
   ];
+  emit("stage-changed");
 };
 
 const removeStage = (id: number) => {
@@ -263,6 +270,49 @@ const removeStage = (id: number) => {
       ...stage,
       id: index + 1,
     }));
+  emit("stage-changed");
+};
+
+// 一括設定機能：指定した段階未満の全最低粒度データを上書き
+const applyBulkSetting = (targetStageId: number) => {
+  if (isSaving.value) {
+    return;
+  }
+
+  const targetStage = editableStages.value.find(stage => stage.id === targetStageId);
+  if (!targetStage) return;
+
+  // 最低粒度（weightが最大）を取得
+  const lowestGranularity = granularities.value.reduce((prev, current) =>
+    (current.weight > prev.weight) ? current : prev
+  );
+
+  if (!lowestGranularity) return;
+
+  // 対象段階未満の全段階を更新
+  editableStages.value.forEach(stage => {
+    if (stage.id < targetStageId) {
+      // 最低粒度のエントリを検索
+      const existingEntry = stage.entries.find(entry => entry.granularityId === lowestGranularity.id);
+      const targetEntry = targetStage.entries.find(entry => entry.granularityId === lowestGranularity.id);
+
+      if (targetEntry) {
+        if (existingEntry) {
+          // 既存エントリを上書き
+          existingEntry.hours = targetEntry.hours;
+        } else {
+          // 新規エントリを追加
+          stage.entries.push({
+            granularityId: lowestGranularity.id,
+            hours: targetEntry.hours
+          });
+        }
+      }
+    }
+  });
+
+  touched.value = true;
+  emit("stage-changed");
 };
 
 const stageErrors = computed(() => {
@@ -456,12 +506,45 @@ const removeGranularityEntries = (granularityId: string) => {
   saved.value = false;
 };
 
+const syncWithGranularities = () => {
+  // 現在の granularities と editableStages のエントリを同期
+  if (granularities.value.length === 0) {
+    return;
+  }
+
+  editableStages.value.forEach(stage => {
+    // 既存のエントリを granularityId でマップ化
+    const existingEntries = new Map(
+      stage.entries.map(entry => [entry.granularityId, entry])
+    );
+
+    // 新しいエントリリストを構築
+    stage.entries = granularities.value.map(granularity => {
+      const existingEntry = existingEntries.get(granularity.id);
+      if (existingEntry) {
+        // 既存のエントリはそのまま使用
+        return existingEntry;
+      } else {
+        // 新しいエントリを追加（空の値で初期化）
+        return {
+          granularityId: granularity.id,
+          hours: "",
+        };
+      }
+    });
+  });
+
+  touched.value = true;
+  saved.value = false;
+};
+
 defineExpose({
   save: handleSave,
   isSaving: () => isSaving.value,
   canSave: () => canSave.value,
   resetColors: resetStageColors,
   removeGranularityEntries,
+  syncWithGranularities,
 });
 </script>
 
@@ -500,6 +583,7 @@ defineExpose({
                   :disabled="isSaving"
                   :aria-label="`ステージ${stage.id}のヒートマップカラー`"
                   :ref="(el) => setColorInputRef(stage.id, el as HTMLInputElement | null)"
+                  @input="emit('stage-changed')"
                 />
               </div>
 
@@ -510,6 +594,7 @@ defineExpose({
                   type="text"
                   placeholder="例: ネーム"
                   :disabled="isSaving"
+                  @input="emit('stage-changed')"
                 />
                 <div v-if="showValidation && getStageError(stage.id)?.label" class="invalid-feedback d-block stage-name-error">
                   {{ getStageError(stage.id)?.label }}
@@ -526,7 +611,7 @@ defineExpose({
                     min="0"
                     step="0.1"
                     :disabled="isSaving"
-                    @input="(event) => updateRelatedEntries(stage.id, entry.granularityId, (event.target as HTMLInputElement)?.value || '')"
+                    @input="(event) => { updateRelatedEntries(stage.id, entry.granularityId, (event.target as HTMLInputElement)?.value || ''); emit('stage-changed'); }"
                   />
                   <span class="input-group-text">h</span>
                 </div>
@@ -535,7 +620,12 @@ defineExpose({
                 </div>
               </div>
 
-              <button class="btn btn-outline-danger stage-remove-btn" type="button" :disabled="isSaving" @click="removeStage(stage.id)">削除</button>
+              <div class="btn-group">
+                <button class="btn btn-outline-primary btn-sm" type="button" :disabled="isSaving || stage.id === 1" @click="applyBulkSetting(stage.id)" title="この段階の設定を前の段階に一括適用">
+                  <i class="bi bi-arrow-up"></i> 一括設定
+                </button>
+                <button class="btn btn-outline-danger stage-remove-btn" type="button" :disabled="isSaving" @click="removeStage(stage.id)">削除</button>
+              </div>
             </div>
           </div>
         </div>
@@ -661,6 +751,19 @@ defineExpose({
 
 .stage-remove-btn {
   margin-left: auto;
+}
+
+.btn-group {
+  margin-left: auto;
+}
+
+.btn-group .btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.btn-group .btn-sm i {
+  font-size: 0.75rem;
 }
 
 @media (max-width: 575.98px) {
