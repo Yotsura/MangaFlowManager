@@ -91,13 +91,23 @@ export const getDefaultStageColor = (stageIndex: number, stageCount: number): st
   const boundedIndex = clamp(stageIndex, 0, maxIndex);
   const ratio = maxIndex === 0 ? 1 : boundedIndex / maxIndex;
 
-  const hue = 0 + (120 - 0) * ratio;
-  const saturation = 0.7;
-  const lightness = 0.52;
+  // 指定されたRGB値で赤から緑へのグラデーション
+  // 開始色: rgb(255, 77, 77) - 赤
+  // 終了色: rgb(77, 255, 77) - 緑
+  const startR = 255;
+  const startG = 77;
+  const startB = 77;
+  
+  const endR = 77;
+  const endG = 255;
+  const endB = 77;
 
-  const [r, g, b] = hslToRgb(hue / 360, saturation, lightness);
+  // 線形補間でグラデーション
+  const r = Math.round(startR + (endR - startR) * ratio);
+  const g = Math.round(startG + (endG - startG) * ratio);
+  const b = Math.round(startB + (endB - startB) * ratio);
 
-  return rgbToHex(Math.round(r * 255), Math.round(g * 255), Math.round(b * 255));
+  return rgbToHex(r, g, b);
 };
 
 export const normalizeStageColorValue = (value: string | null | undefined, stageIndex: number, stageCount: number): string => {
@@ -112,7 +122,8 @@ export const stageColorFor = (stageIndex: number, stageCount: number, overrideCo
   const backgroundColor = normalizeStageColorValue(overrideColor, stageIndex, stageCount);
   const { r, g, b } = hexToRgb(backgroundColor);
   const luminance = relativeLuminance(r, g, b);
-  const textColor = luminance > 0.6 ? DARK_TEXT : LIGHT_TEXT;
+  // 指定されたRGB色(255,77,77)～(77,255,77)は中程度の明度なので、標準的な閾値を使用
+  const textColor = luminance > 0.4 ? DARK_TEXT : LIGHT_TEXT;
 
   return {
     backgroundColor,
