@@ -11,90 +11,90 @@
             </h6>
             <span v-if="granularityTouched" class="badge bg-warning text-dark">変更あり</span>
           </div>
-          <div class="card-body">
-            <div v-if="granularityLoadError" class="alert alert-danger">
-              作業粒度の読み込みに失敗しました: {{ granularityLoadError }}
-            </div>
-            <div v-else-if="granularityLoading" class="alert alert-info">
-              作業粒度を読み込み中です...
-            </div>
-            <div v-else>
-              <!-- 既存の粒度テーブル -->
-              <div class="table-responsive">
-                <table class="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>作業粒度</th>
-                      <th>比重</th>
-                      <th>デフォルト個数</th>
-                      <th class="text-end">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="granularity in editableGranularities" :key="granularity.id">
-                      <td>
-                        <input
-                          v-model="granularity.label"
-                          :class="['form-control form-control-sm', { 'is-invalid': getGranularityError(granularity.id)?.label }]"
-                          type="text"
-                          :disabled="isSaving"
-                          @input="handleGranularityChange"
-                        />
-                        <div v-if="getGranularityError(granularity.id)?.label" class="invalid-feedback">
-                          {{ getGranularityError(granularity.id)?.label }}
-                        </div>
-                      </td>
-                      <td style="width: 120px;">
-                        <input
-                          v-model="granularity.weight"
-                          :class="['form-control form-control-sm', { 'is-invalid': getGranularityError(granularity.id)?.weight }]"
-                          type="number"
-                          min="1"
-                          step="1"
-                          :disabled="isSaving"
-                          @input="handleGranularityChange"
-                        />
-                        <div v-if="getGranularityError(granularity.id)?.weight" class="invalid-feedback">
-                          {{ getGranularityError(granularity.id)?.weight }}
-                        </div>
-                      </td>
-                      <td style="width: 140px;">
-                        <input
-                          v-model="granularity.defaultCount"
-                          :class="['form-control form-control-sm', { 'is-invalid': getGranularityError(granularity.id)?.defaultCount }]"
-                          type="number"
-                          min="1"
-                          step="1"
-                          :disabled="isSaving"
-                          @input="handleGranularityChange"
-                        />
-                        <div v-if="getGranularityError(granularity.id)?.defaultCount" class="invalid-feedback">
-                          {{ getGranularityError(granularity.id)?.defaultCount }}
-                        </div>
-                      </td>
-                      <td class="text-end">
-                        <button
-                          class="btn btn-outline-danger btn-sm"
-                          type="button"
-                          :disabled="isSaving"
-                          @click="removeGranularity(granularity.id)"
-                        >
-                          削除
-                        </button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <button
-                class="btn btn-outline-secondary"
-                type="button"
-                :disabled="isSaving"
-                @click="addGranularity"
-              >
-                新規作業粒度追加
-              </button>
-            </div>
+      <div class="card-body">
+        <div v-if="granularityLoadError" class="alert alert-danger">
+          作業粒度の読み込みに失敗しました: {{ granularityLoadError }}
+        </div>
+        <div v-else-if="granularityLoading" class="alert alert-info">
+          作業粒度を読み込み中です...
+        </div>
+        <div v-else>
+          <!-- 既存の粒度テーブル -->
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>作業粒度</th>
+                  <th>比重</th>
+                  <th>デフォルト個数</th>
+                  <th class="text-end">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="granularity in editableGranularities" :key="granularity.id">
+                  <td>
+                    <input
+                      v-model="granularity.label"
+                      :class="['form-control form-control-sm', { 'is-invalid': getGranularityError(granularity.id)?.label }]"
+                      type="text"
+                      :disabled="isSaving"
+                      @input="handleGranularityChange"
+                    />
+                    <div v-if="getGranularityError(granularity.id)?.label" class="invalid-feedback">
+                      {{ getGranularityError(granularity.id)?.label }}
+                    </div>
+                  </td>
+                  <td style="width: 120px;">
+                    <input
+                      v-model="granularity.weight"
+                      :class="['form-control form-control-sm', { 'is-invalid': getGranularityError(granularity.id)?.weight }]"
+                      type="number"
+                      min="1"
+                      step="1"
+                      :disabled="isSaving"
+                      @input="handleGranularityChange"
+                    />
+                    <div v-if="getGranularityError(granularity.id)?.weight" class="invalid-feedback">
+                      {{ getGranularityError(granularity.id)?.weight }}
+                    </div>
+                  </td>
+                  <td style="width: 140px;">
+                    <input
+                      v-model="granularity.defaultCount"
+                      :class="['form-control form-control-sm', { 'is-invalid': getGranularityError(granularity.id)?.defaultCount }]"
+                      type="number"
+                      min="1"
+                      step="1"
+                      :disabled="isSaving"
+                      @input="handleGranularityChange"
+                    />
+                    <div v-if="getGranularityError(granularity.id)?.defaultCount" class="invalid-feedback">
+                      {{ getGranularityError(granularity.id)?.defaultCount }}
+                    </div>
+                  </td>
+                  <td class="text-end">
+                    <button
+                      class="btn btn-outline-danger btn-sm"
+                      type="button"
+                      :disabled="isSaving"
+                      @click="removeGranularity(granularity.id)"
+                    >
+                      削除
+                    </button>
+                  </td>
+                </tr>
+
+              </tbody>
+            </table>
+          </div>
+          <button
+            class="btn btn-outline-secondary"
+            type="button"
+            :disabled="isSaving"
+            @click="addGranularity"
+          >
+            新規作業粒度追加
+          </button>
           </div>
         </div>
       </div>
@@ -121,119 +121,118 @@
               </button>
             </div>
           </div>
-          <div class="card-body">
-            <div v-if="stageLoadError" class="alert alert-danger">
-              作業段階の読み込みに失敗しました: {{ stageLoadError }}
-            </div>
-            <div v-else-if="stageLoading || editableGranularities.length === 0" class="alert alert-info">
-              {{ editableGranularities.length === 0 ? '作業粒度を先に設定してください' : '作業段階の工数を読み込み中です...' }}
-            </div>
-            <div v-else>
-              <!-- 既存のステージエディター -->
-              <div v-for="stage in editableStages" :key="stage.id" class="stage-editor mb-4">
-                <div class="d-flex align-items-center gap-3 mb-3">
-                  <div class="stage-color-selector">
-                    <button
-                      :style="{ backgroundColor: stage.color }"
-                      class="btn stage-color-button"
-                      type="button"
-                      :disabled="isSaving"
-                      @click="openColorPicker(stage.id)"
-                    >
-                      #{{ stage.id }}
-                    </button>
-                    <input
-                      v-model="stage.color"
-                      type="color"
-                      class="stage-color-input"
-                      :disabled="isSaving"
-                      :ref="(el) => setColorInputRef(stage.id, el as HTMLInputElement | null)"
-                      @input="handleStageChange"
-                    />
-                  </div>
+      <div class="card-body">
+        <div v-if="stageLoadError" class="alert alert-danger">
+          作業段階の読み込みに失敗しました: {{ stageLoadError }}
+        </div>
+        <div v-else-if="stageLoading || editableGranularities.length === 0" class="alert alert-info">
+          {{ editableGranularities.length === 0 ? '作業粒度を先に設定してください' : '作業段階の工数を読み込み中です...' }}
+        </div>
+        <div v-else>
+          <!-- 既存のステージエディター -->
+          <div v-for="stage in editableStages" :key="stage.id" class="stage-editor mb-4">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div class="stage-color-selector">
+                <button
+                  :style="{ backgroundColor: stage.color }"
+                  class="btn stage-color-button"
+                  type="button"
+                  :disabled="isSaving"
+                  @click="openColorPicker(stage.id)"
+                >
+                  #{{ stage.id }}
+                </button>
+                <input
+                  v-model="stage.color"
+                  type="color"
+                  class="stage-color-input"
+                  :disabled="isSaving"
+                  :ref="(el) => setColorInputRef(stage.id, el as HTMLInputElement | null)"
+                  @input="handleStageChange"
+                />
+              </div>
 
-                  <div class="stage-name flex-grow-1">
-                    <input
-                      v-model="stage.label"
-                      :class="['form-control form-control-sm', { 'is-invalid': getStageError(stage.id)?.label }]"
-                      type="text"
-                      placeholder="例: ネーム"
-                      :disabled="isSaving"
-                      @input="handleStageChange"
-                    />
-                    <div v-if="getStageError(stage.id)?.label" class="invalid-feedback">
-                      {{ getStageError(stage.id)?.label }}
-                    </div>
-                  </div>
-
-                  <div class="stage-actions">
-                    <div class="dropdown">
-                      <button
-                        class="btn btn-outline-secondary btn-sm dropdown-toggle"
-                        type="button"
-                        :disabled="isSaving"
-                        data-bs-toggle="dropdown"
-                      >
-                        一括設定
-                      </button>
-                      <ul class="dropdown-menu">
-                        <li>
-                          <button
-                            class="dropdown-item"
-                            type="button"
-                            @click="applyBulkSetting(stage.id)"
-                          >
-                            この段階未満に適用
-                          </button>
-                        </li>
-                      </ul>
-                    </div>
-                    <button
-                      class="btn btn-outline-danger btn-sm ms-2"
-                      type="button"
-                      :disabled="isSaving"
-                      @click="removeStage(stage.id)"
-                    >
-                      削除
-                    </button>
-                  </div>
-                </div>
-
-                <div class="row g-2">
-                  <div v-for="entry in stage.entries" :key="`${stage.id}-${entry.granularityId}`" class="col-md-4">
-                    <label class="form-label text-muted small">{{ getGranularityLabel(entry.granularityId) }}</label>
-                    <div class="input-group input-group-sm">
-                      <input
-                        v-model="entry.hours"
-                        :class="['form-control', { 'is-invalid': getEntryError(stage.id, entry.granularityId) }]"
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        :disabled="isSaving"
-                        @input="(event) => { updateRelatedEntries(stage.id, entry.granularityId, (event.target as HTMLInputElement)?.value || ''); handleStageChange(); }"
-                      />
-                      <span class="input-group-text">時間</span>
-                    </div>
-                    <div v-if="getEntryError(stage.id, entry.granularityId)" class="invalid-feedback d-block">
-                      {{ getEntryError(stage.id, entry.granularityId) }}
-                    </div>
-                  </div>
+              <div class="stage-name flex-grow-1">
+                <input
+                  v-model="stage.label"
+                  :class="['form-control form-control-sm', { 'is-invalid': getStageError(stage.id)?.label }]"
+                  type="text"
+                  placeholder="例: ネーム"
+                  :disabled="isSaving"
+                  @input="handleStageChange"
+                />
+                <div v-if="getStageError(stage.id)?.label" class="invalid-feedback">
+                  {{ getStageError(stage.id)?.label }}
                 </div>
               </div>
 
-              <button
-                class="btn btn-outline-secondary"
-                type="button"
-                :disabled="isSaving || editableGranularities.length === 0"
-                @click="addStage"
-              >
-                新規作業段階追加
-              </button>
+              <div class="stage-actions">
+                <div class="dropdown">
+                  <button
+                    class="btn btn-outline-secondary btn-sm dropdown-toggle"
+                    type="button"
+                    :disabled="isSaving"
+                    data-bs-toggle="dropdown"
+                  >
+                    一括設定
+                  </button>
+                  <ul class="dropdown-menu">
+                    <li>
+                      <button
+                        class="dropdown-item"
+                        type="button"
+                        @click="applyBulkSetting(stage.id)"
+                      >
+                        この段階未満に適用
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+                <button
+                  class="btn btn-outline-danger btn-sm ms-2"
+                  type="button"
+                  :disabled="isSaving"
+                  @click="removeStage(stage.id)"
+                >
+                  削除
+                </button>
+              </div>
             </div>
+
+            <div class="row g-2">
+              <div v-for="entry in stage.entries" :key="`${stage.id}-${entry.granularityId}`" class="col-md-4">
+                <label class="form-label text-muted small">{{ getGranularityLabel(entry.granularityId) }}</label>
+                <div class="input-group input-group-sm">
+                  <input
+                    v-model="entry.hours"
+                    :class="['form-control', { 'is-invalid': getEntryError(stage.id, entry.granularityId) }]"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    :disabled="isSaving"
+                    @input="(event) => { updateRelatedEntries(stage.id, entry.granularityId, (event.target as HTMLInputElement)?.value || ''); handleStageChange(); }"
+                  />
+                  <span class="input-group-text">時間</span>
+                </div>
+                <div v-if="getEntryError(stage.id, entry.granularityId)" class="invalid-feedback d-block">
+                  {{ getEntryError(stage.id, entry.granularityId) }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button
+            class="btn btn-outline-secondary"
+            type="button"
+            :disabled="isSaving || editableGranularities.length === 0"
+            @click="addStage"
+          >
+            新規作業段階追加
+          </button>
           </div>
         </div>
       </div>
-    </div>
+    </div> <!-- row g-4の閉じタグ -->
 
     <!-- 保存ボタン（編集可能な場合のみ） -->
     <div v-if="!readonly" class="d-flex justify-content-end gap-2 mt-4">
@@ -483,6 +482,8 @@ const granularityErrors = computed(() => {
 
 const getGranularityError = (id: string) => granularityErrors.value.get(id);
 
+
+
 // 作業工数のバリデーション
 interface StageError {
   label?: string;
@@ -529,7 +530,7 @@ const stageErrors = computed(() => {
 });
 
 const getStageError = (id: number) => stageErrors.value.get(id);
-const getEntryError = (stageId: number, granularityId: string) => 
+const getEntryError = (stageId: number, granularityId: string) =>
   stageErrors.value.get(stageId)?.entryErrors.get(granularityId);
 
 // ユーティリティ関数
@@ -586,7 +587,7 @@ const addGranularity = () => {
 
   const newId = generateId();
   const nextNumber = editableGranularities.value.length + 1;
-  
+
   editableGranularities.value.push({
     id: newId,
     label: `粒度${nextNumber}`,

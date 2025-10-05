@@ -6,30 +6,7 @@ const toHex = (value: number) => value.toString(16).padStart(2, "0");
 
 const rgbToHex = (r: number, g: number, b: number) => `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 
-const hslToRgb = (h: number, s: number, l: number): [number, number, number] => {
-  if (s === 0) {
-    return [l, l, l];
-  }
 
-  const hue2rgb = (p: number, q: number, t: number) => {
-    let adjustedT = t;
-    if (adjustedT < 0) adjustedT += 1;
-    if (adjustedT > 1) adjustedT -= 1;
-    if (adjustedT < 1 / 6) return p + (q - p) * 6 * adjustedT;
-    if (adjustedT < 1 / 2) return q;
-    if (adjustedT < 2 / 3) return p + (q - p) * (2 / 3 - adjustedT) * 6;
-    return p;
-  };
-
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-
-  const r = hue2rgb(p, q, h + 1 / 3);
-  const g = hue2rgb(p, q, h);
-  const b = hue2rgb(p, q, h - 1 / 3);
-
-  return [r, g, b];
-};
 
 const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
   const match = HEX_COLOR_REGEX.exec(hex);

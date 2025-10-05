@@ -7,7 +7,6 @@ import WorkPaceCard from './components/WorkPaceCard.vue';
 import { getHolidaysWithCabinetOfficeData } from '@/utils/dateUtils';
 import type { Holiday } from '@/utils/dateUtils';
 import { calculateWorkPace } from '@/utils/workloadUtils';
-import type { WorkPaceCalculation } from '@/utils/workloadUtils';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useWorksStore } from '@/store/worksStore';
 import { useAuthStore } from '@/store/authStore';

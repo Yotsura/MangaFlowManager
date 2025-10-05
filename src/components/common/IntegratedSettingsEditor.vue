@@ -117,7 +117,7 @@ interface Emits {
   (e: 'settings-saved'): void;
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   readonly: false,
 });
 
