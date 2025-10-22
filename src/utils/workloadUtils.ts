@@ -158,7 +158,8 @@ export function calculateWorkPace(
   const todayRequiredHours = Math.min(dailyRequiredHours, todayWorkableHours);
 
   // 進捗状況判定
-  const daysUntilDeadline = Math.ceil((endOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+  // 締切日を含めた日数を計算（23日→25日は3日）
+  const daysUntilDeadline = Math.ceil((endOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   const progressRatio = remainingWorkableHours > 0 ? totalRemainingHours / remainingWorkableHours : 0;
 
   let paceStatus: 'ahead' | 'on_track' | 'behind' | 'critical' = 'on_track';
