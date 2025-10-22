@@ -15,6 +15,12 @@ const props = defineProps<{
   lastSaveStatus: string | null;
   isEditMode: boolean;
   actualWorkHours: { totalEstimatedHours: number; remainingEstimatedHours: number };
+  workMetrics?: {
+    remainingEstimatedHours: number;
+    availableWorkHours: number;
+    requiredDailyHours: number;
+    daysUntilDeadline: number;
+  };
 }>();
 
 const emit = defineEmits<{
@@ -107,6 +113,30 @@ const formatDate = (value: string) => {
         <dt class="text-muted small">推定残工数</dt>
         <dd class="mb-0 fw-semibold text-warning">{{ actualWorkHours.remainingEstimatedHours.toFixed(2) }} h</dd>
       </div>
+
+      <!-- 新しい指標 -->
+      <template v-if="workMetrics">
+        <div class="col-12"><hr class="my-2" /></div>
+        <div class="col-6">
+          <dt class="text-muted small">締切まで残り</dt>
+          <dd class="mb-0 fw-semibold">{{ workMetrics.daysUntilDeadline }} 日</dd>
+        </div>
+        <div class="col-6">
+          <dt class="text-muted small">残り作業時間</dt>
+          <dd class="mb-0 fw-semibold">{{ workMetrics.availableWorkHours.toFixed(1) }} h</dd>
+        </div>
+        <div class="col-12">
+          <dt class="text-muted small">1日の必要工数</dt>
+          <dd class="mb-0 fw-semibold" :class="{
+            'text-danger': workMetrics.requiredDailyHours === Infinity || workMetrics.requiredDailyHours > 12,
+            'text-warning': workMetrics.requiredDailyHours > 8 && workMetrics.requiredDailyHours <= 12,
+            'text-success': workMetrics.requiredDailyHours <= 8
+          }">
+            {{ workMetrics.requiredDailyHours === Infinity ? '不可能' : workMetrics.requiredDailyHours.toFixed(2) + ' h' }}
+          </dd>
+        </div>
+      </template>
+
       <div class="col-12">
         <dt class="text-muted small">最終更新</dt>
         <dd class="mb-0">{{ formatDate(work.updatedAt) }}</dd>

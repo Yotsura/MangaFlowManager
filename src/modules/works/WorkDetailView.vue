@@ -12,6 +12,7 @@ import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkUnit, type WorkGranularity, type WorkStageWorkload } from "@/store/worksStore";
+import { useWorkMetrics } from "@/composables/useWorkMetrics";
 import {
   parseStructureString,
   validateStructureString,
@@ -666,6 +667,9 @@ const actualWorkHours = computed(() => {
   return worksStore.calculateActualWorkHours(work.value.id);
 });
 
+// 作品の指標を計算
+const workMetrics = useWorkMetrics(work);
+
 // 新しい階層ユニット操作のイベントハンドラー
 const handleAdvanceUnitStage = async (payload: { unitId: string }) => {
   if (!userId.value) {
@@ -1075,6 +1079,12 @@ const formatDate = (value: string) => {
                 :last-save-status="lastSaveStatus"
                 :is-edit-mode="isEditMode"
                 :actual-work-hours="actualWorkHours"
+                :work-metrics="{
+                  remainingEstimatedHours: workMetrics.remainingEstimatedHours.value,
+                  availableWorkHours: workMetrics.availableWorkHours.value,
+                  requiredDailyHours: workMetrics.requiredDailyHours.value,
+                  daysUntilDeadline: workMetrics.daysUntilDeadline.value
+                }"
                 @request-save="handleSave"
                 @request-delete="requestWorkDeletion"
                 @toggle-edit-mode="toggleEditMode"

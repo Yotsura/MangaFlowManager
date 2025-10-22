@@ -304,3 +304,27 @@ export const isHoliday = (date: Date): Holiday | null => {
     holiday.date.getDate() === date.getDate()
   ) || null;
 };
+
+/**
+ * 指定期間内の祝日を取得（計算ベース）
+ */
+export const getHolidaysForPeriod = (startDate: Date, endDate: Date): Holiday[] => {
+  const holidays: Holiday[] = [];
+  const startYear = startDate.getFullYear();
+  const endYear = endDate.getFullYear();
+
+  // 開始年から終了年まで、各年の祝日を取得
+  for (let year = startYear; year <= endYear; year++) {
+    const yearHolidays = getAllHolidays(year);
+
+    // 期間内の祝日のみフィルタ
+    const filtered = yearHolidays.filter(holiday => {
+      const holidayTime = holiday.date.getTime();
+      return holidayTime >= startDate.getTime() && holidayTime < endDate.getTime();
+    });
+
+    holidays.push(...filtered);
+  }
+
+  return holidays;
+};

@@ -6,6 +6,7 @@ import { useRouter } from "vue-router";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useWorksStore, WORK_STATUSES, type Work, type WorkStatus } from "@/store/worksStore";
+import { useWorkMetrics } from "@/composables/useWorkMetrics";
 import {
   parseStructureString as parseStructure,
   validateStructureString as validateStructure,
@@ -651,6 +652,12 @@ const getWorkActualHours = (work: Work) => {
   return worksStore.calculateActualWorkHours(work.id);
 };
 
+// 作品ごとの指標を計算
+const getWorkMetrics = (work: Work) => {
+  const workRef = computed(() => work);
+  return useWorkMetrics(workRef);
+};
+
 const navigateToDetail = (id: string) => {
   router.push({ name: "work-detail", params: { id } });
 };
@@ -941,6 +948,25 @@ if (typeof window !== 'undefined') {
                 <div class="col-6">
                   <dt class="text-muted">推定残工数</dt>
                   <dd class="mb-0 text-warning">{{ getWorkActualHours(work).remainingEstimatedHours.toFixed(2) }} h</dd>
+                </div>
+                <div class="col-12"><hr class="my-1" /></div>
+                <div class="col-6">
+                  <dt class="text-muted">締切まで残り</dt>
+                  <dd class="mb-0 fw-semibold">{{ getWorkMetrics(work).daysUntilDeadline.value }} 日</dd>
+                </div>
+                <div class="col-6">
+                  <dt class="text-muted">残り作業時間</dt>
+                  <dd class="mb-0 fw-semibold">{{ getWorkMetrics(work).availableWorkHours.value.toFixed(1) }} h</dd>
+                </div>
+                <div class="col-12">
+                  <dt class="text-muted">1日の必要工数</dt>
+                  <dd class="mb-0 fw-semibold" :class="{
+                    'text-danger': getWorkMetrics(work).requiredDailyHours.value === Infinity || getWorkMetrics(work).requiredDailyHours.value > 12,
+                    'text-warning': getWorkMetrics(work).requiredDailyHours.value > 8 && getWorkMetrics(work).requiredDailyHours.value <= 12,
+                    'text-success': getWorkMetrics(work).requiredDailyHours.value <= 8
+                  }">
+                    {{ getWorkMetrics(work).requiredDailyHours.value === Infinity ? '不可能' : getWorkMetrics(work).requiredDailyHours.value.toFixed(2) + ' h' }}
+                  </dd>
                 </div>
               </dl>
 
