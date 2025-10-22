@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 
 import { deleteDocument, getCollectionDocs, getDocument, setDocument } from "@/services/firebase/firestoreService";
 import { generateId } from "@/utils/id";
+import { collectLeafUnits } from "@/utils/workUtils";
 import type { Granularity, StageWorkload } from "@/store/settingsStore";
 
 export const WORK_STATUSES = ["未着手", "作業中", "完了", "保留"] as const;
@@ -155,25 +156,8 @@ const findUnitInHierarchy = (units: WorkUnit[], unitId: string): WorkUnit | null
   return null;
 };
 
-// 最下位ユニット（リーフノード）を全て取得する関数
-const getAllLeafUnits = (units: WorkUnit[]): WorkUnit[] => {
-  const leafUnits: WorkUnit[] = [];
-
-  const collectLeaves = (units: WorkUnit[]) => {
-    for (const unit of units) {
-      if (unit.stageIndex !== undefined) {
-        // stageIndexを持つユニットは最下位
-        leafUnits.push(unit);
-      } else if (unit.children && unit.children.length > 0) {
-        // 子がいる場合は再帰的に探索
-        collectLeaves(unit.children);
-      }
-    }
-  };
-
-  collectLeaves(units);
-  return leafUnits;
-};
+// 最下位ユニット（リーフノード）を全て取得する関数（workUtils.tsから使用）
+const getAllLeafUnits = collectLeafUnits;
 
 const normalizeUnit = (raw: unknown, fallbackIndex: number, isLeafLevel?: boolean): WorkUnit | null => {
   if (!raw || typeof raw !== "object") {
@@ -1197,20 +1181,7 @@ export const useWorksStore = defineStore("works", {
         return { totalEstimatedHours: 0, remainingEstimatedHours: 0 };
       }
 
-      // 最下位レベルのユニット（stageIndexを持つもの）を再帰的に収集
-      const collectLeafUnits = (units: WorkUnit[]): WorkUnit[] => {
-        const result: WorkUnit[] = [];
-        for (const unit of units) {
-          if (unit.stageIndex !== undefined) {
-            result.push(unit);
-          } else if (unit.children) {
-            result.push(...collectLeafUnits(unit.children));
-          }
-        }
-        return result;
-      };
-
-      const leafUnits = collectLeafUnits(work.units);
+      const leafUnits = getAllLeafUnits(work.units);
       const totalUnits = leafUnits.length;
 
       if (totalUnits === 0) {

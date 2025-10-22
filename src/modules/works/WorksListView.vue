@@ -8,6 +8,7 @@ import { useSettingsStore } from "@/store/settingsStore";
 import { useWorksStore, WORK_STATUSES, type Work, type WorkStatus } from "@/store/worksStore";
 import { useWorkMetrics } from "@/composables/useWorkMetrics";
 import { useCustomDatesStore } from "@/store/customDatesStore";
+import { collectLeafUnits } from "@/utils/workUtils";
 import {
   parseStructureString as parseStructure,
   validateStructureString as validateStructure,
@@ -592,19 +593,6 @@ const formatDate = (value: string) => {
   } catch {
     return value;
   }
-};
-
-// 最下位レベルのユニット（stageIndexを持つもの）を再帰的に収集
-const collectLeafUnits = (units: Work['units']): Work['units'] => {
-  const result: Work['units'] = [];
-  for (const unit of units) {
-    if (unit.stageIndex !== undefined) {
-      result.push(unit);
-    } else if (unit.children) {
-      result.push(...collectLeafUnits(unit.children));
-    }
-  }
-  return result;
 };
 
 const computeWorkProgress = (work: Work) => {

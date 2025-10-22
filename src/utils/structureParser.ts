@@ -62,8 +62,6 @@ const getTopLevelUnitDepths = (structureStr: string): number[] => {
   const lastUnit = structureStr.substring(start).trim();
   if (lastUnit) topLevelUnits.push(lastUnit);
 
-  // console.log('Debug: 分割された最上位ユニット:', topLevelUnits);
-
   // 各最上位ユニットの階層数を計算（括弧の深度 + 最下位レベル）
   return topLevelUnits.map(unit => {
     let maxBracketDepth = 0;
@@ -196,8 +194,6 @@ export const parseStructureString = (structureStr: string, expectedDepth?: numbe
     // 最後の部分を追加
     const lastUnit = structureStr.substring(start).trim();
     if (lastUnit) topLevelUnits.push(lastUnit);
-
-    // console.log('Debug: parseStructureString 分割された最上位ユニット:', topLevelUnits);
 
     const units: TopLevelUnit[] = [];
 

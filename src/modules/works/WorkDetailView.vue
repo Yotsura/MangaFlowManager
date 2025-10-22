@@ -12,8 +12,9 @@ import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useCustomDatesStore } from "@/store/customDatesStore";
-import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkUnit, type WorkGranularity, type WorkStageWorkload } from "@/store/worksStore";
+import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkGranularity, type WorkStageWorkload } from "@/store/worksStore";
 import { useWorkMetrics } from "@/composables/useWorkMetrics";
+import { collectLeafUnits } from "@/utils/workUtils";
 import {
   parseStructureString,
   validateStructureString,
@@ -617,19 +618,6 @@ watch(
     }
   },
 );
-
-// 最下位レベルのユニット（stageIndexを持つもの）を再帰的に収集
-const collectLeafUnits = (units: WorkUnit[]): WorkUnit[] => {
-  const result: WorkUnit[] = [];
-  for (const unit of units) {
-    if (unit.stageIndex !== undefined) {
-      result.push(unit);
-    } else if (unit.children) {
-      result.push(...collectLeafUnits(unit.children));
-    }
-  }
-  return result;
-};
 
 const overallProgress = computed(() => {
   if (!work.value || stageCount.value === 0 || work.value.units.length === 0) {
