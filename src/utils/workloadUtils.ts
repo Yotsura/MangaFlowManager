@@ -1,5 +1,5 @@
 import type { Holiday } from './dateUtils';
-import { isWeekend, isHoliday } from './dateUtils';
+import { isHoliday } from './dateUtils';
 
 export const calculatePanelsPerDay = (totalPanels: number, remainingDays: number) => {
   if (remainingDays <= 0) {
@@ -59,8 +59,8 @@ export function calculateWorkPace(
     workHoursMap.set(wh.day, wh.hours);
   });
 
-  // 曜日マッピング
-  const dayMapping = {
+  // 曜日マッピング (0=日曜, 1=月曜, ..., 6=土曜)
+  const dayMapping: Record<number, string> = {
     0: 'sunday',
     1: 'monday',
     2: 'tuesday',
@@ -68,7 +68,7 @@ export function calculateWorkPace(
     4: 'thursday',
     5: 'friday',
     6: 'saturday'
-  } as const;
+  };
 
   // 今日から締切までの作業可能時間を計算
   let totalWorkableHours = 0;
@@ -77,11 +77,11 @@ export function calculateWorkPace(
 
   const currentDate = new Date(startOfToday);
 
+  // 本日0時から締切日24時までの全日を含める
   while (currentDate <= endOfDeadline) {
-    const dayOfWeek = currentDate.getDay() as keyof typeof dayMapping;
-    const dayKey = dayMapping[dayOfWeek];
+    const dayOfWeek = currentDate.getDay();
 
-    // 祝日チェック
+    // 祝日チェック（祝日を優先）
     const isHolidayToday = holidays.some(h =>
       h.date.getFullYear() === currentDate.getFullYear() &&
       h.date.getMonth() === currentDate.getMonth() &&
@@ -90,33 +90,27 @@ export function calculateWorkPace(
 
     let dailyHours = 0;
 
+    // 祝日を最優先でチェック
     if (isHolidayToday) {
-      // 祝日の作業時間
-      dailyHours = workHoursMap.get('holiday') || 0;
-    } else if (isWeekend(currentDate)) {
-      // 週末の作業時間
-      dailyHours = workHoursMap.get(dayKey) || 0;
+      dailyHours = workHoursMap.get('holiday') ?? 0;
     } else {
-      // 平日の作業時間
-      dailyHours = workHoursMap.get(dayKey) || 0;
+      // 曜日に応じた作業時間を取得
+      const dayKey = dayMapping[dayOfWeek];
+      dailyHours = workHoursMap.get(dayKey) ?? 0;
     }
 
     totalWorkableHours += dailyHours;
+    remainingWorkableHours += dailyHours;
 
-    // 今日以降の作業可能時間を計算
-    if (currentDate >= startOfToday) {
-      remainingWorkableHours += dailyHours;
-      if (dailyHours > 0) {
-        workableDaysCount++;
-      }
+    if (dailyHours > 0) {
+      workableDaysCount++;
     }
 
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
   // 今日の作業可能時間
-  const todayDayOfWeek = today.getDay() as keyof typeof dayMapping;
-  const todayDayKey = dayMapping[todayDayOfWeek];
+  const todayDayOfWeek = today.getDay();
   const isTodayHoliday = holidays.some(h =>
     h.date.getFullYear() === today.getFullYear() &&
     h.date.getMonth() === today.getMonth() &&
@@ -125,11 +119,10 @@ export function calculateWorkPace(
 
   let todayWorkableHours = 0;
   if (isTodayHoliday) {
-    todayWorkableHours = workHoursMap.get('holiday') || 0;
-  } else if (isWeekend(today)) {
-    todayWorkableHours = workHoursMap.get(todayDayKey) || 0;
+    todayWorkableHours = workHoursMap.get('holiday') ?? 0;
   } else {
-    todayWorkableHours = workHoursMap.get(todayDayKey) || 0;
+    const todayDayKey = dayMapping[todayDayOfWeek];
+    todayWorkableHours = workHoursMap.get(todayDayKey) ?? 0;
   }
 
   // 必要な進捗計算

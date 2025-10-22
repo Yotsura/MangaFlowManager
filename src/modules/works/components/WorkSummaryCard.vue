@@ -122,7 +122,7 @@ const formatDate = (value: string) => {
           <dd class="mb-0 fw-semibold">{{ workMetrics.daysUntilDeadline }} 日</dd>
         </div>
         <div class="col-6">
-          <dt class="text-muted small">残り作業時間</dt>
+          <dt class="text-muted small">残り作業可能時間</dt>
           <dd class="mb-0 fw-semibold">{{ workMetrics.availableWorkHours.toFixed(1) }} h</dd>
         </div>
         <div class="col-12">

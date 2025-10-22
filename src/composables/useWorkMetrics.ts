@@ -2,6 +2,7 @@ import { computed, type ComputedRef } from "vue";
 import type { Work, WorkUnit } from "@/store/worksStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { getHolidaysForPeriod } from "@/utils/dateUtils";
+import { calculateWorkPace } from "@/utils/workloadUtils";
 
 /**
  * 作品の進捗指標を計算するcomposable
@@ -95,11 +96,11 @@ export const useWorkMetrics = (work: ComputedRef<Work | undefined>) => {
       return 0;
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     const deadlineDate = new Date(workData.deadline);
     deadlineDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     // 締切が過ぎている場合は0
     if (deadlineDate <= today) {
@@ -108,49 +109,20 @@ export const useWorkMetrics = (work: ComputedRef<Work | undefined>) => {
 
     // 作業時間設定を取得
     const workHours = settingsStore.workHours || [];
-    const workHoursMap = new Map(workHours.map(wh => [wh.day, wh.hours]));
-
-    // デフォルトの作業時間
-    const defaultWeekdayHours = workHoursMap.get("weekday") ?? 8;
-    const defaultSaturdayHours = workHoursMap.get("saturday") ?? 0;
-    const defaultSundayHours = workHoursMap.get("sunday") ?? 0;
-    const defaultHolidayHours = workHoursMap.get("holiday") ?? 0;
 
     // 期間内の祝日を取得
     const holidays = getHolidaysForPeriod(today, deadlineDate);
-    const holidayDates = new Set(
-      holidays.map(h => h.date.toISOString().split("T")[0])
+
+    // calculateWorkPaceを使用して作業可能時間を計算
+    const paceCalc = calculateWorkPace(
+      deadlineDate,
+      0, // 残り工数は不要（作業可能時間のみ計算）
+      0, // 進捗率は不要
+      workHours,
+      holidays
     );
 
-    // 日ごとに作業時間を積算
-    let totalHours = 0;
-    const currentDate = new Date(today);
-
-    while (currentDate < deadlineDate) {
-      const dateString = currentDate.toISOString().split("T")[0];
-      const dayOfWeek = currentDate.getDay();
-
-      // 祝日かどうか判定
-      if (holidayDates.has(dateString)) {
-        totalHours += defaultHolidayHours;
-      }
-      // 日曜日
-      else if (dayOfWeek === 0) {
-        totalHours += defaultSundayHours;
-      }
-      // 土曜日
-      else if (dayOfWeek === 6) {
-        totalHours += defaultSaturdayHours;
-      }
-      // 平日
-      else {
-        totalHours += defaultWeekdayHours;
-      }
-
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    return Number(totalHours.toFixed(2));
+    return Number(paceCalc.remainingWorkableHours.toFixed(2));
   });
 
   /**

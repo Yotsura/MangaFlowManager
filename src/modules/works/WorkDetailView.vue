@@ -468,6 +468,11 @@ const ensureSettingsLoaded = async () => {
   if (!stageWorkloadsLoaded.value && !loadingStageWorkloads.value) {
     await settingsStore.fetchStageWorkloads(userId.value);
   }
+
+  // 作業時間設定も読み込む
+  if (!settingsStore.workHoursLoaded && !settingsStore.loadingWorkHours) {
+    await settingsStore.fetchWorkHours(userId.value);
+  }
 };
 
 const ensureWorksLoaded = async () => {

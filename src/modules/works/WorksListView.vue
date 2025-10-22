@@ -160,6 +160,11 @@ const ensureSettingsLoaded = async () => {
   if (!stageWorkloadsLoaded.value && !loadingStageWorkloads.value) {
     await settingsStore.fetchStageWorkloads(userId.value);
   }
+
+  // 作業時間設定も読み込む
+  if (!settingsStore.workHoursLoaded && !settingsStore.loadingWorkHours) {
+    await settingsStore.fetchWorkHours(userId.value);
+  }
 };
 
 const ensureWorksLoaded = async () => {
@@ -955,7 +960,7 @@ if (typeof window !== 'undefined') {
                   <dd class="mb-0 fw-semibold">{{ getWorkMetrics(work).daysUntilDeadline.value }} 日</dd>
                 </div>
                 <div class="col-6">
-                  <dt class="text-muted">残り作業時間</dt>
+                  <dt class="text-muted">残り作業可能時間</dt>
                   <dd class="mb-0 fw-semibold">{{ getWorkMetrics(work).availableWorkHours.value.toFixed(1) }} h</dd>
                 </div>
                 <div class="col-12">
