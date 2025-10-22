@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
-import { generateCalendarDays, isSameMonth, isToday, isWeekend, isHoliday, getHolidaysWithCabinetOfficeData } from '@/utils/dateUtils';
+import { generateCalendarDays, isSameMonth, isToday, isWeekend, isHoliday, getHolidaysWithCabinetOfficeData, formatLocalDate } from '@/utils/dateUtils';
 import type { Holiday } from '@/utils/dateUtils';
 import { useCustomDatesStore } from '@/store/customDatesStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -119,17 +119,9 @@ const getHolidayName = (date: Date) => {
   return holiday ? holiday.name : null;
 };
 
-// 日本時間でYYYY-MM-DD形式の文字列を取得
-const getLocalDateString = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 // カスタム日付情報を取得
 const getCustomDateInfo = (date: Date) => {
-  const dateString = getLocalDateString(date);
+  const dateString = formatLocalDate(date);
   return customDatesStore.getCustomDateByDate(dateString);
 };
 
