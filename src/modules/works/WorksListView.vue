@@ -7,6 +7,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useWorksStore, WORK_STATUSES, type Work, type WorkStatus } from "@/store/worksStore";
 import { useWorkMetrics } from "@/composables/useWorkMetrics";
+import { useCustomDatesStore } from "@/store/customDatesStore";
 import {
   parseStructureString as parseStructure,
   validateStructureString as validateStructure,
@@ -17,6 +18,7 @@ import {
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const worksStore = useWorksStore();
+const customDatesStore = useCustomDatesStore();
 const router = useRouter();
 
 const { user } = storeToRefs(authStore);
@@ -165,6 +167,11 @@ const ensureSettingsLoaded = async () => {
   if (!settingsStore.workHoursLoaded && !settingsStore.loadingWorkHours) {
     await settingsStore.fetchWorkHours(userId.value);
   }
+
+  // カスタム日付設定も読み込む
+  if (!customDatesStore.customDatesLoaded && !customDatesStore.loadingCustomDates) {
+    await customDatesStore.fetchCustomDates(userId.value);
+  }
 };
 
 const ensureWorksLoaded = async () => {
@@ -281,6 +288,12 @@ const loadData = async () => {
 
   await ensureSettingsLoaded();
   await ensureWorksLoaded();
+
+  // カスタム日付も読み込む
+  if (userId.value && !customDatesStore.customDatesLoaded) {
+    await customDatesStore.fetchCustomDates(userId.value);
+  }
+
   initializeGranularityForm();
 };
 

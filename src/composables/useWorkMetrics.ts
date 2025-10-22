@@ -1,6 +1,7 @@
 import { computed, type ComputedRef } from "vue";
 import type { Work, WorkUnit } from "@/store/worksStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { useCustomDatesStore } from "@/store/customDatesStore";
 import { getHolidaysForPeriod } from "@/utils/dateUtils";
 import { calculateWorkPace } from "@/utils/workloadUtils";
 
@@ -9,6 +10,7 @@ import { calculateWorkPace } from "@/utils/workloadUtils";
  */
 export const useWorkMetrics = (work: ComputedRef<Work | undefined>) => {
   const settingsStore = useSettingsStore();
+  const customDatesStore = useCustomDatesStore();
 
   /**
    * 最下位ユニット（リーフノード）を全て取得
@@ -102,8 +104,8 @@ export const useWorkMetrics = (work: ComputedRef<Work | undefined>) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 締切が過ぎている場合は0
-    if (deadlineDate <= today) {
+    // 締切が過去の場合は0（締切日当日は含む）
+    if (deadlineDate < today) {
       return 0;
     }
 
@@ -113,13 +115,17 @@ export const useWorkMetrics = (work: ComputedRef<Work | undefined>) => {
     // 期間内の祝日を取得
     const holidays = getHolidaysForPeriod(today, deadlineDate);
 
+    // カスタム日付を取得
+    const customDates = customDatesStore.customDates || [];
+
     // calculateWorkPaceを使用して作業可能時間を計算
     const paceCalc = calculateWorkPace(
       deadlineDate,
       0, // 残り工数は不要（作業可能時間のみ計算）
       0, // 進捗率は不要
       workHours,
-      holidays
+      holidays,
+      customDates
     );
 
     return Number(paceCalc.remainingWorkableHours.toFixed(2));

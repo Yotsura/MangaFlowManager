@@ -4,12 +4,14 @@ import { storeToRefs } from 'pinia';
 import WorkloadCalendar from './components/WorkloadCalendar.vue';
 import WorkHoursForm from '@/modules/settings/components/WorkHoursForm.vue';
 import WorkPaceCard from './components/WorkPaceCard.vue';
+import UnavailableTimeModal from './components/UnavailableTimeModal.vue';
 import { getHolidaysWithCabinetOfficeData } from '@/utils/dateUtils';
 import type { Holiday } from '@/utils/dateUtils';
 import { calculateWorkPace } from '@/utils/workloadUtils';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useWorksStore } from '@/store/worksStore';
 import { useAuthStore } from '@/store/authStore';
+import { useCustomDatesStore } from '@/store/customDatesStore';
 
 interface WorkHoursFormExposed {
   submit: () => void;
@@ -18,6 +20,7 @@ interface WorkHoursFormExposed {
 }
 
 const selectedDate = ref<Date | null>(null);
+const showModal = ref(false);
 const currentYear = ref(new Date().getFullYear());
 const currentMonth = ref(new Date().getMonth() + 1);
 const holidays = ref<Holiday[]>([]);
@@ -26,6 +29,7 @@ const holidays = ref<Holiday[]>([]);
 const settingsStore = useSettingsStore();
 const worksStore = useWorksStore();
 const authStore = useAuthStore();
+const customDatesStore = useCustomDatesStore();
 const { user } = storeToRefs(authStore);
 const { workHours } = storeToRefs(settingsStore);
 const { works } = storeToRefs(worksStore);
@@ -64,7 +68,8 @@ const workPaceCalculations = computed(() => {
       totalRemainingHours,
       0.2, // 20%完了と仮定
       workHours.value,
-      holidays.value
+      holidays.value,
+      customDatesStore.customDates
     );
 
     return {
@@ -113,7 +118,7 @@ const updateHolidays = async () => {
 
 const onDateClick = (date: Date) => {
   selectedDate.value = date;
-  console.log('Selected date:', date);
+  showModal.value = true;
 };
 
 const onMonthChange = async (year: number, month: number) => {
@@ -139,6 +144,7 @@ watch(() => user.value?.uid, async (uid) => {
   if (uid) {
     await settingsStore.fetchWorkHours(uid);
     await worksStore.fetchWorks(uid);
+    await customDatesStore.fetchCustomDates(uid);
   }
 }, { immediate: true });
 
@@ -206,5 +212,8 @@ onMounted(async () => {
         </div>
       </div>
     </div>
+
+    <!-- 日付設定モーダル -->
+    <UnavailableTimeModal :date="selectedDate" :show="showModal" @update:show="showModal = $event" @close="showModal = false" />
   </section>
 </template>

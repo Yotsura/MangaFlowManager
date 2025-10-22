@@ -11,6 +11,7 @@ import WorkloadSettingsEditor from "@/components/common/WorkloadSettingsEditor.v
 import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { useCustomDatesStore } from "@/store/customDatesStore";
 import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkUnit, type WorkGranularity, type WorkStageWorkload } from "@/store/worksStore";
 import { useWorkMetrics } from "@/composables/useWorkMetrics";
 import {
@@ -27,6 +28,7 @@ const workId = route.params.id as string;
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const worksStore = useWorksStore();
+const customDatesStore = useCustomDatesStore();
 
 const { user } = storeToRefs(authStore);
 const { granularities, granularitiesLoaded, loadingGranularities, stageWorkloads, stageWorkloadsLoaded, loadingStageWorkloads } = storeToRefs(settingsStore);
@@ -473,6 +475,11 @@ const ensureSettingsLoaded = async () => {
   if (!settingsStore.workHoursLoaded && !settingsStore.loadingWorkHours) {
     await settingsStore.fetchWorkHours(userId.value);
   }
+
+  // カスタム日付設定も読み込む
+  if (!customDatesStore.customDatesLoaded && !customDatesStore.loadingCustomDates) {
+    await customDatesStore.fetchCustomDates(userId.value);
+  }
 };
 
 const ensureWorksLoaded = async () => {
@@ -507,6 +514,11 @@ onMounted(async () => {
   await authStore.ensureInitialized();
   await ensureSettingsLoaded();
   await ensureWorksLoaded();
+
+  // カスタム日付も読み込む
+  if (userId.value && !customDatesStore.customDatesLoaded) {
+    await customDatesStore.fetchCustomDates(userId.value);
+  }
 
   // ローカル設定を初期化
   initializeLocalSettings();

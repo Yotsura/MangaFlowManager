@@ -1,5 +1,6 @@
 import type { Holiday } from './dateUtils';
 import { isHoliday } from './dateUtils';
+import type { CustomDate } from '@/store/customDatesStore';
 
 export const calculatePanelsPerDay = (totalPanels: number, remainingDays: number) => {
   if (remainingDays <= 0) {
@@ -33,7 +34,8 @@ export function calculateWorkPace(
   totalRemainingHours: number,
   currentProgress: number,
   workHours: WorkHourRange[],
-  holidays: Holiday[] = []
+  holidays: Holiday[] = [],
+  customDates: CustomDate[] = []
 ): WorkPaceCalculation {
   const today = new Date();
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -81,6 +83,17 @@ export function calculateWorkPace(
   while (currentDate <= endOfDeadline) {
     const dayOfWeek = currentDate.getDay();
 
+    // カスタム日付の取得（YYYY-MM-DD形式）
+    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+    const customDate = customDates.find(cd => cd.date === dateStr);
+
+    // カスタム日付が「作業不可」の場合は0時間
+    if (customDate && customDate.type === 'unavailable') {
+      // 作業不可日は0時間として扱う
+      currentDate.setDate(currentDate.getDate() + 1);
+      continue;
+    }
+
     // 祝日チェック（祝日を優先）
     const isHolidayToday = holidays.some(h =>
       h.date.getFullYear() === currentDate.getFullYear() &&
@@ -90,8 +103,10 @@ export function calculateWorkPace(
 
     let dailyHours = 0;
 
-    // 祝日を最優先でチェック
-    if (isHolidayToday) {
+    // カスタム休日または祝日の場合、holiday設定を適用
+    if (customDate && customDate.type === 'custom-holiday') {
+      dailyHours = workHoursMap.get('holiday') ?? 0;
+    } else if (isHolidayToday) {
       dailyHours = workHoursMap.get('holiday') ?? 0;
     } else {
       // 曜日に応じた作業時間を取得
@@ -111,18 +126,31 @@ export function calculateWorkPace(
 
   // 今日の作業可能時間
   const todayDayOfWeek = today.getDay();
-  const isTodayHoliday = holidays.some(h =>
-    h.date.getFullYear() === today.getFullYear() &&
-    h.date.getMonth() === today.getMonth() &&
-    h.date.getDate() === today.getDate()
-  ) || isHoliday(today);
+  const todayDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const todayCustomDate = customDates.find(cd => cd.date === todayDateStr);
 
   let todayWorkableHours = 0;
-  if (isTodayHoliday) {
+
+  // 今日がカスタム日付の「作業不可」の場合は0時間
+  if (todayCustomDate && todayCustomDate.type === 'unavailable') {
+    todayWorkableHours = 0;
+  } else if (todayCustomDate && todayCustomDate.type === 'custom-holiday') {
+    // カスタム休日の場合、holiday設定を適用
     todayWorkableHours = workHoursMap.get('holiday') ?? 0;
   } else {
-    const todayDayKey = dayMapping[todayDayOfWeek];
-    todayWorkableHours = workHoursMap.get(todayDayKey) ?? 0;
+    // 通常の祝日チェック
+    const isTodayHoliday = holidays.some(h =>
+      h.date.getFullYear() === today.getFullYear() &&
+      h.date.getMonth() === today.getMonth() &&
+      h.date.getDate() === today.getDate()
+    ) || isHoliday(today);
+
+    if (isTodayHoliday) {
+      todayWorkableHours = workHoursMap.get('holiday') ?? 0;
+    } else {
+      const todayDayKey = dayMapping[todayDayOfWeek];
+      todayWorkableHours = workHoursMap.get(todayDayKey) ?? 0;
+    }
   }
 
   // 必要な進捗計算
