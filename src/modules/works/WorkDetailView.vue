@@ -344,20 +344,11 @@ const toggleStructureEditMode = () => {
   isStructureEditMode.value = !isStructureEditMode.value;
 
   if (isStructureEditMode.value) {
-    // 編集モード開始時にフォームをクリア
-    structureEditForm.structureString = "";
+    // 編集モード開始時に現在の構造文字列を自動入力
+    structureEditForm.structureString = currentStructureString.value === '構造が設定されていません'
+      ? ''
+      : currentStructureString.value;
     structureEditError.value = null;
-  }
-};
-
-// 構造文字列をクリップボードにコピー
-const copyStructureString = async () => {
-  try {
-    await navigator.clipboard.writeText(currentStructureString.value);
-    // 成功の視覚的フィードバックを追加することも可能
-    console.log('構造文字列をクリップボードにコピーしました');
-  } catch (error) {
-    console.error('クリップボードへのコピーに失敗しました:', error);
   }
 };
 
@@ -923,15 +914,28 @@ const formatDate = (value: string) => {
                 <div class="mt-4 border-top pt-4">
                   <div class="d-flex justify-content-between align-items-center mb-3">
                     <h6 class="mb-0">作品構造編集</h6>
-                    <button
-                      type="button"
-                      class="btn btn-sm"
-                      :class="isStructureEditMode ? 'btn-outline-secondary' : 'btn-outline-primary'"
-                      @click="toggleStructureEditMode"
-                    >
-                      <i class="bi" :class="isStructureEditMode ? 'bi-x' : 'bi-pencil'"></i>
-                      {{ isStructureEditMode ? 'キャンセル' : '作品を編集する' }}
-                    </button>
+                    <div class="d-flex gap-2">
+                      <button
+                        v-if="isStructureEditMode"
+                        type="button"
+                        class="btn btn-sm btn-success"
+                        @click="applyStructureChanges"
+                        :disabled="isSavingStructure || !structureEditForm.structureString.trim()"
+                      >
+                        <span v-if="isSavingStructure" class="spinner-border spinner-border-sm me-1"></span>
+                        <i class="bi bi-check me-1"></i>
+                        保存
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm"
+                        :class="isStructureEditMode ? 'btn-outline-secondary' : 'btn-outline-primary'"
+                        @click="toggleStructureEditMode"
+                      >
+                        <i class="bi" :class="isStructureEditMode ? 'bi-x' : 'bi-pencil'"></i>
+                        {{ isStructureEditMode ? 'キャンセル' : '作品を編集する' }}
+                      </button>
+                    </div>
                   </div>
 
                   <div v-if="!isStructureEditMode" class="text-muted">
@@ -946,7 +950,7 @@ const formatDate = (value: string) => {
                         v-model="structureEditForm.structureString"
                         class="form-control"
                         :class="{ 'is-invalid': structureEditError }"
-                        rows="3"
+                        rows="5"
                         placeholder="例: [1],[5/5/5/5/5],[5/5/5/4]"
                       ></textarea>
                       <div v-if="structureEditError" class="invalid-feedback">
@@ -959,27 +963,6 @@ const formatDate = (value: string) => {
                         • 作業段階：スラッシュ(/)区切りで各最下位ユニットの作業段階を指定<br>
                         <strong>作業段階:</strong> 1=未着手, 2=ネーム済, 3=下書済, 4=ペン入済, 5=仕上済
                       </div>
-                    </div>
-
-                    <div class="d-flex gap-2">
-                      <button
-                        type="button"
-                        class="btn btn-success"
-                        @click="applyStructureChanges"
-                        :disabled="isSavingStructure || !structureEditForm.structureString.trim()"
-                      >
-                        <span v-if="isSavingStructure" class="spinner-border spinner-border-sm me-2"></span>
-                        <i class="bi bi-check me-1"></i>
-                        構造を更新
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-outline-secondary"
-                        @click="toggleStructureEditMode"
-                      >
-                        <i class="bi bi-x me-1"></i>
-                        キャンセル
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -1012,25 +995,6 @@ const formatDate = (value: string) => {
                 @remove-unit="handleRemoveUnit"
                 @update-children-count="handleUpdateChildrenCount"
               />
-
-              <!-- 現在の構造文字列を表示 -->
-              <div class="mt-3 pt-3 border-top">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                  <h6 class="mb-0 text-muted">現在の構造</h6>
-                  <button
-                    v-if="currentStructureString !== '構造が設定されていません'"
-                    type="button"
-                    class="btn btn-sm btn-outline-secondary"
-                    @click="copyStructureString"
-                    title="構造文字列をコピー"
-                  >
-                    <i class="bi bi-clipboard"></i>
-                  </button>
-                </div>
-                <div class="bg-light p-2 rounded">
-                  <code class="text-dark">{{ currentStructureString }}</code>
-                </div>
-              </div>
             </div>
           </div>
         </div>
