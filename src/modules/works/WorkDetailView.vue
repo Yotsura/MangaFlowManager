@@ -309,13 +309,6 @@ const discardSettings = () => {
 
 // 設定編集モードの切り替え
 const toggleSettingsEditMode = () => {
-  if (isSettingsEditMode.value && hasUnsavedSettings.value) {
-    const confirmed = window.confirm('未保存の設定変更があります。破棄してよろしいですか？');
-    if (!confirmed) {
-      return;
-    }
-  }
-
   isSettingsEditMode.value = !isSettingsEditMode.value;
 
   if (isSettingsEditMode.value) {
@@ -850,15 +843,28 @@ const formatDate = (value: string) => {
               <div class="mt-4 border-top pt-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                   <h6 class="mb-0">作品固有設定</h6>
-                  <button
-                    type="button"
-                    class="btn btn-sm"
-                    :class="isSettingsEditMode ? 'btn-outline-secondary' : 'btn-outline-primary'"
-                    @click="toggleSettingsEditMode"
-                  >
-                    <i class="bi" :class="isSettingsEditMode ? 'bi-x' : 'bi-gear'"></i>
-                    {{ isSettingsEditMode ? 'キャンセル' : '設定を編集' }}
-                  </button>
+                  <div class="d-flex gap-2">
+                    <button
+                      v-if="isSettingsEditMode"
+                      type="button"
+                      class="btn btn-sm btn-success"
+                      @click="saveSettings"
+                      :disabled="isSavingSettings || !hasUnsavedSettings"
+                    >
+                      <span v-if="isSavingSettings" class="spinner-border spinner-border-sm me-1"></span>
+                      <i class="bi bi-check me-1"></i>
+                      保存
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-sm"
+                      :class="isSettingsEditMode ? 'btn-outline-secondary' : 'btn-outline-primary'"
+                      @click="toggleSettingsEditMode"
+                    >
+                      <i class="bi" :class="isSettingsEditMode ? 'bi-x' : 'bi-gear'"></i>
+                      {{ isSettingsEditMode ? 'キャンセル' : '設定を編集' }}
+                    </button>
+                  </div>
                 </div>
 
                 <div v-if="!isSettingsEditMode" class="text-muted">
@@ -886,32 +892,11 @@ const formatDate = (value: string) => {
                     @stage-workload-change="handleStageWorkloadChange"
                     @bulk-stage-update="handleBulkStageUpdate"
                   />
-
-                  <!-- 設定保存/キャンセルボタン -->
-                  <div v-if="hasUnsavedSettings" class="mt-3 d-flex gap-2">
-                    <button
-                      type="button"
-                      class="btn btn-success"
-                      @click="saveSettings"
-                      :disabled="isSavingSettings"
-                    >
-                      <span v-if="isSavingSettings" class="spinner-border spinner-border-sm me-2"></span>
-                      <i class="bi bi-check me-1"></i>
-                      作品設定を保存
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-outline-secondary"
-                      @click="discardSettings"
-                    >
-                      <i class="bi bi-x me-1"></i>
-                      変更を破棄
-                    </button>
-                  </div>
                 </div>
+              </div>
 
-                <!-- 作品構造編集 -->
-                <div class="mt-4 border-top pt-4">
+              <!-- 作品構造編集 -->
+              <div class="mt-4 border-top pt-4">
                   <div class="d-flex justify-content-between align-items-center mb-3">
                     <h6 class="mb-0">作品構造編集</h6>
                     <div class="d-flex gap-2">
@@ -970,7 +955,6 @@ const formatDate = (value: string) => {
             </div>
           </div>
         </div>
-      </div>
 
       <div class="row g-4">
         <div class="col-12 col-xl-8">
