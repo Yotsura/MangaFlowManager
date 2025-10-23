@@ -14,7 +14,6 @@ import { useSettingsStore } from "@/store/settingsStore";
 import { useCustomDatesStore } from "@/store/customDatesStore";
 import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkGranularity, type WorkStageWorkload } from "@/store/worksStore";
 import { useWorkMetrics } from "@/composables/useWorkMetrics";
-import { collectLeafUnits } from "@/utils/workUtils";
 import {
   parseStructureString,
   validateStructureString,
@@ -619,58 +618,26 @@ watch(
   },
 );
 
-const overallProgress = computed(() => {
-  if (!work.value || stageCount.value === 0 || work.value.units.length === 0) {
-    return 0;
-  }
-
-  const leafUnits = collectLeafUnits(work.value.units);
-  const totalUnits = leafUnits.length;
-
-  if (totalUnits === 0) {
-    return 0;
-  }
-
-  // 工数ベースの進捗計算
-  if (work.value.primaryGranularityId && stageWorkloads.value.length > 0) {
-    // 各段階の累積工数を計算
-    const cumulativeWorkloads = stageWorkloadHours.value.reduce((acc, hours, index) => {
-      const prevTotal = index > 0 ? (acc[index - 1] ?? 0) : 0;
-      acc.push(prevTotal + hours);
-      return acc;
-    }, [] as number[]);
-
-    const totalWorkHoursPerUnit = cumulativeWorkloads[cumulativeWorkloads.length - 1] || 0;
-    const totalWorkHours = totalWorkHoursPerUnit * totalUnits;
-
-    if (totalWorkHours === 0) {
-      return 0;
-    }
-
-    // 各ユニットの完了工数を計算
-    const completedWorkHours = leafUnits.reduce((sum, unit) => {
-      const stageIndex = unit.stageIndex ?? 0;
-      const completedHours = stageIndex < cumulativeWorkloads.length ? (cumulativeWorkloads[stageIndex] || 0) : 0;
-      return sum + completedHours;
-    }, 0);
-
-    return Math.round((completedWorkHours / totalWorkHours) * 100);
-  } else {
-    // 従来の単純な進捗計算（工数データがない場合）
-    const completedUnits = leafUnits.filter(unit => (unit.stageIndex ?? 0) >= stageCount.value - 1).length;
-    return Math.round((completedUnits / totalUnits) * 100);
-  }
-});
-
-const totalPanels = computed(() => work.value?.totalUnits ?? 0);
-
-// 実際の進捗計算で使用される工数
+// 実際の進捗計算で使用される工数と進捗率
 const actualWorkHours = computed(() => {
   if (!work.value) {
-    return { totalEstimatedHours: 0, remainingEstimatedHours: 0 };
+    return {
+      totalEstimatedHours: 0,
+      remainingEstimatedHours: 0,
+      completedEstimatedHours: 0,
+      progressPercentage: 0,
+      pageCount: 0,
+      totalPanels: 0,
+      averagePanelsPerPage: 0
+    };
   }
   return worksStore.calculateActualWorkHours(work.value.id);
 });
+
+// 進捗率（共通計算を使用）
+const overallProgress = computed(() => actualWorkHours.value.progressPercentage);
+
+const totalPanels = computed(() => work.value?.totalUnits ?? 0);
 
 // 作品の指標を計算
 const workMetrics = useWorkMetrics(work);

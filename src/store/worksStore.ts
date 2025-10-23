@@ -4,6 +4,7 @@ import { deleteDocument, getCollectionDocs, getDocument, setDocument } from "@/s
 import { generateId } from "@/utils/id";
 import { collectLeafUnits } from "@/utils/workUtils";
 import type { Granularity, StageWorkload } from "@/store/settingsStore";
+import { useSettingsStore } from "@/store/settingsStore";
 
 export const WORK_STATUSES = ["未着手", "作業中", "完了", "保留"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
@@ -1175,17 +1176,55 @@ export const useWorksStore = defineStore("works", {
     },
 
     // 実際の進捗計算で使用される工数を計算
-    calculateActualWorkHours(workId: string): { totalEstimatedHours: number; remainingEstimatedHours: number } {
+    /**
+     * 作品の実際の工数と進捗率を計算
+     * @param workId 作品ID
+     * @returns 総推定工数、残り推定工数、完了工数、進捗率、ページ数、総コマ数、平均コマ数/ページ
+     */
+    calculateActualWorkHours(workId: string): {
+      totalEstimatedHours: number;
+      remainingEstimatedHours: number;
+      completedEstimatedHours: number;
+      progressPercentage: number;
+      pageCount: number;
+      totalPanels: number;
+      averagePanelsPerPage: number;
+    } {
       const work = this.getWorkById(workId);
       if (!work) {
-        return { totalEstimatedHours: 0, remainingEstimatedHours: 0 };
+        return {
+          totalEstimatedHours: 0,
+          remainingEstimatedHours: 0,
+          completedEstimatedHours: 0,
+          progressPercentage: 0,
+          pageCount: 0,
+          totalPanels: 0,
+          averagePanelsPerPage: 0
+        };
       }
 
       const leafUnits = getAllLeafUnits(work.units);
       const totalUnits = leafUnits.length;
 
+      // ページ数（最上位レベルのユニット数）
+      const pageCount = work.units.length;
+
+      // 総コマ数（最下位レベルのユニット数 = work.totalUnits）
+      const totalPanels = work.totalUnits;
+
+      // 平均コマ数/ページ
+      const averagePanelsPerPage = pageCount > 0 ? Number((totalPanels / pageCount).toFixed(2)) : 0;
+
       if (totalUnits === 0) {
-        return { totalEstimatedHours: 0, remainingEstimatedHours: 0 };
+        return {
+          totalEstimatedHours: 0,
+          remainingEstimatedHours: 0,
+          completedEstimatedHours: 0,
+          progressPercentage: 0,
+          pageCount,
+          totalPanels,
+          averagePanelsPerPage
+        };
       }
 
       // 作品固有設定または全体設定を使用
@@ -1266,17 +1305,47 @@ export const useWorksStore = defineStore("works", {
           }
         }, 0);
 
+        const completedEstimatedHours = Number(completedWorkHours.toFixed(2));
         const remainingEstimatedHours = Number((totalEstimatedHours - completedWorkHours).toFixed(2));
+        const progressPercentage = totalEstimatedHours > 0
+          ? Math.round((completedWorkHours / totalEstimatedHours) * 100)
+          : 0;
 
         return {
           totalEstimatedHours,
-          remainingEstimatedHours: Math.max(0, remainingEstimatedHours)
+          remainingEstimatedHours: Math.max(0, remainingEstimatedHours),
+          completedEstimatedHours,
+          progressPercentage,
+          pageCount,
+          totalPanels,
+          averagePanelsPerPage
         };
       } else {
         // 従来の計算方法（工数データがない場合）
+        // stageCountを取得
+        const settingsStore = useSettingsStore();
+        const stageCount = settingsStore.stageWorkloads.length;
+
+        // 完了ユニット数を計算
+        const completedUnits = stageCount > 0
+          ? leafUnits.filter(unit => (unit.stageIndex ?? 0) >= stageCount - 1).length
+          : 0;
+
+        const totalEstimatedHours = Number((work.totalUnits * work.unitEstimatedHours).toFixed(2));
+        const completedEstimatedHours = Number((completedUnits * work.unitEstimatedHours).toFixed(2));
+        const remainingEstimatedHours = Number((totalEstimatedHours - completedEstimatedHours).toFixed(2));
+        const progressPercentage = totalUnits > 0
+          ? Math.round((completedUnits / totalUnits) * 100)
+          : 0;
+
         return {
-          totalEstimatedHours: Number((work.totalUnits * work.unitEstimatedHours).toFixed(2)),
-          remainingEstimatedHours: Number((work.totalUnits * work.unitEstimatedHours).toFixed(2))
+          totalEstimatedHours,
+          remainingEstimatedHours: Math.max(0, remainingEstimatedHours),
+          completedEstimatedHours,
+          progressPercentage,
+          pageCount,
+          totalPanels,
+          averagePanelsPerPage
         };
       }
     },

@@ -14,7 +14,15 @@ const props = defineProps<{
   saveError: string | null;
   lastSaveStatus: string | null;
   isEditMode: boolean;
-  actualWorkHours: { totalEstimatedHours: number; remainingEstimatedHours: number };
+  actualWorkHours: {
+    totalEstimatedHours: number;
+    remainingEstimatedHours: number;
+    completedEstimatedHours: number;
+    progressPercentage: number;
+    pageCount: number;
+    totalPanels: number;
+    averagePanelsPerPage: number;
+  };
   workMetrics?: {
     remainingEstimatedHours: number;
     availableWorkHours: number;
@@ -29,14 +37,14 @@ const emit = defineEmits<{
   (event: "toggle-edit-mode"): void;
 }>();
 
-const totalUnits = computed(() => props.work.totalUnits);
+// ページ数（共通計算から取得）
+const pageCount = computed(() => props.actualWorkHours.pageCount);
 
-const averagePanelsPerPage = computed(() => {
-  if (!totalUnits.value) {
-    return 0;
-  }
-  return props.totalPanels / totalUnits.value;
-});
+// 総コマ数（共通計算から取得）
+const totalUnits = computed(() => props.actualWorkHours.totalPanels);
+
+// 平均コマ数/ページ（共通計算から取得）
+const averagePanelsPerPage = computed(() => props.actualWorkHours.averagePanelsPerPage);
 
 const unitHours = computed(() => props.work.unitEstimatedHours);
 
@@ -91,11 +99,11 @@ const formatDate = (value: string) => {
       </div>
       <div class="col-6">
         <dt class="text-muted small">ページ数</dt>
-        <dd class="mb-0">{{ totalUnits }}</dd>
+        <dd class="mb-0">{{ pageCount }}</dd>
       </div>
       <div class="col-6">
         <dt class="text-muted small">総コマ数</dt>
-        <dd class="mb-0">{{ totalPanels }}</dd>
+        <dd class="mb-0">{{ totalUnits }}</dd>
       </div>
       <div class="col-6">
         <dt class="text-muted small">平均コマ数 / ページ</dt>

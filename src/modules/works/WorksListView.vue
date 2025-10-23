@@ -8,7 +8,6 @@ import { useSettingsStore } from "@/store/settingsStore";
 import { useWorksStore, WORK_STATUSES, type Work, type WorkStatus } from "@/store/worksStore";
 import { useWorkMetrics } from "@/composables/useWorkMetrics";
 import { useCustomDatesStore } from "@/store/customDatesStore";
-import { collectLeafUnits } from "@/utils/workUtils";
 import {
   parseStructureString as parseStructure,
   validateStructureString as validateStructure,
@@ -595,67 +594,24 @@ const formatDate = (value: string) => {
   }
 };
 
-const computeWorkProgress = (work: Work) => {
-  if (!work.units || work.units.length === 0 || stageCount.value === 0) {
-    return 0;
-  }
-
-  const leafUnits = collectLeafUnits(work.units);
-  const totalUnits = leafUnits.length;
-
-  if (totalUnits === 0) {
-    return 0;
-  }
-
-  // 工数ベースの進捗計算
-  if (work.primaryGranularityId && stageWorkloads.value && Array.isArray(stageWorkloads.value) && stageWorkloads.value.length > 0) {
-    // 各段階の工数を取得（baseHoursから最上位粒度の工数を逆算）
-    const primaryGranularity = granularities.value.find(g => g.id === work.primaryGranularityId);
-    const lowestGranularity = granularities.value.reduce((min, current) =>
-      current.weight < min.weight ? current : min
-    );
-
-    const stageHours = stageWorkloads.value.map(stage => {
-      if (!stage.baseHours || !primaryGranularity || !lowestGranularity) return 0;
-      // 最低粒度の工数から最上位粒度の工数を計算
-      const ratio = primaryGranularity.weight / lowestGranularity.weight;
-      return stage.baseHours * ratio;
-    });
-
-    // 各段階の累積工数を計算
-    const cumulativeWorkloads = stageHours.reduce((acc, hours, index) => {
-      const prevTotal = index > 0 ? (acc[index - 1] ?? 0) : 0;
-      acc.push(prevTotal + hours);
-      return acc;
-    }, [] as number[]);
-
-    const totalWorkHoursPerUnit = cumulativeWorkloads[cumulativeWorkloads.length - 1] || 0;
-    const totalWorkHours = totalWorkHoursPerUnit * totalUnits;
-
-    if (totalWorkHours === 0) {
-      return 0;
-    }
-
-    // 各ユニットの完了工数を計算
-    const completedWorkHours = leafUnits.reduce((sum, unit) => {
-      const stageIndex = unit.stageIndex ?? 0;
-      const completedHours = stageIndex < cumulativeWorkloads.length ? (cumulativeWorkloads[stageIndex] || 0) : 0;
-      return sum + completedHours;
-    }, 0);
-
-    return Math.round((completedWorkHours / totalWorkHours) * 100);
-  } else {
-    // 従来の単純な進捗計算（工数データがない場合）
-    const completedUnits = leafUnits.filter(unit => (unit.stageIndex ?? 0) >= stageCount.value - 1).length;
-    return Math.round((completedUnits / totalUnits) * 100);
-  }
-};
-
-const totalPanelsForWork = (work: Work) => work.totalUnits;
-
-// 作品ごとの実際の工数計算
+// 作品ごとの実際の工数計算（共通計算を使用）
 const getWorkActualHours = (work: Work) => {
   return worksStore.calculateActualWorkHours(work.id);
+};
+
+// 作品の進捗率を計算（共通計算を使用）
+const computeWorkProgress = (work: Work) => {
+  return getWorkActualHours(work).progressPercentage;
+};
+
+// ページ数を取得（共通計算を使用）
+const getPageCount = (work: Work) => {
+  return getWorkActualHours(work).pageCount;
+};
+
+// 総コマ数を取得（共通計算を使用）
+const getTotalPanels = (work: Work) => {
+  return getWorkActualHours(work).totalPanels;
 };
 
 // 作品ごとの指標を計算
@@ -941,11 +897,11 @@ if (typeof window !== 'undefined') {
                 </div>
                 <div class="col-6">
                   <dt class="text-muted">ページ数</dt>
-                  <dd class="mb-0">{{ work.units.length }}</dd>
+                  <dd class="mb-0">{{ getPageCount(work) }}</dd>
                 </div>
                 <div class="col-6">
                   <dt class="text-muted">総コマ数</dt>
-                  <dd class="mb-0">{{ totalPanelsForWork(work) }}</dd>
+                  <dd class="mb-0">{{ getTotalPanels(work) }}</dd>
                 </div>
                 <div class="col-6">
                   <dt class="text-muted">推定総工数</dt>
