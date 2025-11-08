@@ -1,37 +1,22 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { storeToRefs } from 'pinia';
-import { useWorksStore } from '@/store/worksStore';
-import { useWorkMetrics } from '@/composables/useWorkMetrics';
+/**
+ * 締切設定作品リストコンポーネント
+ *
+ * 締切が設定されている未完了作品を、締切日の近い順に表示します。
+ * 各作品について以下の情報を表示:
+ * - 作品タイトル
+ * - 締切までの残り日数と作業可能時間
+ * - 締切日（日本語形式）
+ * - 進捗率
+ * - 残り推定工数と総工数
+ *
+ * @see useDeadlineWorks - 締切作品データの取得と計算を行うcomposable
+ * @see formatJapaneseDate - 日付の日本語フォーマット（YYYY/MM/DD）
+ */
+import { formatJapaneseDate } from '@/utils/dateUtils';
+import { useDeadlineWorks } from '@/composables/useDeadlineWorks';
 
-const worksStore = useWorksStore();
-const { works } = storeToRefs(worksStore);
-
-// 締切が設定されている作品のリスト
-const worksWithDeadline = computed(() => {
-  return works.value
-    .filter(work => work.deadline && work.status !== '完了')
-    .map(work => {
-      const metrics = worksStore.calculateActualWorkHours(work.id);
-      const workComputed = computed(() => work);
-      const workMetrics = useWorkMetrics(workComputed);
-
-      return {
-        id: work.id,
-        title: work.title,
-        deadline: work.deadline,
-        progressPercentage: metrics.progressPercentage,
-        remainingHours: metrics.remainingEstimatedHours,
-        totalHours: metrics.totalEstimatedHours,
-        daysUntilDeadline: workMetrics.daysUntilDeadline.value,
-        availableWorkHours: workMetrics.availableWorkHours.value
-      };
-    })
-    .sort((a, b) => {
-      // 締切の近い順にソート
-      return new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime();
-    });
-});
+const { worksWithDeadline } = useDeadlineWorks();
 </script>
 
 <template>
@@ -54,7 +39,7 @@ const worksWithDeadline = computed(() => {
             <div class="fw-semibold small">{{ work.title }}</div>
             <div class="d-flex align-items-center gap-2 ms-2 flex-shrink-0">
               <span class="badge bg-info text-dark">{{ work.daysUntilDeadline }}日（{{ work.availableWorkHours.toFixed(1) }}h）</span>
-              <span class="badge bg-secondary">{{ new Date(work.deadline!).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/') }}</span>
+              <span class="badge bg-secondary">{{ formatJapaneseDate(work.deadline!) }}</span>
             </div>
           </div>
           <div class="d-flex justify-content-between align-items-center">
