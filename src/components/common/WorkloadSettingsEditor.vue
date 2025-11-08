@@ -23,12 +23,12 @@
             <div v-else>
               <!-- 既存の粒度テーブル -->
               <div class="table-responsive">
-                <table class="table table-sm">
+                <table class="table table-sm mb-2">
                   <thead>
                     <tr>
                       <th>作業粒度</th>
-                      <th>比重</th>
-                      <th>デフォルト個数</th>
+                      <th class="d-none d-sm-table-cell">比重</th>
+                      <th class="d-none d-sm-table-cell">デフォルト個数</th>
                       <th class="text-end">操作</th>
                     </tr>
                   </thead>
@@ -45,8 +45,43 @@
                         <div v-if="getGranularityError(granularity.id)?.label" class="invalid-feedback">
                           {{ getGranularityError(granularity.id)?.label }}
                         </div>
+                        <!-- スマホサイズでは比重とデフォルト個数を下に表示 -->
+                        <div class="d-sm-none mt-2">
+                          <div class="row g-2">
+                            <div class="col-6">
+                              <label class="form-label small mb-1">比重</label>
+                              <input
+                                v-model="granularity.weight"
+                                :class="['form-control form-control-sm', { 'is-invalid': getGranularityError(granularity.id)?.weight }]"
+                                type="number"
+                                min="1"
+                                step="1"
+                                :disabled="isSaving"
+                                @input="handleGranularityChange"
+                              />
+                              <div v-if="getGranularityError(granularity.id)?.weight" class="invalid-feedback">
+                                {{ getGranularityError(granularity.id)?.weight }}
+                              </div>
+                            </div>
+                            <div class="col-6">
+                              <label class="form-label small mb-1">デフォルト個数</label>
+                              <input
+                                v-model="granularity.defaultCount"
+                                :class="['form-control form-control-sm', { 'is-invalid': getGranularityError(granularity.id)?.defaultCount }]"
+                                type="number"
+                                min="1"
+                                step="1"
+                                :disabled="isSaving"
+                                @input="handleGranularityChange"
+                              />
+                              <div v-if="getGranularityError(granularity.id)?.defaultCount" class="invalid-feedback">
+                                {{ getGranularityError(granularity.id)?.defaultCount }}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </td>
-                      <td style="width: 120px;">
+                      <td class="d-none d-sm-table-cell" style="width: 100px;">
                         <input
                           v-model="granularity.weight"
                           :class="['form-control form-control-sm', { 'is-invalid': getGranularityError(granularity.id)?.weight }]"
@@ -60,7 +95,7 @@
                           {{ getGranularityError(granularity.id)?.weight }}
                         </div>
                       </td>
-                      <td style="width: 140px;">
+                      <td class="d-none d-sm-table-cell" style="width: 100px;">
                         <input
                           v-model="granularity.defaultCount"
                           :class="['form-control form-control-sm', { 'is-invalid': getGranularityError(granularity.id)?.defaultCount }]"
@@ -74,28 +109,31 @@
                           {{ getGranularityError(granularity.id)?.defaultCount }}
                         </div>
                       </td>
-                      <td class="text-end">
+                      <td class="text-end" style="width: 60px;">
                         <button
                           class="btn btn-outline-danger btn-sm"
                           type="button"
                           :disabled="isSaving"
                           @click="removeGranularity(granularity.id)"
+                          title="削除"
                         >
-                          削除
+                          <i class="bi bi-trash"></i>
                         </button>
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-              <button
-                class="btn btn-outline-secondary"
-                type="button"
-                :disabled="isSaving"
-                @click="addGranularity"
-              >
-                新規作業粒度追加
-              </button>
+              <div class="text-md-start text-end">
+                <button
+                  class="btn btn-outline-secondary btn-sm"
+                  type="button"
+                  :disabled="isSaving"
+                  @click="addGranularity"
+                >
+                  新規作業粒度追加
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -132,8 +170,8 @@
             </div>
             <div v-else>
               <!-- 既存のステージエディター -->
-              <div v-for="stage in editableStages" :key="stage.id" class="stage-editor mb-4">
-                <div class="d-flex align-items-center gap-3 mb-3">
+              <div v-for="stage in editableStages" :key="stage.id" class="stage-editor mb-3">
+                <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
                   <div class="stage-color-selector">
                     <button
                       :style="{ backgroundColor: stage.color }"
@@ -168,7 +206,7 @@
                     </div>
                   </div>
 
-                  <div class="stage-actions">
+                  <div class="stage-actions d-flex gap-1">
                     <button
                       v-if="isWorkMode"
                       class="btn btn-outline-secondary btn-sm"
@@ -177,20 +215,23 @@
                       @click="applyBulkSetting(stage.id)"
                       title="この段階未満に適用"
                     >
-                      一括設定
+                      <span class="d-none d-md-inline">一括設定</span>
+                      <i class="bi bi-arrow-down-circle d-md-none"></i>
                     </button>
                     <button
-                      class="btn btn-outline-danger btn-sm ms-2"
+                      class="btn btn-outline-danger btn-sm"
                       type="button"
                       :disabled="isSaving"
                       @click="removeStage(stage.id)"
+                      title="削除"
                     >
-                      削除
+                      <i class="bi bi-trash"></i>
                     </button>
                   </div>
                 </div>
 
-                <div class="d-flex flex-wrap gap-3 align-items-start">
+                <!-- PC: 横並び -->
+                <div class="d-none d-md-flex flex-wrap gap-2 align-items-start">
                   <div v-for="entry in stage.entries" :key="`${stage.id}-${entry.granularityId}`" class="granularity-entry">
                     <div class="d-flex align-items-center gap-1">
                       <span class="text-muted small">{{ getGranularityLabel(entry.granularityId) }}</span>
@@ -210,16 +251,46 @@
                     </div>
                   </div>
                 </div>
+
+                <!-- Mobile: 縦並び -->
+                <div class="d-md-none">
+                  <div v-for="entry in stage.entries" :key="`${stage.id}-${entry.granularityId}`" class="mb-2">
+                    <div class="row g-2 align-items-center">
+                      <div class="col-5">
+                        <label class="form-label small mb-0 text-muted">{{ getGranularityLabel(entry.granularityId) }}</label>
+                      </div>
+                      <div class="col-7">
+                        <div class="input-group input-group-sm">
+                          <input
+                            v-model="entry.hours"
+                            :class="['form-control', { 'is-invalid': getEntryError(stage.id, entry.granularityId) }]"
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            :disabled="isSaving"
+                            @input="(event) => { updateRelatedEntries(stage.id, entry.granularityId, (event.target as HTMLInputElement)?.value || ''); handleStageChange(); }"
+                          />
+                          <span class="input-group-text">h</span>
+                        </div>
+                        <div v-if="getEntryError(stage.id, entry.granularityId)" class="invalid-feedback d-block small">
+                          {{ getEntryError(stage.id, entry.granularityId) }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <button
-                class="btn btn-outline-secondary"
-                type="button"
-                :disabled="isSaving || editableGranularities.length === 0"
-                @click="addStage"
-              >
-                新規作業段階追加
-              </button>
+              <div class="text-md-start text-end">
+                <button
+                  class="btn btn-outline-secondary btn-sm"
+                  type="button"
+                  :disabled="isSaving || editableGranularities.length === 0"
+                  @click="addStage"
+                >
+                  新規作業段階追加
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -961,7 +1032,7 @@ defineExpose({
 .stage-editor {
   border: 1px solid #dee2e6;
   border-radius: 0.375rem;
-  padding: 1rem;
+  padding: 0.75rem;
   background-color: #f8f9fa;
 }
 
@@ -1014,5 +1085,21 @@ defineExpose({
 .granularity-input {
   width: 70px !important;
   text-align: right;
+}
+
+/* モバイルでの高さ削減 */
+@media (max-width: 767px) {
+  .card-body {
+    padding: 0.75rem;
+  }
+
+  .stage-editor {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .card-header {
+    padding: 0.5rem 0.75rem;
+  }
 }
 </style>
