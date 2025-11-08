@@ -6,6 +6,7 @@ import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 import PanelStyleUnitEditor from "./components/PanelStyleUnitEditor.vue";
 import ProgressHeatmap from "./components/ProgressHeatmap.vue";
 import WorkloadSettingsEditor from "@/components/common/WorkloadSettingsEditor.vue";
+import EditModal from "@/components/common/EditModal.vue";
 
 import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
@@ -891,53 +892,26 @@ const formatDate = (value: string) => {
                 <h6 class="mb-0">工程設定</h6>
                 <div class="d-flex gap-2">
                   <button
-                    v-if="isSettingsEditMode"
                     type="button"
-                    class="btn btn-sm btn-success"
-                    @click="saveSettings"
-                    :disabled="isSavingSettings || !hasUnsavedSettings"
-                  >
-                    <span v-if="isSavingSettings" class="spinner-border spinner-border-sm"></span>
-                    <i v-else class="bi bi-check"></i>
-                    <span class="d-none d-md-inline ms-1">保存</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm"
-                    :class="isSettingsEditMode ? 'btn-outline-secondary' : 'btn-outline-primary'"
+                    class="btn btn-sm btn-outline-primary"
                     @click="toggleSettingsEditMode"
                   >
-                    <i class="bi" :class="isSettingsEditMode ? 'bi-x' : 'bi-gear'"></i>
-                    <span class="d-none d-md-inline ms-1">{{ isSettingsEditMode ? 'キャンセル' : '編集' }}</span>
+                    <i class="bi bi-gear"></i>
+                    <span class="d-none d-md-inline ms-1">編集</span>
                   </button>
                 </div>
               </div>
 
-              <!-- 通常表示: 工程別進捗 -->
-              <div v-if="!isSettingsEditMode">
-                <ProgressHeatmap
-                  :units="work.units"
-                  :stage-count="stageCount"
-                  :stage-labels="stageLabels"
-                  :stage-colors="stageColors"
-                  :stage-workload-hours="stageWorkloadHours"
-                />
-                <div class="mt-3 text-muted small">
-                  <span class="badge text-bg-light">更新: {{ formatDate(work.updatedAt) }}</span>
-                </div>
-              </div>
-
-              <!-- 編集モード: 作品固有設定 -->
-              <div v-if="isSettingsEditMode">
-                <WorkloadSettingsEditor
-                  work-mode
-                  :work-granularities="localWorkGranularities"
-                  :work-stage-workloads="localWorkStageWorkloads"
-                  :work-data="work"
-                  @granularity-change="handleGranularityChange"
-                  @stage-workload-change="handleStageWorkloadChange"
-                  @bulk-stage-update="handleBulkStageUpdate"
-                />
+              <!-- 工程別進捗 -->
+              <ProgressHeatmap
+                :units="work.units"
+                :stage-count="stageCount"
+                :stage-labels="stageLabels"
+                :stage-colors="stageColors"
+                :stage-workload-hours="stageWorkloadHours"
+              />
+              <div class="mt-3 text-muted small">
+                <span class="badge text-bg-light">更新: {{ formatDate(work.updatedAt) }}</span>
               </div>
             </div>
           </div>
@@ -955,48 +929,13 @@ const formatDate = (value: string) => {
                 </div>
                 <div class="d-flex gap-2">
                   <button
-                    v-if="isStructureEditMode"
                     type="button"
-                    class="btn btn-sm btn-success"
-                    @click="applyStructureChanges"
-                    :disabled="isSavingStructure || !structureEditForm.structureString.trim()"
-                  >
-                    <span v-if="isSavingStructure" class="spinner-border spinner-border-sm"></span>
-                    <i v-else class="bi bi-check"></i>
-                    <span class="d-none d-md-inline ms-1">保存</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm"
-                    :class="isStructureEditMode ? 'btn-outline-secondary' : 'btn-outline-primary'"
+                    class="btn btn-sm btn-outline-primary"
                     @click="toggleStructureEditMode"
                   >
-                    <i class="bi" :class="isStructureEditMode ? 'bi-x' : 'bi-pencil'"></i>
-                    <span class="d-none d-md-inline ms-1">{{ isStructureEditMode ? 'キャンセル' : '構造文字列編集' }}</span>
+                    <i class="bi bi-pencil"></i>
+                    <span class="d-none d-md-inline ms-1">構造文字列編集</span>
                   </button>
-                </div>
-              </div>
-
-              <!-- 構造文字列編集フォーム -->
-              <div v-if="isStructureEditMode" class="mb-3">
-                <label for="structure-input" class="form-label">構造指定文字列</label>
-                <textarea
-                  id="structure-input"
-                  v-model="structureEditForm.structureString"
-                  class="form-control"
-                  :class="{ 'is-invalid': structureEditError }"
-                  rows="5"
-                  placeholder="例: [1],[5/5/5/5/5],[5/5/5/4]"
-                ></textarea>
-                <div v-if="structureEditError" class="invalid-feedback">
-                  {{ structureEditError }}
-                </div>
-                <div class="form-text">
-                  <strong>書式:</strong><br>
-                  • 最上位ユニット：カンマ(,)区切りで分割<br>
-                  • 各最上位ユニット：角括弧[]で囲む<br>
-                  • 作業段階：スラッシュ(/)区切りで各最下位ユニットの作業段階を指定<br>
-                  <strong>作業段階:</strong> 1=未着手, 2=ネーム済, 3=下書済, 4=ペン入済, 5=仕上済
                 </div>
               </div>
 
@@ -1059,6 +998,60 @@ const formatDate = (value: string) => {
           </button>
         </template>
       </div>
+
+      <!-- 工程設定編集モーダル -->
+      <EditModal
+        :show="isSettingsEditMode"
+        title="工程設定を編集"
+        size="xl"
+        :can-save="hasUnsavedSettings"
+        :is-saving="isSavingSettings"
+        @close="toggleSettingsEditMode"
+        @save="saveSettings"
+      >
+        <WorkloadSettingsEditor
+          work-mode
+          :work-granularities="localWorkGranularities"
+          :work-stage-workloads="localWorkStageWorkloads"
+          :work-data="work"
+          @granularity-change="handleGranularityChange"
+          @stage-workload-change="handleStageWorkloadChange"
+          @bulk-stage-update="handleBulkStageUpdate"
+        />
+      </EditModal>
+
+      <!-- 構造文字列編集モーダル -->
+      <EditModal
+        :show="isStructureEditMode"
+        title="構造指定文字列で一括編集"
+        size="lg"
+        :can-save="!!structureEditForm.structureString.trim()"
+        :is-saving="isSavingStructure"
+        @close="toggleStructureEditMode"
+        @save="applyStructureChanges"
+      >
+        <div class="mb-3">
+          <label for="structure-input" class="form-label">構造指定文字列</label>
+          <textarea
+            id="structure-input"
+            v-model="structureEditForm.structureString"
+            class="form-control"
+            :class="{ 'is-invalid': structureEditError }"
+            rows="8"
+            placeholder="例: [1],[5/5/5/5/5],[5/5/5/4]"
+          ></textarea>
+          <div v-if="structureEditError" class="invalid-feedback">
+            {{ structureEditError }}
+          </div>
+          <div class="form-text mt-2">
+            <strong>書式:</strong><br>
+            • 最上位ユニット：カンマ(,)区切りで分割<br>
+            • 各最上位ユニット：角括弧[]で囲む<br>
+            • 作業段階：スラッシュ(/)区切りで各最下位ユニットの作業段階を指定<br>
+            <strong>作業段階:</strong> 1=未着手, 2=ネーム済, 3=下書済, 4=ペン入済, 5=仕上済
+          </div>
+        </div>
+      </EditModal>
     </template>
   </section>
 </template>
