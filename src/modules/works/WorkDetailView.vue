@@ -5,7 +5,6 @@ import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 // import PagePanel from "./components/PagePanel.vue"; // 一時的に無効化
 import PanelStyleUnitEditor from "./components/PanelStyleUnitEditor.vue";
 import ProgressHeatmap from "./components/ProgressHeatmap.vue";
-import WorkSummaryCard from "./components/WorkSummaryCard.vue";
 import WorkloadSettingsEditor from "@/components/common/WorkloadSettingsEditor.vue";
 
 import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
@@ -117,6 +116,24 @@ const primaryGranularityLabel = computed(() => {
     return null;
   }
   return workGranularities.value.find((item) => item.id === id)?.label ?? null;
+});
+
+// 最上位粒度のラベル
+const topGranularityLabel = computed(() => {
+  if (workGranularities.value.length === 0) return 'ページ';
+  const topGranularity = workGranularities.value.reduce((max, current) =>
+    current.weight > max.weight ? current : max
+  );
+  return topGranularity.label;
+});
+
+// 最低粒度のラベル
+const lowestGranularityLabel = computed(() => {
+  if (workGranularities.value.length === 0) return 'コマ';
+  const lowestGranularity = workGranularities.value.reduce((min, current) =>
+    current.weight < min.weight ? current : min
+  );
+  return lowestGranularity.label;
 });
 
 // 各工程の最低粒度での工数を計算
@@ -774,18 +791,94 @@ const formatDate = (value: string) => {
     </div>
 
     <template v-else>
-      <header class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-4">
-        <div>
-          <h1 class="h3 fw-semibold mb-1">{{ work.title || "作品詳細" }}</h1>
-          <p class="text-muted mb-0">ID: {{ work.id }}</p>
-        </div>
-        <div class="text-lg-end">
-          <p class="mb-0 text-muted small">
-            最上位粒度: <strong>{{ primaryGranularityLabel ?? "未設定" }}</strong>
-          </p>
-          <p class="mb-0 text-muted small">
-            ユニット数: <strong>{{ work.units.length }}</strong> / 総要素数: <strong>{{ totalPanels }}</strong>
-          </p>
+      <header class="mb-4">
+        <!-- 作品概要情報 -->
+        <div class="card shadow-sm">
+          <div class="card-body py-3">
+            <div class="row g-2">
+              <!-- タイトル -->
+              <div class="col-12 mb-2">
+                <input v-model="detailForm.title" type="text" class="form-control form-control-sm fw-semibold" placeholder="作品タイトル" :readonly="!isEditMode" style="font-size: 1.1rem;" />
+              </div>
+
+              <!-- 主要情報 -->
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="small text-muted mb-1">{{ topGranularityLabel }}（{{ lowestGranularityLabel }}数）</div>
+                <div class="small py-1">
+                  {{ actualWorkHours.pageCount }}（{{ totalPanels }}）
+                </div>
+              </div>
+              <div class="col-6 col-md-3 col-lg-3">
+                <div class="small text-muted mb-1">推定工数</div>
+                <div class="fw-semibold small py-1">
+                  残り {{ actualWorkHours.remainingEstimatedHours.toFixed(1) }}h / {{ actualWorkHours.totalEstimatedHours.toFixed(1) }}h
+                </div>
+              </div>
+              <div class="col-6 col-md-3 col-lg-3">
+                <div class="small text-muted mb-1">進捗率</div>
+                <div class="fw-semibold small py-1">{{ overallProgress }}%</div>
+              </div>
+              <div class="col-6 col-md-3 col-lg-2">
+                <div class="small text-muted mb-1">締切まで</div>
+                <div class="fw-semibold small py-1">{{ workMetrics.daysUntilDeadline.value }}日（{{ workMetrics.availableWorkHours.value.toFixed(1) }}h）</div>
+              </div>
+              <div class="col-6 col-md-4">
+                <div class="small text-muted mb-1">1日の必要工数</div>
+                <div class="small py-1" :class="{
+                  'text-danger': workMetrics.requiredDailyHours.value === Infinity || workMetrics.requiredDailyHours.value > 12,
+                  'text-warning': workMetrics.requiredDailyHours.value > 8 && workMetrics.requiredDailyHours.value <= 12,
+                  'text-success': workMetrics.requiredDailyHours.value <= 8
+                }">
+                  {{ workMetrics.requiredDailyHours.value === Infinity ? '不可能' : workMetrics.requiredDailyHours.value.toFixed(1) + 'h' }}
+                </div>
+              </div>
+
+              <!-- 詳細情報 - 折りたたみ可能 -->
+              <div class="col-12">
+                <details class="mt-2">
+                  <summary class="small text-muted fw-semibold" style="cursor: pointer;">詳細情報</summary>
+                  <div class="row g-2 mt-2">
+                    <div class="col-6 col-md-4">
+                      <div class="small text-muted mb-1">開始日</div>
+                      <input v-model="detailForm.startDate" type="date" class="form-control form-control-sm" :max="detailForm.deadline || undefined" :readonly="!isEditMode" />
+                    </div>
+                    <div class="col-6 col-md-4">
+                      <div class="small text-muted mb-1">締め切り</div>
+                      <input v-model="detailForm.deadline" type="date" class="form-control form-control-sm" :min="detailForm.startDate || undefined" :readonly="!isEditMode" />
+                    </div>
+                    <div class="col-6 col-md-4">
+                      <div class="small text-muted mb-1">ステータス</div>
+                      <select v-model="detailForm.status" class="form-select form-select-sm" :disabled="!isEditMode">
+                        <option v-for="option in WORK_STATUSES" :key="option" :value="option">{{ option }}</option>
+                      </select>
+                    </div>
+
+                    <!-- 削除ボタン（編集モード時のみ） -->
+                    <div v-if="isEditMode" class="col-12 mt-3 pt-3 border-top">
+                      <button type="button" class="btn btn-sm btn-danger w-100" @click="requestWorkDeletion">
+                        <i class="bi bi-trash me-1"></i>作品を削除する
+                      </button>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </div>
+
+            <!-- 保存ステータス表示 -->
+            <div v-if="lastSaveStatus || saveErrorMessage" class="mt-2">
+              <div v-if="saveErrorMessage" class="alert alert-danger py-2 mb-0 small" role="alert">
+                <i class="bi bi-exclamation-triangle me-1"></i>{{ saveErrorMessage }}
+              </div>
+              <div v-else-if="lastSaveStatus === 'success'" class="alert alert-success py-2 mb-0 small" role="alert">
+                <i class="bi bi-check-circle me-1"></i>保存しました
+              </div>
+            </div>
+
+            <!-- ID表示 -->
+            <div class="mt-2 pt-2 border-top">
+              <p class="text-muted small mb-0 text-center" style="font-size: 0.75rem;">ID: {{ work.id }}</p>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -793,35 +886,6 @@ const formatDate = (value: string) => {
         <div class="col-12">
           <div class="card shadow-sm">
             <div class="card-body">
-              <div class="row g-3">
-                <div class="col-12 col-md-6 col-xl-4">
-                  <label class="form-label" for="detail-title">タイトル</label>
-                  <input id="detail-title" v-model="detailForm.title" type="text" class="form-control" placeholder="作品タイトル" :readonly="!isEditMode" />
-                </div>
-                <div class="col-12 col-md-3 col-xl-2">
-                  <label class="form-label" for="detail-status">ステータス</label>
-                  <select id="detail-status" v-model="detailForm.status" class="form-select" :disabled="!isEditMode">
-                    <option v-for="option in WORK_STATUSES" :key="option" :value="option">{{ option }}</option>
-                  </select>
-                </div>
-                <div class="col-12 col-md-3 col-xl-2">
-                  <label class="form-label" for="detail-start">開始日</label>
-                  <input id="detail-start" v-model="detailForm.startDate" type="date" class="form-control" :max="detailForm.deadline || undefined" :readonly="!isEditMode" />
-                </div>
-                <div class="col-12 col-md-3 col-xl-2">
-                  <label class="form-label" for="detail-deadline">締め切り</label>
-                  <input id="detail-deadline" v-model="detailForm.deadline" type="date" class="form-control" :min="detailForm.startDate || undefined" :readonly="!isEditMode" />
-                </div>
-                <div class="col-12 col-md-3 col-xl-2">
-                  <label class="form-label">推定総工数</label>
-                  <div class="form-control-plaintext fw-semibold">{{ actualWorkHours.totalEstimatedHours.toFixed(2) }} h</div>
-                </div>
-                <div class="col-12 col-md-3 col-xl-2">
-                  <label class="form-label">推定残工数</label>
-                  <div class="form-control-plaintext fw-semibold">{{ actualWorkHours.remainingEstimatedHours.toFixed(2) }} h</div>
-                </div>
-              </div>
-
               <!-- 工程別工数表示 -->
               <div v-if="stageBaseHours.length > 0" class="mt-3 pt-3 border-top">
                 <div class="mb-2">
@@ -851,9 +915,9 @@ const formatDate = (value: string) => {
                       @click="saveSettings"
                       :disabled="isSavingSettings || !hasUnsavedSettings"
                     >
-                      <span v-if="isSavingSettings" class="spinner-border spinner-border-sm me-1"></span>
-                      <i class="bi bi-check me-1"></i>
-                      保存
+                      <span v-if="isSavingSettings" class="spinner-border spinner-border-sm"></span>
+                      <i v-else class="bi bi-check"></i>
+                      <span class="d-none d-md-inline ms-1">保存</span>
                     </button>
                     <button
                       type="button"
@@ -862,7 +926,7 @@ const formatDate = (value: string) => {
                       @click="toggleSettingsEditMode"
                     >
                       <i class="bi" :class="isSettingsEditMode ? 'bi-x' : 'bi-gear'"></i>
-                      {{ isSettingsEditMode ? 'キャンセル' : '設定を編集' }}
+                      <span class="d-none d-md-inline ms-1">{{ isSettingsEditMode ? 'キャンセル' : '設定を編集' }}</span>
                     </button>
                   </div>
                 </div>
@@ -907,9 +971,9 @@ const formatDate = (value: string) => {
                         @click="applyStructureChanges"
                         :disabled="isSavingStructure || !structureEditForm.structureString.trim()"
                       >
-                        <span v-if="isSavingStructure" class="spinner-border spinner-border-sm me-1"></span>
-                        <i class="bi bi-check me-1"></i>
-                        保存
+                        <span v-if="isSavingStructure" class="spinner-border spinner-border-sm"></span>
+                        <i v-else class="bi bi-check"></i>
+                        <span class="d-none d-md-inline ms-1">保存</span>
                       </button>
                       <button
                         type="button"
@@ -918,7 +982,7 @@ const formatDate = (value: string) => {
                         @click="toggleStructureEditMode"
                       >
                         <i class="bi" :class="isStructureEditMode ? 'bi-x' : 'bi-pencil'"></i>
-                        {{ isStructureEditMode ? 'キャンセル' : '作品を編集する' }}
+                        <span class="d-none d-md-inline ms-1">{{ isStructureEditMode ? 'キャンセル' : '作品構造を編集' }}</span>
                       </button>
                     </div>
                   </div>
@@ -986,34 +1050,6 @@ const formatDate = (value: string) => {
         <div class="col-12 col-xl-4 d-flex flex-column gap-4">
           <div class="card shadow-sm">
             <div class="card-body">
-              <h2 class="h5 mb-3">作品概要</h2>
-              <WorkSummaryCard
-                :work="work"
-                :stage-count="stageCount"
-                :progress-percent="overallProgress"
-                :primary-granularity-label="primaryGranularityLabel"
-                :total-panels="totalPanels"
-                :saving="isSavingWork"
-                :can-save="canSaveWork"
-                :save-error="saveErrorMessage"
-                :last-save-status="lastSaveStatus"
-                :is-edit-mode="isEditMode"
-                :actual-work-hours="actualWorkHours"
-                :work-metrics="{
-                  remainingEstimatedHours: workMetrics.remainingEstimatedHours.value,
-                  availableWorkHours: workMetrics.availableWorkHours.value,
-                  requiredDailyHours: workMetrics.requiredDailyHours.value,
-                  daysUntilDeadline: workMetrics.daysUntilDeadline.value
-                }"
-                @request-save="handleSave"
-                @request-delete="requestWorkDeletion"
-                @toggle-edit-mode="toggleEditMode"
-              />
-            </div>
-          </div>
-
-          <div class="card shadow-sm">
-            <div class="card-body">
               <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="h5 mb-0">工程別進捗</h2>
                 <span class="badge text-bg-light">更新: {{ formatDate(work.updatedAt) }}</span>
@@ -1028,6 +1064,44 @@ const formatDate = (value: string) => {
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- 固定アクションボタン（画面右下） -->
+      <div class="position-fixed bottom-0 end-0 p-3 d-flex gap-2" style="z-index: 1040; margin-bottom: 70px;">
+        <button
+          v-if="!isEditMode"
+          type="button"
+          class="btn btn-primary shadow-lg"
+          @click="toggleEditMode"
+          :title="'編集モード'"
+        >
+          <i class="bi bi-pencil"></i>
+          <span class="d-none d-md-inline ms-2">編集モード</span>
+        </button>
+        <template v-else>
+          <button
+            type="button"
+            class="btn btn-outline-secondary shadow-lg"
+            @click="toggleEditMode"
+            :title="'キャンセル'"
+          >
+            <i class="bi bi-x-lg"></i>
+            <span class="d-none d-md-inline ms-2">キャンセル</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-success shadow-lg"
+            :disabled="!canSaveWork || isSavingWork"
+            @click="handleSave"
+            :title="'保存'"
+          >
+            <span v-if="isSavingWork" class="spinner-border spinner-border-sm" role="status">
+              <span class="visually-hidden">保存中...</span>
+            </span>
+            <i v-else class="bi bi-check-lg"></i>
+            <span class="d-none d-md-inline ms-2">保存</span>
+          </button>
+        </template>
       </div>
     </template>
   </section>
