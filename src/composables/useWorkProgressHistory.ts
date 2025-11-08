@@ -18,6 +18,10 @@ export function useWorkProgressHistory() {
   // 表示モード
   const displayMode = ref<ProgressDisplayMode>('daily');
 
+  // 日付範囲フィルタ
+  const startDateFilter = ref<string>('');
+  const endDateFilter = ref<string>('');
+
   /**
    * グラフ用のデータセット（作品ごと）
    */
@@ -71,7 +75,7 @@ export function useWorkProgressHistory() {
   });
 
   /**
-   * 全作品の日付リスト（ユニーク、ソート済み）
+   * 全作品の日付リスト（ユニーク、ソート済み、フィルタ適用後）
    */
   const allDates = computed(() => {
     const datesSet = new Set<string>();
@@ -82,7 +86,17 @@ export function useWorkProgressHistory() {
       });
     });
 
-    return Array.from(datesSet).sort();
+    let dates = Array.from(datesSet).sort();
+
+    // 日付範囲フィルタを適用
+    if (startDateFilter.value) {
+      dates = dates.filter(date => date >= startDateFilter.value);
+    }
+    if (endDateFilter.value) {
+      dates = dates.filter(date => date <= endDateFilter.value);
+    }
+
+    return dates;
   });
 
   /**
@@ -152,6 +166,8 @@ export function useWorkProgressHistory() {
 
   return {
     displayMode,
+    startDateFilter,
+    endDateFilter,
     progressDatasets,
     allDates,
     chartData

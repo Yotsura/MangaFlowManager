@@ -25,7 +25,13 @@ ChartJS.register(
   Legend
 );
 
-const { chartData, displayMode } = useWorkProgressHistory();
+const { chartData, displayMode, startDateFilter, endDateFilter } = useWorkProgressHistory();
+
+// 日付フィルタをクリア
+const clearDateFilters = () => {
+  startDateFilter.value = '';
+  endDateFilter.value = '';
+};
 
 // グラフのタイトルと単位を表示モードに応じて変更
 const chartTitle = computed(() => {
@@ -117,37 +123,38 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
 
 <template>
   <div class="work-progress-chart">
-    <div class="mb-3">
+    <div class="mb-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <!-- 表示モード切り替え -->
       <div class="btn-group" role="group" aria-label="表示モード切り替え">
-        <input
-          type="radio"
-          class="btn-check"
-          id="mode-daily"
-          value="daily"
-          v-model="displayMode"
-          autocomplete="off"
-        >
+        <input type="radio" class="btn-check" id="mode-daily"
+          value="daily" v-model="displayMode" autocomplete="off">
         <label class="btn btn-outline-primary btn-sm" for="mode-daily">日次作業時間</label>
 
-        <input
-          type="radio"
-          class="btn-check"
-          id="mode-cumulative-percent"
-          value="cumulative-percent"
-          v-model="displayMode"
-          autocomplete="off"
-        >
+        <input type="radio" class="btn-check" id="mode-cumulative-percent"
+          value="cumulative-percent" v-model="displayMode" autocomplete="off">
         <label class="btn btn-outline-primary btn-sm" for="mode-cumulative-percent">累計進捗率(%)</label>
 
-        <input
-          type="radio"
-          class="btn-check"
-          id="mode-cumulative-units"
-          value="cumulative-units"
-          v-model="displayMode"
-          autocomplete="off"
-        >
+        <input type="radio" class="btn-check" id="mode-cumulative-units"
+          value="cumulative-units" v-model="displayMode" autocomplete="off" >
         <label class="btn btn-outline-primary btn-sm" for="mode-cumulative-units">累計完了工数</label>
+      </div>
+
+      <!-- 日付範囲フィルタ -->
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="d-flex align-items-center gap-1">
+          <label for="start-date-filter" class="form-label mb-0 text-nowrap small">開始:</label>
+          <input type="date" class="form-control form-control-sm" id="start-date-filter"
+            v-model="startDateFilter" style="min-width: 140px;">
+        </div>
+        <div class="d-flex align-items-center gap-1">
+          <label for="end-date-filter" class="form-label mb-0 text-nowrap small">終了:</label>
+          <input type="date" class="form-control form-control-sm" id="end-date-filter"
+            v-model="endDateFilter" style="min-width: 140px;">
+        </div>
+        <button v-if="startDateFilter || endDateFilter" class="btn btn-sm btn-outline-secondary"
+          @click="clearDateFilters" title="フィルタをクリア">
+          <i class="bi bi-x-circle"></i>
+        </button>
       </div>
     </div>
 
