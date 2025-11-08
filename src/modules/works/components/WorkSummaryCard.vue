@@ -122,8 +122,8 @@ const requiredHoursText = computed(() => formatRequiredHours(workMetrics.require
 
         <!-- 主要情報 -->
         <div class="col-12">
-          <div class="small text-muted mb-1">{{ topGranularityLabel }}（{{ lowestGranularityLabel }}数）</div>
-          <div class="small py-1">{{ pageCount }}（{{ totalPanels }}）</div>
+          <div class="small text-muted mb-1">総工数</div>
+          <div class="small py-1">{{ pageCount }}{{ topGranularityLabel }}（{{ totalPanels }}{{ lowestGranularityLabel }}）</div>
         </div>
         <div class="col-6">
           <div class="small text-muted mb-1">推定工数</div>

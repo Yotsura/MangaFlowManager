@@ -1209,8 +1209,8 @@ export const useWorksStore = defineStore("works", {
       // ページ数（最上位レベルのユニット数）
       const pageCount = work.units.length;
 
-      // 総コマ数（最下位レベルのユニット数 = work.totalUnits）
-      const totalPanels = work.totalUnits;
+      // 総コマ数（最下位レベルのユニット数 = leafUnits.length）
+      const totalPanels = totalUnits;
 
       // 平均コマ数/ページ
       const averagePanelsPerPage = pageCount > 0 ? Number((totalPanels / pageCount).toFixed(2)) : 0;
