@@ -1432,44 +1432,39 @@ export const useWorksStore = defineStore("works", {
     },
 
     /**
-     * テスト用: 作品にサンプル進捗履歴を生成
+     * テスト用: 全作品にサンプル進捗履歴を生成
      */
-    generateTestProgressHistory(workId: string) {
-      const work = this.works.find(w => w.id === workId);
-      if (!work) {
-        console.warn(`Work not found: ${workId}`);
-        return;
+    generateTestProgressHistory() {
+      for (const work of this.works) {
+        // 作品ごとに異なるテストデータを生成
+        let testData: { date: string; completedHours: number }[] | null = null;
+
+        if (work.title.toLowerCase() === 'フェイなの本') {
+          testData = [
+            { date: '2025-11-03', completedHours: 52.2 },
+            { date: '2025-11-06', completedHours: 55.4 },
+            { date: '2025-11-08', completedHours: 58.2 },
+          ];
+        } else if (work.title.toLowerCase() === 'test') {
+          testData = [
+            { date: '2025-11-05', completedHours: 3.5 },
+            { date: '2025-11-07', completedHours: 5.2 },
+            { date: '2025-11-08', completedHours: 9 },
+          ];
+        }
+
+        // 指定した作品以外はスキップ
+        if (!testData) { continue; }
+
+        const history: WorkProgressHistory[] = testData.map(item => ({
+          date: item.date,
+          completedHours: Math.round(item.completedHours * 10) / 10,
+          timestamp: new Date(item.date).getTime()
+        }));
+
+        work.progressHistory = history;
+        this.markWorkDirty(work.id);
       }
-
-      // 作品名に応じて異なるテストデータを生成
-      let testData: { date: string; completedHours: number }[];
-
-      if (work.title.toLowerCase() === 'test2') {
-        testData = [
-          { date: '2025-11-01', completedHours: 3.5 },
-          { date: '2025-11-02', completedHours: 5.5 },
-          { date: '2025-11-03', completedHours: 6 },
-          { date: '2025-11-04', completedHours: 11 },
-          { date: '2025-11-07', completedHours: 10.2 },
-          { date: '2025-11-08', completedHours: 14.2 },
-        ];
-      } else {
-        // デフォルト（test用）
-        testData = [
-          { date: '2025-11-05', completedHours: 3.5 },
-          { date: '2025-11-06', completedHours: 5.2 },
-          { date: '2025-11-07', completedHours: 5.2 },
-        ];
-      }
-
-      const history: WorkProgressHistory[] = testData.map(item => ({
-        date: item.date,
-        completedHours: item.completedHours,
-        timestamp: new Date(item.date).getTime()
-      }));
-
-      work.progressHistory = history;
-      this.markWorkDirty(workId);
     },
   },
 });

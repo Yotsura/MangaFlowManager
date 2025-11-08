@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -7,9 +7,9 @@ import { useWorksStore } from '@/store/worksStore';
 import { useCustomDatesStore } from '@/store/customDatesStore';
 import WorkPaceCard from '@/modules/calendar/components/WorkPaceCard.vue';
 import WorkProgressChart from '@/components/WorkProgressChart.vue';
-import { getHolidaysWithCabinetOfficeData } from '@/utils/dateUtils';
-import type { Holiday } from '@/utils/dateUtils';
-import { calculateWorkPace } from '@/utils/workloadUtils';
+import { useHolidays } from '@/composables/useHolidays';
+import { useUrgentWork } from '@/composables/useUrgentWork';
+import { useTestDataGenerator } from '@/composables/useTestDataGenerator';
 
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
@@ -17,82 +17,16 @@ const worksStore = useWorksStore();
 const customDatesStore = useCustomDatesStore();
 
 const { displayName, user } = storeToRefs(authStore);
-const { workHours } = storeToRefs(settingsStore);
-const { works } = storeToRefs(worksStore);
 
-const currentYear = ref(new Date().getFullYear());
-const holidays = ref<Holiday[]>([]);
+// 祝日データを管理
+const { holidays } = useHolidays();
 
-// 祝日データを更新
-const updateHolidays = async () => {
-  try {
-    const yearHolidays = await getHolidaysWithCabinetOfficeData(currentYear.value);
-    holidays.value = yearHolidays;
-  } catch (error) {
-    console.warn('Failed to update holidays:', error);
-  }
-};
+// 最優先作品を計算
+const { mostUrgentWork } = useUrgentWork(holidays.value);
 
-// 作業ペース計算
-const workPaceCalculations = computed(() => {
-  if (!workHours.value.length || !works.value.length) {
-    return [];
-  }
-
-  return works.value.map(work => {
-    // 締切があり、完了していない作品のみ
-    if (!work.deadline || work.status === '完了') {
-      return null;
-    }
-
-    // 推定工数から完了分を引いた残り工数を計算
-    // ここでは総推定工数の80%が残っていると仮定（実際の進捗管理は別途実装）
-    const totalRemainingHours = work.totalEstimatedHours * 0.8;
-
-    if (totalRemainingHours <= 0) {
-      return null;
-    }
-
-    const paceCalculation = calculateWorkPace(
-      new Date(work.deadline),
-      totalRemainingHours,
-      0.2, // 20%完了と仮定
-      workHours.value,
-      holidays.value,
-      customDatesStore.customDates
-    );
-
-    return {
-      work,
-      totalRemainingHours,
-      paceCalculation
-    };
-  }).filter((item): item is NonNullable<typeof item> => item !== null);
-});
-
-// 最も緊急度の高い作品
-const mostUrgentWork = computed(() => {
-  const validCalculations = workPaceCalculations.value;
-  if (validCalculations.length === 0) return null;
-
-  return validCalculations.reduce((prev, current) => {
-    if (!prev) return current;
-
-    // 締切が近い順、そして作業負荷が高い順
-    const prevRatio = prev.totalRemainingHours / (prev.paceCalculation.remainingWorkableHours || 1);
-    const currentRatio = current.totalRemainingHours / (current.paceCalculation.remainingWorkableHours || 1);
-
-    if (current.paceCalculation.daysUntilDeadline < prev.paceCalculation.daysUntilDeadline) {
-      return current;
-    }
-
-    if (current.paceCalculation.daysUntilDeadline === prev.paceCalculation.daysUntilDeadline) {
-      return currentRatio > prevRatio ? current : prev;
-    }
-
-    return prev;
-  });
-});
+// テストデータ生成機能
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const { generateTestData } = useTestDataGenerator();
 
 // ユーザーが変わったらデータを再読み込み
 watch(() => user.value?.uid, async (uid) => {
@@ -102,45 +36,6 @@ watch(() => user.value?.uid, async (uid) => {
     await customDatesStore.fetchCustomDates(uid);
   }
 }, { immediate: true });
-
-// 初期化時に祝日データを読み込み
-onMounted(async () => {
-  await updateHolidays();
-});
-
-// 開発環境かどうかの判定
-// const isDev = import.meta.env.DEV;
-
-// テスト用: test作品にサンプルデータを生成
-// const generateTestData = async () => {
-//   const testWork = works.value.find(w => w.title.toLowerCase() === 'test');
-//   const test2Work = works.value.find(w => w.title.toLowerCase() === 'test2');
-
-//   if (!testWork && !test2Work) {
-//     alert('「test」または「test2」という名前の作品が見つかりません');
-//     return;
-//   }
-
-//   let generatedCount = 0;
-
-//   if (testWork) {
-//     worksStore.generateTestProgressHistory(testWork.id);
-//     if (user.value?.uid) {
-//       await worksStore.saveWork({ userId: user.value.uid, workId: testWork.id });
-//       generatedCount++;
-//     }
-//   }
-
-//   if (test2Work) {
-//     worksStore.generateTestProgressHistory(test2Work.id);
-//     if (user.value?.uid) {
-//       await worksStore.saveWork({ userId: user.value.uid, workId: test2Work.id });
-//       generatedCount++;
-//     }
-//   }
-
-//   alert(`${generatedCount}件の作品にサンプル進捗データを生成しました`);
-// };
 </script>
 
 <template>
@@ -160,12 +55,8 @@ onMounted(async () => {
           <div class="card-header bg-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0">作品別 進捗集計</h5>
             <!-- 開発用: テストデータ生成ボタン -->
-            <!-- <button
-              v-if="isDev"
-              class="btn btn-sm btn-outline-secondary"
-              @click="generateTestData"
-              title="test作品にサンプルデータを生成"
-            >
+            <!-- <button class="btn btn-sm btn-outline-secondary"
+              @click="generateTestData" title="全作品にサンプルデータを生成">
               <i class="bi bi-database-fill-add me-1"></i>
               テストデータ生成
             </button> -->
