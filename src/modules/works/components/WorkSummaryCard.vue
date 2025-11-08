@@ -122,25 +122,35 @@ const requiredHoursText = computed(() => formatRequiredHours(workMetrics.require
 
         <!-- 主要情報 -->
         <div class="col-12">
-          <div class="small text-muted mb-1">総工数</div>
+          <div class="small text-muted mb-1">
+            <i class="bi bi-file-earmark-text me-1"></i>総工数
+          </div>
           <div class="small py-1">{{ pageCount }}{{ topGranularityLabel }}（{{ totalPanels }}{{ lowestGranularityLabel }}）</div>
         </div>
         <div class="col-6">
-          <div class="small text-muted mb-1">推定工数</div>
+          <div class="small text-muted mb-1">
+            <i class="bi bi-hourglass-split me-1"></i>推定工数
+          </div>
           <div class="fw-semibold small py-1 py-md-1" style="line-height: 1.3;">
             残り {{ remainingHours.toFixed(1) }}h / {{ totalHours.toFixed(1) }}h
           </div>
         </div>
         <div class="col-6">
-          <div class="small text-muted mb-1">進捗率</div>
+          <div class="small text-muted mb-1">
+            <i class="bi bi-graph-up me-1"></i>進捗率
+          </div>
           <div class="fw-semibold small py-1 py-md-1">{{ progressPercentage }}%</div>
         </div>
         <div class="col-6">
-          <div class="small text-muted mb-1">締切まで</div>
+          <div class="small text-muted mb-1">
+            <i class="bi bi-calendar-check me-1"></i>締切まで
+          </div>
           <div class="fw-semibold small py-1 py-md-1" style="line-height: 1.3;">{{ workMetrics.daysUntilDeadline.value }}日（{{ workMetrics.availableWorkHours.value.toFixed(1) }}h）</div>
         </div>
         <div class="col-6">
-          <div class="small text-muted mb-1">1日の必要工数</div>
+          <div class="small text-muted mb-1">
+            <i class="bi bi-clock-history me-1"></i>1日の必要工数
+          </div>
           <div class="small py-1 py-md-1" :class="requiredHoursClass">
             {{ requiredHoursText }}
           </div>
@@ -152,7 +162,9 @@ const requiredHoursText = computed(() => formatRequiredHours(workMetrics.require
             <summary class="small text-muted fw-semibold" style="cursor: pointer;">詳細情報</summary>
             <div class="row g-2 mt-1 mt-md-2">
               <div class="col-6 col-md-4">
-                <div class="small text-muted mb-1">開始日</div>
+                <div class="small text-muted mb-1">
+                  <i class="bi bi-calendar-event me-1"></i>開始日
+                </div>
                 <input
                   :value="startDate"
                   @input="emit('update:startDate', ($event.target as HTMLInputElement).value)"
@@ -163,7 +175,9 @@ const requiredHoursText = computed(() => formatRequiredHours(workMetrics.require
                 />
               </div>
               <div class="col-6 col-md-4">
-                <div class="small text-muted mb-1">締め切り</div>
+                <div class="small text-muted mb-1">
+                  <i class="bi bi-calendar-x me-1"></i>締め切り
+                </div>
                 <input
                   :value="deadline"
                   @input="emit('update:deadline', ($event.target as HTMLInputElement).value)"
@@ -174,7 +188,9 @@ const requiredHoursText = computed(() => formatRequiredHours(workMetrics.require
                 />
               </div>
               <div class="col-6 col-md-4">
-                <div class="small text-muted mb-1">ステータス</div>
+                <div class="small text-muted mb-1">
+                  <i class="bi bi-flag me-1"></i>ステータス
+                </div>
                 <select
                   :value="status"
                   @change="emit('update:status', ($event.target as HTMLSelectElement).value as WorkStatus)"
