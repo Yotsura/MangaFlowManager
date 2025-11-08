@@ -2,18 +2,17 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
-// import PagePanel from "./components/PagePanel.vue"; // 一時的に無効化
-import PanelStyleUnitEditor from "./components/PanelStyleUnitEditor.vue";
-import ProgressHeatmap from "./components/ProgressHeatmap.vue";
 import WorkloadSettingsEditor from "@/components/common/WorkloadSettingsEditor.vue";
 import EditModal from "@/components/common/EditModal.vue";
+import WorkSummaryCard from "./components/WorkSummaryCard.vue";
+import WorkStageSettingsCard from "./components/WorkStageSettingsCard.vue";
+import WorkStructureCard from "./components/WorkStructureCard.vue";
+import WorkActionButtons from "./components/WorkActionButtons.vue";
 
-import { normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useCustomDatesStore } from "@/store/customDatesStore";
 import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkGranularity, type WorkStageWorkload } from "@/store/worksStore";
-import { useWorkMetrics } from "@/composables/useWorkMetrics";
 import {
   parseStructureString,
   validateStructureString,
@@ -34,48 +33,6 @@ const { user } = storeToRefs(authStore);
 const { granularities, granularitiesLoaded, loadingGranularities, stageWorkloads, stageWorkloadsLoaded, loadingStageWorkloads } = storeToRefs(settingsStore);
 
 const work = computed(() => worksStore.getWorkById(workId));
-
-const stageWorkloadHours = computed(() => {
-  const workData = work.value;
-  if (!workData?.primaryGranularityId || workStageWorkloads.value.length === 0) {
-    return [];
-  }
-
-  return workStageWorkloads.value.map(stage => {
-    // 新しいbaseHours構造に対応
-    if ('baseHours' in stage && stage.baseHours !== null && stage.baseHours !== undefined) {
-      // baseHoursは最低粒度での工数なので、そのまま返す
-      // 表示は主要粒度単位で行うが、工数の値は最低粒度ベース
-      return stage.baseHours;
-    }
-
-    // 後方互換性: entries構造の場合
-    if ('entries' in stage && Array.isArray(stage.entries)) {
-      // 最低粒度のエントリを探す
-      const lowestGranularity = workGranularities.value.reduce((min, current) =>
-        current.weight < min.weight ? current : min
-      );
-
-      const lowestEntry = stage.entries.find(e => e.granularityId === lowestGranularity.id);
-      if (lowestEntry?.hours != null) {
-        return lowestEntry.hours;
-      }
-
-      // 他の粒度から最低粒度の工数を逆算
-      for (const entry of stage.entries) {
-        if (entry.hours != null) {
-          const entryGranularity = workGranularities.value.find(g => g.id === entry.granularityId);
-          if (entryGranularity) {
-            const ratio = lowestGranularity.weight / entryGranularity.weight;
-            return entry.hours * ratio;
-          }
-        }
-      }
-    }
-
-    return 0;
-  });
-});
 
 // 元の設定を取得する計算プロパティ
 const originalWorkGranularities = computed(() => {
@@ -100,10 +57,6 @@ const workStageWorkloads = computed(() => hasUnsavedSettings.value ? localWorkSt
 
 // 作品固有設定に基づく派生データ
 const stageLabels = computed(() => workStageWorkloads.value.map((stage) => stage.label));
-const stageColors = computed(() => {
-  const total = workStageWorkloads.value.length;
-  return workStageWorkloads.value.map((stage, index) => normalizeStageColorValue(stage.color, index, total));
-});
 const stageCount = computed(() => stageLabels.value.length);
 
 // 重みでソートした粒度配列（高い重み→低い重み）
@@ -111,92 +64,7 @@ const sortedGranularities = computed(() => {
   return [...workGranularities.value].sort((a, b) => b.weight - a.weight);
 });
 
-const primaryGranularityLabel = computed(() => {
-  const id = work.value?.primaryGranularityId;
-  if (!id) {
-    return null;
-  }
-  return workGranularities.value.find((item) => item.id === id)?.label ?? null;
-});
-
-// 最上位粒度のラベル
-const topGranularityLabel = computed(() => {
-  if (workGranularities.value.length === 0) return 'ページ';
-  const topGranularity = workGranularities.value.reduce((max, current) =>
-    current.weight > max.weight ? current : max
-  );
-  return topGranularity.label;
-});
-
-// 最低粒度のラベル
-const lowestGranularityLabel = computed(() => {
-  if (workGranularities.value.length === 0) return 'コマ';
-  const lowestGranularity = workGranularities.value.reduce((min, current) =>
-    current.weight < min.weight ? current : min
-  );
-  return lowestGranularity.label;
-});
-
-// 各工程の最低粒度での工数を計算
-const stageBaseHours = computed(() => {
-  if (workStageWorkloads.value.length === 0 || workGranularities.value.length === 0) {
-    return [];
-  }
-
-  // 最低粒度を取得
-  const lowestGranularity = workGranularities.value.reduce((min, current) =>
-    current.weight < min.weight ? current : min
-  );
-
-  return workStageWorkloads.value.map((stage, index) => {
-    let baseHours = 0;
-
-    // 新しいbaseHours構造に対応
-    if ('baseHours' in stage && stage.baseHours !== null && stage.baseHours !== undefined) {
-      baseHours = stage.baseHours;
-    } else if ('entries' in stage && Array.isArray(stage.entries)) {
-      // 後方互換性: entries構造の場合、最低粒度のエントリを探す
-      const lowestEntry = stage.entries.find(entry => entry.granularityId === lowestGranularity.id);
-      if (lowestEntry && lowestEntry.hours !== null && lowestEntry.hours !== undefined) {
-        baseHours = lowestEntry.hours;
-      } else {
-        // 他の粒度から逆算
-        for (const entry of stage.entries) {
-          if (entry.hours !== null && entry.hours !== undefined) {
-            const entryGranularity = workGranularities.value.find(g => g.id === entry.granularityId);
-            if (entryGranularity) {
-              baseHours = (entry.hours * lowestGranularity.weight) / entryGranularity.weight;
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    return {
-      label: stage.label,
-      color: stageColors.value[index] || '#666666',
-      hours: baseHours
-    };
-  }); // 0時間の工程も表示する
-});
-
 const userId = computed(() => user.value?.uid ?? null);
-
-// 背景色に対して適切なテキスト色を返す関数
-const getContrastColor = (backgroundColor: string) => {
-  // カラーコードから RGB 値を抽出
-  const hex = backgroundColor.replace('#', '');
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-
-  // 明度を計算 (0-255)
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-
-  // 明度が128より大きい場合は黒、そうでなければ白
-  return brightness > 128 ? '#000000' : '#ffffff';
-};
 
 const isSavingWork = computed(() => (work.value ? worksStore.isSavingWork(work.value.id) : false));
 const canSaveWork = computed(() => (work.value ? worksStore.isWorkDirty(work.value.id) : false));
@@ -620,30 +488,6 @@ watch(
   },
 );
 
-// 実際の進捗計算で使用される工数と進捗率
-const actualWorkHours = computed(() => {
-  if (!work.value) {
-    return {
-      totalEstimatedHours: 0,
-      remainingEstimatedHours: 0,
-      completedEstimatedHours: 0,
-      progressPercentage: 0,
-      pageCount: 0,
-      totalPanels: 0,
-      averagePanelsPerPage: 0
-    };
-  }
-  return worksStore.calculateActualWorkHours(work.value.id);
-});
-
-// 進捗率（共通計算を使用）
-const overallProgress = computed(() => actualWorkHours.value.progressPercentage);
-
-const totalPanels = computed(() => work.value?.totalUnits ?? 0);
-
-// 作品の指標を計算
-const workMetrics = useWorkMetrics(work);
-
 // 新しい階層ユニット操作のイベントハンドラー
 const handleAdvanceUnitStage = async (payload: { unitId: string }) => {
   if (!userId.value) {
@@ -758,7 +602,12 @@ const handleSave = async () => {
     });
 
     await worksStore.saveWork({ userId: userId.value, workId: work.value.id });
-    lastSaveStatus.value = "保存しました。";
+    lastSaveStatus.value = "保存しました";
+
+    // 3秒後にメッセージを消す
+    setTimeout(() => {
+      lastSaveStatus.value = null;
+    }, 3000);
 
     // 保存成功後に編集モードを閉じる
     isEditMode.value = false;
@@ -772,16 +621,6 @@ const goBackToList = () => {
   router.push({ name: "works" });
 };
 
-const formatDate = (value: string) => {
-  if (!value) {
-    return "";
-  }
-  try {
-    return new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(value));
-  } catch {
-    return value;
-  }
-};
 </script>
 
 <template>
@@ -795,209 +634,57 @@ const formatDate = (value: string) => {
       <div class="row g-4 mb-4">
         <!-- 作品概要情報 -->
         <div class="col-12 col-lg-6">
-          <div class="card shadow-sm h-100">
-            <div class="card-body py-3">
-              <div class="row g-2">
-                <!-- タイトル -->
-                <div class="col-12 mb-2">
-                  <input v-model="detailForm.title" type="text" class="form-control form-control-sm fw-semibold" placeholder="作品タイトル" :readonly="!isEditMode" style="font-size: 1.1rem;" />
-                </div>
-
-                <!-- 主要情報 -->
-                <div class="col-12">
-                  <div class="small text-muted mb-1">{{ topGranularityLabel }}（{{ lowestGranularityLabel }}数）</div>
-                  <div class="small py-1">
-                    {{ actualWorkHours.pageCount }}（{{ totalPanels }}）
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="small text-muted mb-1">推定工数</div>
-                  <div class="fw-semibold small py-1">
-                    残り {{ actualWorkHours.remainingEstimatedHours.toFixed(1) }}h / {{ actualWorkHours.totalEstimatedHours.toFixed(1) }}h
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="small text-muted mb-1">進捗率</div>
-                  <div class="fw-semibold small py-1">{{ overallProgress }}%</div>
-                </div>
-                <div class="col-6">
-                  <div class="small text-muted mb-1">締切まで</div>
-                  <div class="fw-semibold small py-1">{{ workMetrics.daysUntilDeadline.value }}日（{{ workMetrics.availableWorkHours.value.toFixed(1) }}h）</div>
-                </div>
-                <div class="col-6">
-                  <div class="small text-muted mb-1">1日の必要工数</div>
-                  <div class="small py-1" :class="{
-                    'text-danger': workMetrics.requiredDailyHours.value === Infinity || workMetrics.requiredDailyHours.value > 12,
-                    'text-warning': workMetrics.requiredDailyHours.value > 8 && workMetrics.requiredDailyHours.value <= 12,
-                    'text-success': workMetrics.requiredDailyHours.value <= 8
-                  }">
-                    {{ workMetrics.requiredDailyHours.value === Infinity ? '不可能' : workMetrics.requiredDailyHours.value.toFixed(1) + 'h' }}
-                  </div>
-                </div>
-
-                <!-- 詳細情報 - 折りたたみ可能 -->
-                <div class="col-12">
-                  <details class="mt-2">
-                    <summary class="small text-muted fw-semibold" style="cursor: pointer;">詳細情報</summary>
-                    <div class="row g-2 mt-2">
-                      <div class="col-6 col-md-4">
-                        <div class="small text-muted mb-1">開始日</div>
-                        <input v-model="detailForm.startDate" type="date" class="form-control form-control-sm" :max="detailForm.deadline || undefined" :readonly="!isEditMode" />
-                      </div>
-                      <div class="col-6 col-md-4">
-                        <div class="small text-muted mb-1">締め切り</div>
-                        <input v-model="detailForm.deadline" type="date" class="form-control form-control-sm" :min="detailForm.startDate || undefined" :readonly="!isEditMode" />
-                      </div>
-                      <div class="col-6 col-md-4">
-                        <div class="small text-muted mb-1">ステータス</div>
-                        <select v-model="detailForm.status" class="form-select form-select-sm" :disabled="!isEditMode">
-                          <option v-for="option in WORK_STATUSES" :key="option" :value="option">{{ option }}</option>
-                        </select>
-                      </div>
-
-                      <!-- 削除ボタン（編集モード時のみ） -->
-                      <div v-if="isEditMode" class="col-12 mt-3 pt-3 border-top">
-                        <button type="button" class="btn btn-sm btn-danger w-100" @click="requestWorkDeletion">
-                          <i class="bi bi-trash me-1"></i>作品を削除する
-                        </button>
-                      </div>
-                    </div>
-                  </details>
-                </div>
-              </div>
-
-              <!-- 保存ステータス表示 -->
-              <div v-if="lastSaveStatus || saveErrorMessage" class="mt-2">
-                <div v-if="saveErrorMessage" class="alert alert-danger py-2 mb-0 small" role="alert">
-                  <i class="bi bi-exclamation-triangle me-1"></i>{{ saveErrorMessage }}
-                </div>
-                <div v-else-if="lastSaveStatus === 'success'" class="alert alert-success py-2 mb-0 small" role="alert">
-                  <i class="bi bi-check-circle me-1"></i>保存しました
-                </div>
-              </div>
-
-              <!-- ID表示 -->
-              <div class="mt-2 pt-2 border-top">
-                <p class="text-muted small mb-0 text-center" style="font-size: 0.75rem;">ID: {{ work.id }}</p>
-              </div>
-            </div>
-          </div>
+          <WorkSummaryCard
+            :work-id="work.id"
+            :title="detailForm.title"
+            :status="detailForm.status"
+            :start-date="detailForm.startDate"
+            :deadline="detailForm.deadline"
+            :is-edit-mode="isEditMode"
+            :last-save-status="lastSaveStatus"
+            :save-error-message="saveErrorMessage"
+            @update:title="detailForm.title = $event"
+            @update:status="detailForm.status = $event"
+            @update:start-date="detailForm.startDate = $event"
+            @update:deadline="detailForm.deadline = $event"
+            @delete-work="requestWorkDeletion"
+          />
         </div>
 
         <!-- 工程設定 -->
         <div class="col-12 col-lg-6">
-          <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="mb-0">工程設定</h6>
-                <div class="d-flex gap-2">
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-primary"
-                    @click="toggleSettingsEditMode"
-                  >
-                    <i class="bi bi-gear"></i>
-                    <span class="d-none d-md-inline ms-1">編集</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- 工程別進捗 -->
-              <ProgressHeatmap
-                :units="work.units"
-                :stage-count="stageCount"
-                :stage-labels="stageLabels"
-                :stage-colors="stageColors"
-                :stage-workload-hours="stageWorkloadHours"
-              />
-              <div class="mt-3 text-muted small">
-                <span class="badge text-bg-light">更新: {{ formatDate(work.updatedAt) }}</span>
-              </div>
-            </div>
-          </div>
+          <WorkStageSettingsCard
+            :work-id="work.id"
+            @open-settings-modal="toggleSettingsEditMode"
+          />
         </div>
       </div>
 
       <div class="row g-4 mb-4">
         <div class="col-12">
-          <div class="card shadow-sm">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                  <h2 class="h5 mb-1">作品構造管理</h2>
-                  <p class="text-muted mb-0 small">階層構造でユニットを管理できます。要素をクリックして作業段階を進めましょう。</p>
-                </div>
-                <div class="d-flex gap-2">
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-primary"
-                    @click="toggleStructureEditMode"
-                  >
-                    <i class="bi bi-pencil"></i>
-                    <span class="d-none d-md-inline ms-1">構造文字列編集</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- 作品構造管理UI -->
-              <PanelStyleUnitEditor
-                :units="work.units"
-                :stage-count="stageCount"
-                :stage-labels="stageLabels"
-                :stage-colors="stageColors"
-                :stage-workloads="stageWorkloadHours"
-                :granularities="sortedGranularities"
-                :is-edit-mode="isEditMode"
-                :saving-unit-ids="savingPanelIds"
-                @advance-stage="handleAdvanceUnitStage"
-                @add-root-unit="handleAddRootUnit"
-                @add-child="handleAddChildUnit"
-                @remove-unit="handleRemoveUnit"
-                @update-children-count="handleUpdateChildrenCount"
-              />
-
-            </div>
-          </div>
+          <WorkStructureCard
+            :work-id="work.id"
+            :is-edit-mode="isEditMode"
+            :saving-unit-ids="savingPanelIds"
+            @advance-stage="handleAdvanceUnitStage"
+            @add-root-unit="handleAddRootUnit"
+            @add-child="handleAddChildUnit"
+            @remove-unit="handleRemoveUnit"
+            @update-children-count="handleUpdateChildrenCount"
+            @open-structure-modal="toggleStructureEditMode"
+          />
         </div>
       </div>
 
       <!-- 固定アクションボタン（画面右下） -->
-      <div class="position-fixed bottom-0 end-0 p-3 d-flex gap-2" style="z-index: 1040; margin-bottom: 70px;">
-        <button
-          v-if="!isEditMode"
-          type="button"
-          class="btn btn-primary shadow-lg"
-          @click="toggleEditMode"
-          :title="'編集モード'"
-        >
-          <i class="bi bi-pencil"></i>
-          <span class="d-none d-md-inline ms-2">編集モード</span>
-        </button>
-        <template v-else>
-          <button
-            type="button"
-            class="btn btn-outline-secondary shadow-lg"
-            @click="toggleEditMode"
-            :title="'キャンセル'"
-          >
-            <i class="bi bi-x-lg"></i>
-            <span class="d-none d-md-inline ms-2">キャンセル</span>
-          </button>
-          <button
-            type="button"
-            class="btn btn-success shadow-lg"
-            :disabled="!canSaveWork || isSavingWork"
-            @click="handleSave"
-            :title="'保存'"
-          >
-            <span v-if="isSavingWork" class="spinner-border spinner-border-sm" role="status">
-              <span class="visually-hidden">保存中...</span>
-            </span>
-            <i v-else class="bi bi-check-lg"></i>
-            <span class="d-none d-md-inline ms-2">保存</span>
-          </button>
-        </template>
-      </div>
+      <WorkActionButtons
+        :is-edit-mode="isEditMode"
+        :can-save="canSaveWork"
+        :is-saving="isSavingWork"
+        @toggle-edit-mode="toggleEditMode"
+        @cancel="toggleEditMode"
+        @save="handleSave"
+      />
 
       <!-- 工程設定編集モーダル -->
       <EditModal
