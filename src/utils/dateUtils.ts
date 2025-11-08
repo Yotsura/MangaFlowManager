@@ -42,17 +42,17 @@ export const getMondayBasedDayOfWeek = (date: Date): number => {
 
 /**
  * カレンダー表示用の日付配列を生成
- * 月曜日から日曜日の週で構成され、前後の月で埋める
+ * 日曜日から土曜日の週で構成され、前後の月で埋める
  */
 export const generateCalendarDays = (year: number, month: number): Date[] => {
   const firstDay = getFirstDayOfMonth(year, month);
   const lastDay = getLastDayOfMonth(year, month);
 
-  // 月の最初の日が月曜日から何日目かを計算
-  const firstDayOfWeek = getMondayBasedDayOfWeek(firstDay);
+  // 月の最初の日が日曜日から何日目かを計算（0=日曜日, 6=土曜日）
+  const firstDayOfWeek = firstDay.getDay();
 
-  // 月の最後の日が月曜日から何日目かを計算
-  const lastDayOfWeek = getMondayBasedDayOfWeek(lastDay);
+  // 月の最後の日が日曜日から何日目かを計算
+  const lastDayOfWeek = lastDay.getDay();
 
   const days: Date[] = [];
 

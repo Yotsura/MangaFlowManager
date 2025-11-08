@@ -52,7 +52,7 @@ const updateHolidays = async () => {
 };
 
 // 曜日ラベル
-const weekDays = ['月', '火', '水', '木', '金', '土', '日'];
+const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
 
 // 月を変更
 const changeMonth = (delta: number) => {
@@ -257,17 +257,19 @@ onMounted(async () => {
                 <div class="date-number">
                   {{ calendarDays[weekIndex * 7 + dayIndex - 1]!.getDate() }}
                 </div>
-                <div
-                  v-if="getHolidayName(calendarDays[weekIndex * 7 + dayIndex - 1]!)"
-                  class="holiday-name"
-                >
-                  {{ getHolidayName(calendarDays[weekIndex * 7 + dayIndex - 1]!) }}
-                </div>
-                <div
-                  v-if="getCustomDateLabel(calendarDays[weekIndex * 7 + dayIndex - 1]!)"
-                  class="custom-label"
-                >
-                  {{ getCustomDateLabel(calendarDays[weekIndex * 7 + dayIndex - 1]!) }}
+                <div class="label-area">
+                  <div
+                    v-if="getHolidayName(calendarDays[weekIndex * 7 + dayIndex - 1]!)"
+                    class="holiday-name"
+                  >
+                    {{ getHolidayName(calendarDays[weekIndex * 7 + dayIndex - 1]!) }}
+                  </div>
+                  <div
+                    v-if="getCustomDateLabel(calendarDays[weekIndex * 7 + dayIndex - 1]!)"
+                    class="custom-label"
+                  >
+                    {{ getCustomDateLabel(calendarDays[weekIndex * 7 + dayIndex - 1]!) }}
+                  </div>
                 </div>
                 <div class="work-hours">
                   {{ getWorkHoursForDate(calendarDays[weekIndex * 7 + dayIndex - 1]!).toFixed(1) }}h
@@ -324,21 +326,41 @@ onMounted(async () => {
 }
 
 .calendar-date.today {
-  background-color: #0d6efd;
-  color: #000;
+  position: relative;
+}
+
+.calendar-date.today .date-number {
+  background-color: #9b87f3;
+  color: white;
   font-weight: bold;
-  border-radius: 4px;
+  border-radius: 50%;
+  width: 25px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .calendar-date.today:hover {
-  background-color: #0b5ed7;
+  background-color: #f8f9fa;
+}
+
+.calendar-date.today:hover .date-number {
+  background-color: #138496;
 }
 
 .calendar-date.weekend {
+  background-color: #fdf2f2;
   color: #dc3545;
 }
 
+.calendar-date.weekend:hover {
+  background-color: #f5c2c7;
+}
+
 .calendar-date.other-month.weekend {
+  background-color: transparent;
   color: #f5c2c7;
 }
 
@@ -357,12 +379,12 @@ onMounted(async () => {
 }
 
 .calendar-date.custom-holiday {
-  background-color: #fff3cd;
-  color: #856404;
+  background-color: #fdf2f2;
+  color: #dc3545;
 }
 
 .calendar-date.custom-holiday:hover {
-  background-color: #ffe69c;
+  background-color: #f5c2c7;
 }
 
 .calendar-date.unavailable {
@@ -388,13 +410,25 @@ onMounted(async () => {
 .date-number {
   font-weight: 500;
   line-height: 1;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.label-area {
+  min-height: 16px;
+  margin-top: 1px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .holiday-name {
   font-size: 0.6rem;
   line-height: 0.8;
   text-align: center;
-  margin-top: 1px;
   font-weight: 400;
   word-break: break-all;
   overflow: hidden;
@@ -408,12 +442,12 @@ onMounted(async () => {
   font-size: 0.6rem;
   line-height: 0.8;
   text-align: center;
-  margin-top: 1px;
   font-weight: 600;
   padding: 1px 3px;
   background-color: #ffc107;
   color: #000;
   border-radius: 2px;
+  display: inline-block;
 }
 
 .calendar-date.unavailable .custom-label {
@@ -433,5 +467,6 @@ onMounted(async () => {
   margin-top: 2px;
   font-weight: 500;
   color: #000;
+  min-height: 14px;
 }
 </style>
