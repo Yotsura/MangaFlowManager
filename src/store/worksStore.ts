@@ -1,332 +1,54 @@
 import { defineStore } from "pinia";
-
 import { deleteDocument, getCollectionDocs, getDocument, setDocument } from "@/services/firebase/firestoreService";
 import { generateId } from "@/utils/id";
-import { collectLeafUnits } from "@/utils/workUtils";
 import type { Granularity, StageWorkload } from "@/store/settingsStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import type { WorkProgressHistory } from "@/types/models";
 import { formatLocalDate } from "@/utils/dateUtils";
+import type { WorkProgressHistory } from "@/types/models";
 
-export const WORK_STATUSES = ["未着手", "作業中", "完了", "保留"] as const;
-export type WorkStatus = (typeof WORK_STATUSES)[number];
+// 型定義をインポート
+export type {
+  Work,
+  WorkUnit,
+  WorkGranularity,
+  WorkStageWorkload,
+  WorkStageWorkloadEntry,
+  WorkStatus,
+  WorkDocument,
+  WorksState,
+  CreateWorkPayload,
+  RemoveWorkPayload,
+  SaveWorkPayload,
+} from "@/types/work";
+export { WORK_STATUSES } from "@/types/work";
+import type {
+  Work,
+  WorkUnit,
+  WorkGranularity,
+  WorkStageWorkload,
+  WorkStatus,
+  WorkDocument,
+  WorksState,
+  CreateWorkPayload,
+  RemoveWorkPayload,
+  SaveWorkPayload,
+} from "@/types/work";
 
-export interface WorkUnit {
-  id: string;
-  index: number;
-  children?: WorkUnit[]; // 最下位以外は持つ
-  stageIndex?: number; // 最下位のみ持つ
-}
+// ヘルパー関数をインポート
+import {
+  mapError,
+  buildWorkCollectionPath,
+  buildWorkDocumentPath,
+  normalizePositiveInteger,
+  recalculateUnitIndices,
+  findUnitInHierarchy,
+  getAllLeafUnits,
+  getActualWorkDepth,
+  getUnitDepthInHierarchy,
+} from "@/utils/workStoreHelpers";
 
-// 作品固有の粒度設定
-export interface WorkGranularity {
-  id: string;
-  label: string;
-  weight: number;
-  defaultCount: number;
-}
-
-// 作品固有の段階工数設定
-export interface WorkStageWorkloadEntry {
-  granularityId: string;
-  hours: number | null;
-}
-
-export interface WorkStageWorkload {
-  id: number;
-  label: string;
-  color: string;
-  baseHours: number | null; // 最低粒度での工数のみ保持
-  entries?: WorkStageWorkloadEntry[]; // 後方互換性のため（古いデータ用）
-}
-
-// レガシーデータの型定義
-interface LegacyPanel {
-  id?: string;
-  stageIndex?: number;
-}
-
-interface LegacyPage {
-  id?: string;
-  panels?: LegacyPanel[];
-  panelCount?: number;
-  stageIndex?: number;
-}
-
-interface LegacyWork {
-  units?: unknown[];
-  defaultCounts?: unknown[];
-  pages?: LegacyPage[];
-  defaultPanelsPerPage?: unknown;
-  [key: string]: unknown;
-}
-
-export interface Work {
-  id: string;
-  title: string;
-  status: WorkStatus;
-  startDate: string;
-  deadline: string;
-  createdAt: string;
-  updatedAt: string;
-  totalUnits: number;
-  defaultCounts: number[]; // 各粒度レベルのデフォルト数 [上位→下位]
-  primaryGranularityId: string | null;
-  unitEstimatedHours: number;
-  totalEstimatedHours: number;
-  units: WorkUnit[]; // 最上位粒度の配列
-
-  // 作品固有の設定
-  workGranularities?: WorkGranularity[]; // 作品作成時点の粒度設定
-  workStageWorkloads?: WorkStageWorkload[]; // 作品作成時点の段階工数設定
-
-  // 進捗履歴
-  progressHistory?: WorkProgressHistory[]; // 日別の進捗履歴
-}
-
-type WorkDocument = Omit<Work, "id">;
-
-interface WorksState {
-  works: Work[];
-  worksLoaded: boolean;
-  loadingWorks: boolean;
-  loadError: string | null;
-  savingWorkMap: Record<string, boolean>;
-  saveErrorMap: Record<string, string>;
-  dirtyWorkMap: Record<string, boolean>;
-}
-
-interface CreateWorkPayload {
-  title: string;
-  status: WorkStatus;
-  startDate: string;
-  deadline: string;
-  totalUnits: number;
-  defaultCounts: number[]; // 各階層のデフォルト数 [上位→下位]
-  primaryGranularityId: string | null;
-  unitEstimatedHours: number;
-
-  // 作品作成時点の設定をコピー
-  workGranularities: WorkGranularity[];
-  workStageWorkloads: WorkStageWorkload[];
-}
-
-interface RemoveWorkPayload {
-  userId: string;
-  workId: string;
-}
-
-interface SaveWorkPayload {
-  userId: string;
-  workId: string;
-}
-
-const mapError = (error: unknown, fallback: string) => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return fallback;
-};
-
-const buildWorkCollectionPath = (userId: string) => `users/${userId}/works`;
-const buildWorkDocumentPath = (userId: string, workId: string) => `${buildWorkCollectionPath(userId)}/${workId}`;
-
-const normalizePositiveInteger = (value: number, fallback: number): number => {
-  if (!Number.isFinite(value) || value <= 0) {
-    return fallback;
-  }
-  return Math.floor(value);
-};
-
-const recalculateUnitIndices = (units: WorkUnit[]) => {
-  units.forEach((unit, index) => {
-    unit.index = index + 1;
-    if (unit.children) {
-      recalculateUnitIndices(unit.children);
-    }
-  });
-};
-
-const findUnitInHierarchy = (units: WorkUnit[], unitId: string): WorkUnit | null => {
-  for (const unit of units) {
-    if (unit.id === unitId) {
-      return unit;
-    }
-    if (unit.children) {
-      const found = findUnitInHierarchy(unit.children, unitId);
-      if (found) {
-        return found;
-      }
-    }
-  }
-  return null;
-};
-
-// 最下位ユニット（リーフノード）を全て取得する関数（workUtils.tsから使用）
-const getAllLeafUnits = collectLeafUnits;
-
-const normalizeUnit = (raw: unknown, fallbackIndex: number, isLeafLevel?: boolean): WorkUnit | null => {
-  if (!raw || typeof raw !== "object") {
-    return null;
-  }
-
-  const data = raw as Record<string, unknown>;
-
-  const id = typeof data.id === "string" && data.id.trim().length > 0 ? data.id : generateId();
-  const indexRaw = Number(data.index);
-  const index = Number.isFinite(indexRaw) && indexRaw > 0 ? Math.floor(indexRaw) : fallbackIndex;
-
-  // stageIndexの有無で最下位粒度かどうかを自動判定
-  const hasStageIndex = data.stageIndex !== undefined && data.stageIndex !== null;
-  const hasChildren = Array.isArray(data.children) && data.children.length > 0;
-
-  // isLeafLevelが明示的に指定されていない場合は自動判定
-  const actualIsLeaf = isLeafLevel !== undefined ? isLeafLevel : hasStageIndex && !hasChildren;
-
-  if (actualIsLeaf || hasStageIndex) {
-    // 最下位粒度: stageIndexを持つ
-    const stageRaw = Number(data.stageIndex);
-    const stageIndex = Number.isFinite(stageRaw) && stageRaw >= 0 ? Math.floor(stageRaw) : 0;
-
-    return {
-      id,
-      index,
-      stageIndex,
-    } satisfies WorkUnit;
-  } else {
-    // 中間粒度: childrenを持つ
-    let children: WorkUnit[] = [];
-
-    if (Array.isArray(data.children)) {
-      children = data.children
-        .map((childRaw, childIndex) => normalizeUnit(childRaw, childIndex + 1))
-        .filter((child): child is WorkUnit => child !== null)
-        .map((child, childIndex) => ({ ...child, index: childIndex + 1 }));
-    }
-
-    return {
-      id,
-      index,
-      children,
-    } satisfies WorkUnit;
-  }
-};
-const mapDocumentToWork = (item: WorkDocument & { id: string }): Work => {
-  const createdAt = typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString();
-  const updatedAt = typeof item.updatedAt === "string" ? item.updatedAt : createdAt;
-
-  // 新形式のunitsまたは旧形式のpagesを処理
-  let units: WorkUnit[] = [];
-  let defaultCounts: number[] = [];
-
-  const legacyItem = item as LegacyWork;
-
-  if (Array.isArray(legacyItem.units)) {
-    // 新形式: unitsプロパティがある場合
-    units = legacyItem.units
-      .map((unitRaw: unknown, index: number) => normalizeUnit(unitRaw, index + 1))
-      .filter((unit: WorkUnit | null): unit is WorkUnit => unit !== null)
-      .map((unit: WorkUnit, index: number) => ({ ...unit, index: index + 1 }));
-
-    defaultCounts = Array.isArray(legacyItem.defaultCounts) ? legacyItem.defaultCounts as number[] : [1];
-  } else if (Array.isArray(legacyItem.pages)) {
-    // 旧形式からの移行: pagesをunitsに変換
-    const pagesRaw = legacyItem.pages;
-    units = pagesRaw
-      .map((pageRaw: LegacyPage, index: number) => {
-        // 旧形式のpageをunit構造に変換
-        return normalizeUnit(
-          {
-            id: pageRaw.id || generateId(),
-            index: index + 1,
-            children: Array.isArray(pageRaw.panels)
-              ? pageRaw.panels.map((panel: LegacyPanel, panelIndex: number) => ({
-                  id: panel.id || generateId(),
-                  index: panelIndex + 1,
-                  stageIndex: panel.stageIndex || 0,
-                }))
-              : Array.from({ length: pageRaw.panelCount || 1 }, (_, panelIndex) => ({
-                  id: generateId(),
-                  index: panelIndex + 1,
-                  stageIndex: pageRaw.stageIndex || 0,
-                })),
-          },
-          index + 1,
-          false,
-        );
-      })
-      .filter((unit: WorkUnit | null): unit is WorkUnit => unit !== null);
-
-    const defaultPanels = Number.isFinite(Number(legacyItem.defaultPanelsPerPage)) && Number(legacyItem.defaultPanelsPerPage) > 0 ? Math.floor(Number(legacyItem.defaultPanelsPerPage)) : 1;
-    defaultCounts = [defaultPanels];
-  }
-
-  const totalUnits = Number.isFinite(Number(item.totalUnits)) && Number(item.totalUnits) > 0 ? Math.floor(Number(item.totalUnits)) : units.length;
-  const unitEstimatedHours = Number.isFinite(Number(item.unitEstimatedHours)) && Number(item.unitEstimatedHours) >= 0 ? Number(item.unitEstimatedHours) : 0;
-  const totalEstimatedHours =
-    Number.isFinite(Number(item.totalEstimatedHours)) && Number(item.totalEstimatedHours) >= 0 ? Number(item.totalEstimatedHours) : Number((totalUnits * unitEstimatedHours).toFixed(2));
-
-  return {
-    id: item.id,
-    title: typeof item.title === "string" ? item.title : "",
-    status: WORK_STATUSES.includes(item.status as WorkStatus) ? (item.status as WorkStatus) : WORK_STATUSES[0],
-    startDate: typeof item.startDate === "string" ? item.startDate : "",
-    deadline: typeof item.deadline === "string" ? item.deadline : "",
-    createdAt,
-    updatedAt,
-    totalUnits,
-    defaultCounts,
-    primaryGranularityId: typeof item.primaryGranularityId === "string" ? item.primaryGranularityId : null,
-    unitEstimatedHours,
-    totalEstimatedHours,
-    units,
-    workGranularities: Array.isArray(item.workGranularities) ? item.workGranularities : [],
-    workStageWorkloads: Array.isArray(item.workStageWorkloads) ? item.workStageWorkloads : [],
-    progressHistory: Array.isArray(item.progressHistory) ? item.progressHistory : [],
-  };
-};
-
-interface SerializedWorkUnit {
-  id: string;
-  index: number;
-  children?: SerializedWorkUnit[];
-  stageIndex?: number;
-}
-
-const serializeWorkUnit = (unit: WorkUnit): SerializedWorkUnit => {
-  const result: SerializedWorkUnit = {
-    id: unit.id,
-    index: unit.index,
-  };
-
-  if (unit.stageIndex !== undefined) {
-    // 最下位粒度
-    result.stageIndex = unit.stageIndex;
-  } else if (unit.children) {
-    // 中間粒度
-    result.children = unit.children.map(serializeWorkUnit);
-  }
-
-  return result;
-};
-
-const serializeWork = (work: Work): WorkDocument => ({
-  title: work.title,
-  status: work.status,
-  startDate: work.startDate,
-  deadline: work.deadline,
-  createdAt: work.createdAt,
-  updatedAt: work.updatedAt,
-  totalUnits: work.totalUnits,
-  defaultCounts: work.defaultCounts,
-  primaryGranularityId: work.primaryGranularityId,
-  unitEstimatedHours: work.unitEstimatedHours,
-  totalEstimatedHours: work.totalEstimatedHours,
-  units: work.units.map(serializeWorkUnit),
-  workGranularities: work.workGranularities || [],
-  workStageWorkloads: work.workStageWorkloads || [],
-  progressHistory: work.progressHistory || [],
-});
+// シリアライゼーション関数をインポート
+import { mapDocumentToWork, serializeWork } from "@/utils/workSerializer";
 
 export const useWorksStore = defineStore("works", {
   state: (): WorksState => ({
@@ -866,24 +588,6 @@ export const useWorksStore = defineStore("works", {
         });
       };
 
-      // 作品の実際の階層深度を検出して適切なdefaultCountsを決定
-      const getActualWorkDepth = (units: WorkUnit[]): number => {
-        if (units.length === 0) return 0;
-        let maxDepth = 0;
-        const traverse = (units: WorkUnit[], currentDepth: number) => {
-          for (const unit of units) {
-            if (unit.stageIndex !== undefined) {
-              // 最下位ユニット（葉ノード）に到達
-              maxDepth = Math.max(maxDepth, currentDepth);
-            } else if (unit.children) {
-              traverse(unit.children, currentDepth + 1);
-            }
-          }
-        };
-        traverse(units, 1);
-        return maxDepth;
-      };
-
       const actualDepth = getActualWorkDepth(target.units);
 
       // 作品固有の粒度設定を優先、なければ実際の深度に基づくデフォルト値を使用
@@ -957,46 +661,7 @@ export const useWorksStore = defineStore("works", {
         parentUnit.children = [];
       }
 
-      // 親ユニットの階層レベルを計算
-      // 階層構造: [totalUnits, ...defaultCounts]
-      // レベル0=totalUnits, レベル1=defaultCounts[0], レベル2=defaultCounts[1], ...
-      const getUnitDepthInHierarchy = (targetUnit: WorkUnit, rootUnits: WorkUnit[], currentDepth: number = 0): number => {
-        // ルートレベルで見つかった場合
-        if (rootUnits.includes(targetUnit)) {
-          return currentDepth;
-        }
-
-        // 子レベルを再帰的に検索
-        for (const unit of rootUnits) {
-          if (unit.children) {
-            const foundDepth = getUnitDepthInHierarchy(targetUnit, unit.children, currentDepth + 1);
-            if (foundDepth !== -1) {
-              return foundDepth;
-            }
-          }
-        }
-        return -1; // 見つからない場合
-      };
-
       const parentDepth = getUnitDepthInHierarchy(parentUnit, target.units);
-
-      // 作品の実際の階層深度を検出して適切なdefaultCountsを決定
-      const getActualWorkDepth = (units: WorkUnit[]): number => {
-        let maxDepth = 0;
-        const traverse = (units: WorkUnit[], currentDepth: number) => {
-          for (const unit of units) {
-            if (unit.stageIndex !== undefined) {
-              // 最下位ユニット（葉ノード）に到達
-              maxDepth = Math.max(maxDepth, currentDepth);
-            } else if (unit.children) {
-              traverse(unit.children, currentDepth + 1);
-            }
-          }
-        };
-        traverse(units, 1);
-        return maxDepth;
-      };
-
       const actualDepth = getActualWorkDepth(target.units);
 
       // 作品固有の粒度設定を優先、なければ実際の深度に基づくデフォルト値を使用
