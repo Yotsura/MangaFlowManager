@@ -6,6 +6,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useWorksStore } from '@/store/worksStore';
 import { useCustomDatesStore } from '@/store/customDatesStore';
 import WorkPaceCard from '@/modules/calendar/components/WorkPaceCard.vue';
+import WorkProgressChart from '@/components/WorkProgressChart.vue';
 import { getHolidaysWithCabinetOfficeData } from '@/utils/dateUtils';
 import type { Holiday } from '@/utils/dateUtils';
 import { calculateWorkPace } from '@/utils/workloadUtils';
@@ -106,6 +107,40 @@ watch(() => user.value?.uid, async (uid) => {
 onMounted(async () => {
   await updateHolidays();
 });
+
+// 開発環境かどうかの判定
+// const isDev = import.meta.env.DEV;
+
+// テスト用: test作品にサンプルデータを生成
+// const generateTestData = async () => {
+//   const testWork = works.value.find(w => w.title.toLowerCase() === 'test');
+//   const test2Work = works.value.find(w => w.title.toLowerCase() === 'test2');
+
+//   if (!testWork && !test2Work) {
+//     alert('「test」または「test2」という名前の作品が見つかりません');
+//     return;
+//   }
+
+//   let generatedCount = 0;
+
+//   if (testWork) {
+//     worksStore.generateTestProgressHistory(testWork.id);
+//     if (user.value?.uid) {
+//       await worksStore.saveWork({ userId: user.value.uid, workId: testWork.id });
+//       generatedCount++;
+//     }
+//   }
+
+//   if (test2Work) {
+//     worksStore.generateTestProgressHistory(test2Work.id);
+//     if (user.value?.uid) {
+//       await worksStore.saveWork({ userId: user.value.uid, workId: test2Work.id });
+//       generatedCount++;
+//     }
+//   }
+
+//   alert(`${generatedCount}件の作品にサンプル進捗データを生成しました`);
+// };
 </script>
 
 <template>
@@ -119,6 +154,28 @@ onMounted(async () => {
     </div>
 
     <div class="row g-3">
+      <!-- 進捗グラフ -->
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">作品別 進捗集計</h5>
+            <!-- 開発用: テストデータ生成ボタン -->
+            <!-- <button
+              v-if="isDev"
+              class="btn btn-sm btn-outline-secondary"
+              @click="generateTestData"
+              title="test作品にサンプルデータを生成"
+            >
+              <i class="bi bi-database-fill-add me-1"></i>
+              テストデータ生成
+            </button> -->
+          </div>
+          <div class="card-body">
+            <WorkProgressChart />
+          </div>
+        </div>
+      </div>
+
       <!-- 最優先作品カード -->
       <div v-if="mostUrgentWork" class="col-12 col-md-6 col-xl-4">
         <div class="d-flex align-items-center justify-content-between mb-2">

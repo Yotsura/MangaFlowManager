@@ -5,6 +5,8 @@ import { generateId } from "@/utils/id";
 import { collectLeafUnits } from "@/utils/workUtils";
 import type { Granularity, StageWorkload } from "@/store/settingsStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import type { WorkProgressHistory } from "@/types/models";
+import { formatLocalDate } from "@/utils/dateUtils";
 
 export const WORK_STATUSES = ["未着手", "作業中", "完了", "保留"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
@@ -77,6 +79,9 @@ export interface Work {
   // 作品固有の設定
   workGranularities?: WorkGranularity[]; // 作品作成時点の粒度設定
   workStageWorkloads?: WorkStageWorkload[]; // 作品作成時点の段階工数設定
+
+  // 進捗履歴
+  progressHistory?: WorkProgressHistory[]; // 日別の進捗履歴
 }
 
 type WorkDocument = Omit<Work, "id">;
@@ -277,6 +282,7 @@ const mapDocumentToWork = (item: WorkDocument & { id: string }): Work => {
     units,
     workGranularities: Array.isArray(item.workGranularities) ? item.workGranularities : [],
     workStageWorkloads: Array.isArray(item.workStageWorkloads) ? item.workStageWorkloads : [],
+    progressHistory: Array.isArray(item.progressHistory) ? item.progressHistory : [],
   };
 };
 
@@ -319,6 +325,7 @@ const serializeWork = (work: Work): WorkDocument => ({
   units: work.units.map(serializeWorkUnit),
   workGranularities: work.workGranularities || [],
   workStageWorkloads: work.workStageWorkloads || [],
+  progressHistory: work.progressHistory || [],
 });
 
 export const useWorksStore = defineStore("works", {
@@ -397,6 +404,11 @@ export const useWorksStore = defineStore("works", {
     },
     async fetchWorkById(userId: string, workId: string) {
       if (!userId || !workId) {
+        return;
+      }
+
+      // 未保存の変更がある場合は再読み込みをスキップ
+      if (this.dirtyWorkMap[workId]) {
         return;
       }
 
@@ -618,6 +630,11 @@ export const useWorksStore = defineStore("works", {
 
       target.updatedAt = new Date().toISOString();
       this.markWorkDirty(target.id);
+
+      // 工数設定が変更された場合は進捗履歴を記録
+      if (shouldRecalculateTotals) {
+        this.recordProgressHistory(id);
+      }
     },
     recalculateTotals(workId: string) {
       const target = this.works.find((work) => work.id === workId);
@@ -638,6 +655,9 @@ export const useWorksStore = defineStore("works", {
       target.totalEstimatedHours = Number((target.totalUnits * target.unitEstimatedHours).toFixed(2));
       target.updatedAt = new Date().toISOString();
       this.markWorkDirty(target.id);
+
+      // 進捗履歴を記録
+      this.recordProgressHistory(workId);
     },
     advanceUnitStage(workId: string, unitId: string, stageCount: number) {
       const target = this.works.find((work) => work.id === workId);
@@ -656,6 +676,9 @@ export const useWorksStore = defineStore("works", {
       unit.stageIndex = (unit.stageIndex + 1) % stageCount;
       target.updatedAt = new Date().toISOString();
       this.markWorkDirty(target.id);
+
+      // 進捗履歴を記録
+      this.recordProgressHistory(workId);
     },
     updateUnitStage(workId: string, unitId: string, newStage: number) {
       const target = this.works.find((work) => work.id === workId);
@@ -671,6 +694,9 @@ export const useWorksStore = defineStore("works", {
       unit.stageIndex = Math.max(0, newStage);
       target.updatedAt = new Date().toISOString();
       this.markWorkDirty(target.id);
+
+      // 進捗履歴を記録
+      this.recordProgressHistory(workId);
     },
 
     // 最下位ユニットの作業段階を一括更新
@@ -754,6 +780,10 @@ export const useWorksStore = defineStore("works", {
       target.totalEstimatedHours = Number((totalLeafUnits * target.unitEstimatedHours).toFixed(2));
       target.updatedAt = new Date().toISOString();
       this.markWorkDirty(target.id);
+
+      // 進捗履歴を記録
+      this.recordProgressHistory(workId);
+
       return true;
     },
 
@@ -1349,5 +1379,98 @@ export const useWorksStore = defineStore("works", {
         };
       }
     },
+
+    /**
+     * 作品の進捗履歴を記録
+     * 工数変更があった日の完了工数を記録
+     */
+    recordProgressHistory(workId: string) {
+      const work = this.works.find(w => w.id === workId);
+      if (!work) return;
+
+      const today = formatLocalDate(new Date());
+      const metrics = this.calculateActualWorkHours(workId);
+      const completedHours = metrics.completedEstimatedHours;
+
+      // 進捗履歴を初期化（存在しない場合）
+      if (!work.progressHistory) {
+        work.progressHistory = [];
+      }
+
+      // 今日の記録が既に存在するか確認
+      const existingIndex = work.progressHistory.findIndex(h => h.date === today);
+
+      if (existingIndex >= 0) {
+        // 既存の記録を更新
+        work.progressHistory[existingIndex] = {
+          date: today,
+          completedHours,
+          timestamp: Date.now()
+        };
+      } else {
+        // 新しい記録を追加
+        work.progressHistory.push({
+          date: today,
+          completedHours,
+          timestamp: Date.now()
+        });
+      }
+
+      // 日付順にソート
+      work.progressHistory.sort((a, b) => a.date.localeCompare(b.date));
+
+      // 作品を更新済みとしてマーク
+      this.dirtyWorkMap[workId] = true;
+    },
+
+    /**
+     * 作品の進捗履歴を取得
+     */
+    getProgressHistory(workId: string): WorkProgressHistory[] {
+      const work = this.works.find(w => w.id === workId);
+      return work?.progressHistory || [];
+    },
+
+    /**
+     * テスト用: 作品にサンプル進捗履歴を生成
+     */
+    generateTestProgressHistory(workId: string) {
+      const work = this.works.find(w => w.id === workId);
+      if (!work) {
+        console.warn(`Work not found: ${workId}`);
+        return;
+      }
+
+      // 作品名に応じて異なるテストデータを生成
+      let testData: { date: string; completedHours: number }[];
+
+      if (work.title.toLowerCase() === 'test2') {
+        testData = [
+          { date: '2025-11-01', completedHours: 3.5 },
+          { date: '2025-11-02', completedHours: 5.5 },
+          { date: '2025-11-03', completedHours: 6 },
+          { date: '2025-11-04', completedHours: 11 },
+          { date: '2025-11-07', completedHours: 10.2 },
+          { date: '2025-11-08', completedHours: 14.2 },
+        ];
+      } else {
+        // デフォルト（test用）
+        testData = [
+          { date: '2025-11-05', completedHours: 3.5 },
+          { date: '2025-11-06', completedHours: 5.2 },
+          { date: '2025-11-07', completedHours: 5.2 },
+        ];
+      }
+
+      const history: WorkProgressHistory[] = testData.map(item => ({
+        date: item.date,
+        completedHours: item.completedHours,
+        timestamp: new Date(item.date).getTime()
+      }));
+
+      work.progressHistory = history;
+      this.markWorkDirty(workId);
+    },
   },
 });
+

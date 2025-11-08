@@ -25,6 +25,33 @@ export const formatJapaneseDate = (date: Date | string): string => {
   }).replace(/\//g, '/');
 };
 
+/**
+ * 日付文字列（YYYY-MM-DD）に指定日数を加算
+ */
+export const addDays = (dateStr: string, days: number): string => {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+};
+
+/**
+ * 2つの日付文字列（YYYY-MM-DD）の間の全日付を取得
+ * @param startDate 開始日（含む）
+ * @param endDate 終了日（含む）
+ * @returns 日付文字列の配列
+ */
+export const getDateRange = (startDate: string, endDate: string): string[] => {
+  const dates: string[] = [];
+  let currentDate = startDate;
+
+  while (currentDate <= endDate) {
+    dates.push(currentDate);
+    currentDate = addDays(currentDate, 1);
+  }
+
+  return dates;
+};
+
 export const isWeekend = (date: Date) => {
   const day = date.getDay();
   return day === 0 || day === 6;

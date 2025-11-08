@@ -284,8 +284,8 @@ const applyStructureChanges = async () => {
       isStructureEditMode.value = false;
       structureEditForm.structureString = "";
 
-      // 作品データを再読み込み
-      await reloadWorkData();
+      // 注: reloadWorkDataは不要（既にメモリ上のデータが最新）
+      // await reloadWorkData();
     } else {
       structureEditError.value = "構造の更新に失敗しました。";
     }
