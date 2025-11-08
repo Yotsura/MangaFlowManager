@@ -49,6 +49,8 @@ export function useUrgentWork(holidays: Holiday[]) {
         return {
           work,
           totalRemainingHours,
+          totalEstimatedHours: metrics.totalEstimatedHours,
+          progressPercentage: metrics.progressPercentage,
           paceCalculation
         };
       })

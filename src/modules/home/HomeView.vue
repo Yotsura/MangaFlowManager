@@ -5,11 +5,11 @@ import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useWorksStore } from '@/store/worksStore';
 import { useCustomDatesStore } from '@/store/customDatesStore';
-import WorkPaceCard from '@/modules/calendar/components/WorkPaceCard.vue';
-import WorkProgressChart from '@/components/WorkProgressChart.vue';
+import WorkPaceCard from './components/WorkPaceCard.vue';
+import WorkProgressChart from './components/WorkProgressChart.vue';
 import { useHolidays } from '@/composables/useHolidays';
-import { useUrgentWork } from '@/composables/useUrgentWork';
-import { useTestDataGenerator } from '@/composables/useTestDataGenerator';
+import { useUrgentWork } from './composables/useUrgentWork';
+import { useTestDataGenerator } from './composables/useTestDataGenerator';
 
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
@@ -69,16 +69,13 @@ watch(() => user.value?.uid, async (uid) => {
 
       <!-- 最優先作品カード -->
       <div v-if="mostUrgentWork" class="col-12 col-md-6 col-xl-4">
-        <div class="d-flex align-items-center justify-content-between mb-2">
-          <h6 class="mb-0">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            最優先作品
-          </h6>
-          <span class="badge bg-primary">{{ mostUrgentWork.work.title }}</span>
-        </div>
         <WorkPaceCard
+          :work-id="mostUrgentWork.work.id"
+          :work-title="mostUrgentWork.work.title"
           :pace-calculation="mostUrgentWork.paceCalculation"
           :total-remaining-hours="mostUrgentWork.totalRemainingHours"
+          :total-estimated-hours="mostUrgentWork.totalEstimatedHours"
+          :progress-percentage="mostUrgentWork.progressPercentage"
         />
       </div>
 
