@@ -5,13 +5,13 @@ import WorkloadCalendar from './components/WorkloadCalendar.vue';
 import WorkHoursForm from '@/modules/settings/components/WorkHoursForm.vue';
 import UnavailableTimeModal from './components/UnavailableTimeModal.vue';
 import EditModal from '@/components/common/EditModal.vue';
+import DeadlineWorksList from './components/DeadlineWorksList.vue';
 import { getHolidaysWithCabinetOfficeData } from '@/utils/dateUtils';
 import type { Holiday } from '@/utils/dateUtils';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useWorksStore } from '@/store/worksStore';
 import { useAuthStore } from '@/store/authStore';
 import { useCustomDatesStore } from '@/store/customDatesStore';
-import { useWorkMetrics } from '@/composables/useWorkMetrics';
 
 interface WorkHoursFormExposed {
   submit: () => void;
@@ -32,7 +32,6 @@ const worksStore = useWorksStore();
 const authStore = useAuthStore();
 const customDatesStore = useCustomDatesStore();
 const { user } = storeToRefs(authStore);
-const { works } = storeToRefs(worksStore);
 
 // 作業可能時間設定用
 const workHoursRef = ref<WorkHoursFormExposed | null>(null);
@@ -47,31 +46,7 @@ const openWorkHoursModal = () => {
   showWorkHoursModal.value = true;
 };
 
-// 締切が設定されている作品のリスト
-const worksWithDeadline = computed(() => {
-  return works.value
-    .filter(work => work.deadline && work.status !== '完了')
-    .map(work => {
-      const metrics = worksStore.calculateActualWorkHours(work.id);
-      const workComputed = computed(() => work);
-      const workMetrics = useWorkMetrics(workComputed);
-
-      return {
-        id: work.id,
-        title: work.title,
-        deadline: work.deadline,
-        progressPercentage: metrics.progressPercentage,
-        remainingHours: metrics.remainingEstimatedHours,
-        totalHours: metrics.totalEstimatedHours,
-        daysUntilDeadline: workMetrics.daysUntilDeadline.value,
-        availableWorkHours: workMetrics.availableWorkHours.value
-      };
-    })
-    .sort((a, b) => {
-      // 締切の近い順にソート
-      return new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime();
-    });
-});// 祝日データを更新
+// 祝日データを更新
 const updateHolidays = async () => {
   try {
     const yearHolidays = await getHolidaysWithCabinetOfficeData(currentYear.value);
@@ -151,40 +126,7 @@ onMounted(async () => {
 
       <div class="col-lg-4 order-1 order-lg-2">
         <!-- 締切設定作品リスト -->
-        <div v-if="worksWithDeadline.length > 0" class="card">
-          <div class="card-header">
-            <h6 class="card-title mb-0">
-              <i class="bi bi-calendar-check me-2"></i>
-              締切設定作品
-            </h6>
-          </div>
-          <div class="card-body p-0">
-            <div class="list-group list-group-flush">
-              <router-link
-                v-for="work in worksWithDeadline"
-                :key="work.id"
-                :to="`/works/${work.id}`"
-                class="list-group-item list-group-item-action px-3 py-2"
-              >
-                <div class="d-flex justify-content-between align-items-start mb-1">
-                  <div class="fw-semibold small">{{ work.title }}</div>
-                  <div class="d-flex align-items-center gap-2 ms-2 flex-shrink-0">
-                    <span class="badge bg-info text-dark">{{ work.daysUntilDeadline }}日（{{ work.availableWorkHours.toFixed(1) }}h）</span>
-                    <span class="badge bg-secondary">{{ new Date(work.deadline!).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/') }}</span>
-                  </div>
-                </div>
-                <div class="d-flex justify-content-between align-items-center">
-                  <div class="small text-muted">
-                    進捗 {{ work.progressPercentage }}%
-                  </div>
-                  <div class="small text-muted">
-                    残り {{ work.remainingHours.toFixed(1) }}h / {{ work.totalHours.toFixed(1) }}h
-                  </div>
-                </div>
-              </router-link>
-            </div>
-          </div>
-        </div>
+        <DeadlineWorksList />
       </div>
     </div>
 
