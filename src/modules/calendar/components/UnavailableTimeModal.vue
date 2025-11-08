@@ -21,6 +21,7 @@ const authStore = useAuthStore();
 const { user } = storeToRefs(authStore);
 
 const selectedType = ref<CustomDateType | null>(null);
+const customHours = ref<number>(0);
 const isSaving = ref(false);
 const errorMessage = ref<string | null>(null);
 
@@ -47,7 +48,10 @@ const existingCustomDate = computed(() => {
 // 設定が変更されたかどうか
 const hasChanged = computed(() => {
   const existingType = existingCustomDate.value?.type || null;
-  return selectedType.value !== existingType;
+  const existingHours = existingCustomDate.value?.customHours || 0;
+  const typeChanged = selectedType.value !== existingType;
+  const hoursChanged = selectedType.value === 'custom-hours' && customHours.value !== existingHours;
+  return typeChanged || hoursChanged;
 });
 
 // モーダルが開かれたときに既存の設定を読み込む
@@ -57,6 +61,7 @@ watch(
     if (newShow && dateString.value) {
       const existing = existingCustomDate.value;
       selectedType.value = existing?.type || null;
+      customHours.value = existing?.customHours || 0;
       errorMessage.value = null;
     }
   }
@@ -75,7 +80,12 @@ const handleSave = async () => {
     if (selectedType.value === null) {
       await customDatesStore.removeCustomDate(user.value.uid, dateString.value);
     } else {
-      await customDatesStore.setCustomDate(user.value.uid, dateString.value, selectedType.value);
+      await customDatesStore.setCustomDate(
+        user.value.uid,
+        dateString.value,
+        selectedType.value,
+        selectedType.value === 'custom-hours' ? customHours.value : undefined
+      );
     }
     handleClose();
   } catch (error) {
@@ -136,6 +146,39 @@ const handleClose = () => {
                 <label class="form-check-label w-100" for="type-unavailable">
                   <strong>作業不可</strong>
                   <div class="text-muted small">作業可能時間を0時間として扱います</div>
+                </label>
+              </div>
+              <div class="form-check" @click="selectedType = 'custom-hours'">
+                <input
+                  id="type-custom-hours"
+                  v-model="selectedType"
+                  class="form-check-input"
+                  type="radio"
+                  value="custom-hours"
+                  :disabled="isSaving"
+                />
+                <label class="form-check-label w-100" for="type-custom-hours">
+                  <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                      <strong>固有作業時間</strong>
+                      <div class="text-muted small">この日専用の作業可能時間を設定します</div>
+                    </div>
+                    <div v-if="selectedType === 'custom-hours'" class="ms-3" @click.stop>
+                      <div class="input-group input-group-sm" style="width: 130px;">
+                        <input
+                          id="custom-hours-input"
+                          v-model.number="customHours"
+                          type="number"
+                          class="form-control"
+                          min="0"
+                          max="24"
+                          step="0.5"
+                          :disabled="isSaving"
+                        />
+                        <span class="input-group-text">時間</span>
+                      </div>
+                    </div>
+                  </div>
                 </label>
               </div>
               <div class="form-check" @click="selectedType = null">

@@ -1,12 +1,13 @@
 import { defineStore } from "pinia";
 import { deleteDocument, getCollectionDocs, setDocument } from "@/services/firebase/firestoreService";
 
-export type CustomDateType = "custom-holiday" | "unavailable";
+export type CustomDateType = "custom-holiday" | "unavailable" | "custom-hours";
 
 export interface CustomDate {
   id: string; // YYYY-MM-DD形式
   date: string; // YYYY-MM-DD形式
   type: CustomDateType;
+  customHours?: number; // custom-hoursタイプの場合の固有作業時間
   createdAt: string;
   updatedAt: string;
 }
@@ -73,7 +74,7 @@ export const useCustomDatesStore = defineStore("customDates", {
       }
     },
 
-    async setCustomDate(userId: string, date: string, type: CustomDateType) {
+    async setCustomDate(userId: string, date: string, type: CustomDateType, customHours?: number) {
       this.savingCustomDates = true;
       this.saveError = null;
 
@@ -88,6 +89,11 @@ export const useCustomDatesStore = defineStore("customDates", {
           createdAt: existing?.createdAt || now,
           updatedAt: now,
         };
+
+        // custom-hoursタイプの場合のみcustomHoursを含める
+        if (type === "custom-hours" && customHours !== undefined) {
+          document.customHours = customHours;
+        }
 
         const path = buildDocumentPath(userId, dateId);
         await setDocument(path, document);

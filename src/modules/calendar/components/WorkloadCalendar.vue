@@ -98,6 +98,8 @@ const getDateCellClass = (date: Date) => {
     classes.push('unavailable');
   } else if (customDate?.type === "custom-holiday") {
     classes.push('custom-holiday');
+  } else if (customDate?.type === "custom-hours") {
+    classes.push('custom-hours');
   } else {
     // カスタム日付がない場合のみ通常の祝日判定
     const holiday = getHolidayForDate(date);
@@ -135,6 +137,8 @@ const getCustomDateLabel = (date: Date) => {
       return "任意休日";
     case "unavailable":
       return "作業不可";
+    case "custom-hours":
+      return "固有作業時間";
     default:
       return null;
   }
@@ -148,6 +152,11 @@ const getWorkHoursForDate = (date: Date): number => {
   // 作業不可が設定されている場合は0
   if (customDate?.type === "unavailable") {
     return 0;
+  }
+
+  // 固有作業時間が設定されている場合
+  if (customDate?.type === "custom-hours" && customDate.customHours !== undefined) {
+    return customDate.customHours;
   }
 
   // 任意休日または実際の祝日の場合
@@ -366,6 +375,16 @@ onMounted(async () => {
   background-color: #f5c2c7;
 }
 
+.calendar-date.custom-hours {
+  background-color: #d1ecf1;
+  color: #0c5460;
+  font-weight: 500;
+}
+
+.calendar-date.custom-hours:hover {
+  background-color: #bee5eb;
+}
+
 .date-number {
   font-weight: 500;
   line-height: 1;
@@ -399,6 +418,11 @@ onMounted(async () => {
 
 .calendar-date.unavailable .custom-label {
   background-color: #dc3545;
+  color: white;
+}
+
+.calendar-date.custom-hours .custom-label {
+  background-color: #17a2b8;
   color: white;
 }
 

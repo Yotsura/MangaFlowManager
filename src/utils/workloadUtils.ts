@@ -94,6 +94,17 @@ export function calculateWorkPace(
       continue;
     }
 
+    // カスタム日付が「固有作業時間」の場合はその時間を使用
+    if (customDate && customDate.type === 'custom-hours' && customDate.customHours !== undefined) {
+      totalWorkableHours += customDate.customHours;
+      remainingWorkableHours += customDate.customHours;
+      if (customDate.customHours > 0) {
+        workableDaysCount++;
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+      continue;
+    }
+
     // 祝日チェック（祝日を優先）
     const isHolidayToday = holidays.some(h =>
       h.date.getFullYear() === currentDate.getFullYear() &&
@@ -134,6 +145,9 @@ export function calculateWorkPace(
   // 今日がカスタム日付の「作業不可」の場合は0時間
   if (todayCustomDate && todayCustomDate.type === 'unavailable') {
     todayWorkableHours = 0;
+  } else if (todayCustomDate && todayCustomDate.type === 'custom-hours' && todayCustomDate.customHours !== undefined) {
+    // 今日が「固有作業時間」の場合はその時間を使用
+    todayWorkableHours = todayCustomDate.customHours;
   } else if (todayCustomDate && todayCustomDate.type === 'custom-holiday') {
     // カスタム休日の場合、holiday設定を適用
     todayWorkableHours = workHoursMap.get('holiday') ?? 0;
