@@ -11,6 +11,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useWorksStore } from '@/store/worksStore';
 import { useAuthStore } from '@/store/authStore';
 import { useCustomDatesStore } from '@/store/customDatesStore';
+import { useWorkMetrics } from '@/composables/useWorkMetrics';
 
 interface WorkHoursFormExposed {
   submit: () => void;
@@ -52,22 +53,25 @@ const worksWithDeadline = computed(() => {
     .filter(work => work.deadline && work.status !== '完了')
     .map(work => {
       const metrics = worksStore.calculateActualWorkHours(work.id);
+      const workComputed = computed(() => work);
+      const workMetrics = useWorkMetrics(workComputed);
+
       return {
         id: work.id,
         title: work.title,
         deadline: work.deadline,
         progressPercentage: metrics.progressPercentage,
         remainingHours: metrics.remainingEstimatedHours,
-        totalHours: metrics.totalEstimatedHours
+        totalHours: metrics.totalEstimatedHours,
+        daysUntilDeadline: workMetrics.daysUntilDeadline.value,
+        availableWorkHours: workMetrics.availableWorkHours.value
       };
     })
     .sort((a, b) => {
       // 締切の近い順にソート
       return new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime();
     });
-});
-
-// 祝日データを更新
+});// 祝日データを更新
 const updateHolidays = async () => {
   try {
     const yearHolidays = await getHolidaysWithCabinetOfficeData(currentYear.value);
@@ -164,7 +168,10 @@ onMounted(async () => {
               >
                 <div class="d-flex justify-content-between align-items-start mb-1">
                   <div class="fw-semibold small">{{ work.title }}</div>
-                  <span class="badge bg-secondary ms-2">{{ new Date(work.deadline!).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/') }}</span>
+                  <div class="d-flex align-items-center gap-2 ms-2 flex-shrink-0">
+                    <span class="badge bg-info text-dark">{{ work.daysUntilDeadline }}日（{{ work.availableWorkHours.toFixed(1) }}h）</span>
+                    <span class="badge bg-secondary">{{ new Date(work.deadline!).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/') }}</span>
+                  </div>
                 </div>
                 <div class="d-flex justify-content-between align-items-center">
                   <div class="small text-muted">
