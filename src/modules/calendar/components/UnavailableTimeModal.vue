@@ -4,6 +4,7 @@ import { useCustomDatesStore, type CustomDateType } from "@/store/customDatesSto
 import { useAuthStore } from "@/store/authStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { storeToRefs } from "pinia";
+import EditModal from "@/components/common/EditModal.vue";
 
 interface Props {
   date: Date | null;
@@ -103,60 +104,39 @@ const handleClose = () => {
 </script>
 
 <template>
-  <Transition name="modal-fade">
-    <div v-if="show" class="modal d-block" tabindex="-1" @click.self="handleClose">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">日付設定</h5>
-            <button type="button" class="btn-close" :disabled="isSaving" @click="handleClose"></button>
-          </div>
-          <div class="modal-body">
-            <p class="mb-3">
-              <strong>{{ formattedDate }}</strong>
-            </p>
+  <EditModal :show="show" title="日付設定" size="md" centered
+    :can-save="hasChanged" :is-saving="isSaving"
+    @close="handleClose" @save="handleSave">
+    <p class="mb-3">
+      <strong>{{ formattedDate }}</strong>
+    </p>
 
-            <div v-if="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+    <div v-if="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
 
-            <div class="mb-3">
-              <label class="form-label">設定タイプ</label>
-              <div class="form-check" @click="selectedType = 'custom-holiday'">
-                <input
-                  id="type-custom-holiday"
-                  v-model="selectedType"
-                  class="form-check-input"
-                  type="radio"
-                  value="custom-holiday"
-                  :disabled="isSaving"
-                />
-                <label class="form-check-label w-100" for="type-custom-holiday">
-                  <strong>任意休日</strong>
-                  <div class="text-muted small">祝日設定で設定した作業可能時間を適用します</div>
-                </label>
+    <div class="mb-3">
+      <label class="form-label">設定タイプ</label>
+      <div class="form-check" @click="selectedType = 'custom-holiday'">
+        <input id="type-custom-holiday" v-model="selectedType"
+          class="form-check-input" type="radio" value="custom-holiday"
+          :disabled="isSaving"/>
+        <label class="form-check-label w-100" for="type-custom-holiday">
+          <strong>任意休日</strong>
+          <div class="text-muted small">祝日設定で設定した作業可能時間を適用します</div>
+        </label>
               </div>
               <div class="form-check" @click="selectedType = 'unavailable'">
-                <input
-                  id="type-unavailable"
-                  v-model="selectedType"
-                  class="form-check-input"
-                  type="radio"
-                  value="unavailable"
-                  :disabled="isSaving"
-                />
+                <input id="type-unavailable" v-model="selectedType"
+                  class="form-check-input" type="radio" value="unavailable"
+                  :disabled="isSaving"/>
                 <label class="form-check-label w-100" for="type-unavailable">
                   <strong>作業不可</strong>
                   <div class="text-muted small">作業可能時間を0時間として扱います</div>
                 </label>
               </div>
               <div class="form-check" @click="selectedType = 'custom-hours'">
-                <input
-                  id="type-custom-hours"
-                  v-model="selectedType"
-                  class="form-check-input"
-                  type="radio"
-                  value="custom-hours"
-                  :disabled="isSaving"
-                />
+                <input id="type-custom-hours" v-model="selectedType"
+                  class="form-check-input" type="radio" value="custom-hours"
+                  :disabled="isSaving"/>
                 <label class="form-check-label w-100" for="type-custom-hours">
                   <div class="d-flex align-items-center justify-content-between">
                     <div>
@@ -165,16 +145,10 @@ const handleClose = () => {
                     </div>
                     <div v-if="selectedType === 'custom-hours'" class="ms-3" @click.stop>
                       <div class="input-group input-group-sm" style="width: 130px;">
-                        <input
-                          id="custom-hours-input"
-                          v-model.number="customHours"
-                          type="number"
-                          class="form-control"
-                          min="0"
-                          max="24"
-                          step="0.5"
-                          :disabled="isSaving"
-                        />
+                        <input id="custom-hours-input" v-model.number="customHours"
+                          class="form-control" type="number"
+                          min="0" max="24" step="0.5"
+                          :disabled="isSaving"/>
                         <span class="input-group-text">時間</span>
                       </div>
                     </div>
@@ -196,62 +170,10 @@ const handleClose = () => {
                 </label>
               </div>
             </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" :disabled="isSaving" @click="handleClose">キャンセル</button>
-            <button type="button" class="btn btn-primary" :disabled="isSaving || !hasChanged" @click="handleSave">
-              {{ isSaving ? "保存中..." : "保存" }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </Transition>
-  <Transition name="backdrop-fade">
-    <div v-if="show" class="modal-backdrop"></div>
-  </Transition>
+  </EditModal>
 </template>
 
 <style scoped>
-.modal {
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-/* モーダルフェードアニメーション */
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity 0.15s linear;
-}
-
-.modal-fade-enter-active .modal-dialog,
-.modal-fade-leave-active .modal-dialog {
-  transition: transform 0.3s ease-out;
-}
-
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
-}
-
-.modal-fade-enter-from .modal-dialog {
-  transform: translateY(-50px);
-}
-
-.modal-fade-leave-to .modal-dialog {
-  transform: translateY(-50px);
-}
-
-/* 背景フェードアニメーション */
-.backdrop-fade-enter-active,
-.backdrop-fade-leave-active {
-  transition: opacity 0.15s linear;
-}
-
-.backdrop-fade-enter-from,
-.backdrop-fade-leave-to {
-  opacity: 0;
-}
-
 .form-check {
   padding: 0.75rem;
   border: 1px solid #dee2e6;

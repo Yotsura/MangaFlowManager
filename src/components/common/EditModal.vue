@@ -5,14 +5,22 @@ interface Props {
   show: boolean;
   title: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  centered?: boolean;
   canSave?: boolean;
   isSaving?: boolean;
+  saveButtonText?: string;
+  cancelButtonText?: string;
+  hideSaveButton?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   size: 'lg',
+  centered: false,
   canSave: true,
   isSaving: false,
+  saveButtonText: '保存',
+  cancelButtonText: 'キャンセル',
+  hideSaveButton: false,
 });
 
 const emit = defineEmits<{
@@ -28,6 +36,16 @@ const modalSizeClass = computed(() => {
     case 'xl': return 'modal-xl';
     default: return 'modal-lg';
   }
+});
+
+const modalDialogClass = computed(() => {
+  const classes = ['modal-dialog'];
+  if (props.centered) {
+    classes.push('modal-dialog-centered');
+  } else {
+    classes.push('modal-dialog-scrollable');
+  }
+  return classes.join(' ');
 });
 
 const handleClose = () => {
@@ -46,20 +64,21 @@ const handleSave = () => {
     </Transition>
     <Transition name="modal-fade">
       <div v-if="show" class="modal d-block" tabindex="-1" @click.self="handleClose">
-        <div class="modal-dialog modal-dialog-scrollable" :class="modalSizeClass">
+        <div :class="[modalDialogClass, modalSizeClass]">
           <div class="modal-content">
             <div class="modal-header">
               <h5 class="modal-title">{{ title }}</h5>
-              <button type="button" class="btn-close" @click="handleClose"></button>
+              <button type="button" class="btn-close" :disabled="isSaving" @click="handleClose"></button>
             </div>
             <div class="modal-body">
               <slot></slot>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" @click="handleClose">
-                <i class="bi bi-x me-1"></i>キャンセル
+              <button type="button" class="btn btn-secondary" :disabled="isSaving" @click="handleClose">
+                <i class="bi bi-x me-1"></i>{{ cancelButtonText }}
               </button>
               <button
+                v-if="!hideSaveButton"
                 type="button"
                 class="btn btn-primary"
                 :disabled="!canSave || isSaving"
@@ -67,7 +86,7 @@ const handleSave = () => {
               >
                 <span v-if="isSaving" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="bi bi-check me-1"></i>
-                保存
+                {{ isSaving ? '保存中...' : saveButtonText }}
               </button>
             </div>
           </div>
