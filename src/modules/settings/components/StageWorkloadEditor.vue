@@ -471,11 +471,15 @@ const handleSave = async () => {
   const payload = editableStages.value.map((stage, index) => {
     const entries = stage.entries.map((entry) => ({
       granularityId: entry.granularityId,
-      hours: entry.hours === "" ? null : Number(entry.hours),
+      hours: entry.hours === "" ? null : Math.round(Number(entry.hours) * 10) / 10, // 小数点第一位に丸める
     }));
 
     // リアルタイムに計算されたbaseHoursを使用、なければ従来の方法で計算
-    const baseHours = stage.baseHours !== null ? stage.baseHours : calculateBaseHours(entries);
+    let baseHours = stage.baseHours !== null ? stage.baseHours : calculateBaseHours(entries);
+    // baseHoursも小数点第一位に丸める
+    if (baseHours !== null) {
+      baseHours = Math.round(baseHours * 10) / 10;
+    }
 
     return {
       id: index + 1,

@@ -127,8 +127,8 @@ const rowErrors = computed(() => {
     }
     if (row.weight === "" || Number.isNaN(weightNumber)) {
       setRowError(errors, row.id, "weight", "比重は数値で入力してください。");
-    } else if (!Number.isInteger(weightNumber) || weightNumber <= 0) {
-      setRowError(errors, row.id, "weight", "比重は1以上の整数で入力してください。");
+    } else if (weightNumber <= 0) {
+      setRowError(errors, row.id, "weight", "比重は0より大きい値を入力してください。");
     }
 
     if (trimmedLabel) {
@@ -172,8 +172,8 @@ const newRowValidationMessage = computed(() => {
   if (newGranularity.weight === "" || Number.isNaN(weightNumber)) {
     return "比重は数値で入力してください。";
   }
-  if (!Number.isInteger(weightNumber) || weightNumber <= 0) {
-    return "比重は1以上の整数で入力してください。";
+  if (weightNumber <= 0) {
+    return "比重は0より大きい値を入力してください。";
   }
 
   const existingLabels = editableRows.value.map((row) => row.label.trim());
@@ -205,12 +205,15 @@ const submitNewGranularity = () => {
     return;
   }
 
+  // 小数点第一位に丸める
+  const roundedWeight = Math.round(Number(newGranularity.weight) * 10) / 10;
+
   editableRows.value = [
     ...editableRows.value,
     {
       id: generateId(),
       label: newGranularity.label.trim(),
-      weight: Number(newGranularity.weight).toString(),
+      weight: roundedWeight.toString(),
       defaultCount: Number(newGranularity.defaultCount).toString(),
     },
   ];
@@ -251,7 +254,7 @@ const handleSave = async () => {
   const payload = editableRows.value.map((row) => ({
     id: row.id,
     label: row.label.trim(),
-    weight: Number(row.weight),
+    weight: Math.round(Number(row.weight) * 10) / 10, // 小数点第一位に丸める
     defaultCount: Number(row.defaultCount),
   }));
 
@@ -304,7 +307,7 @@ defineExpose({
                 <input v-model="row.label" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'label') }]" type="text" placeholder="例: ページ単位" :disabled="isSaving" @input="emit('granularity-changed')" />
               </td>
               <td>
-                <input v-model="row.weight" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'weight') }]" type="number" min="1" step="1" :disabled="isSaving" @input="emit('granularity-changed')" />
+                <input v-model="row.weight" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'weight') }]" type="number" min="0.1" step="0.1" :disabled="isSaving" @input="emit('granularity-changed')" />
               </td>
               <td>
                 <input v-model="row.defaultCount" :class="['form-control', { 'is-invalid': getFieldError(row.id, 'defaultCount') }]" type="number" min="1" step="1" :disabled="isSaving" />
@@ -328,7 +331,7 @@ defineExpose({
                 />
               </td>
               <td>
-                <input v-model="newGranularity.weight" :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]" type="number" min="1" step="1" :disabled="isSaving" @input="emit('granularity-changed')" />
+                <input v-model="newGranularity.weight" :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]" type="number" min="0.1" step="0.1" :disabled="isSaving" @input="emit('granularity-changed')" />
               </td>
               <td>
                 <input v-model="newGranularity.defaultCount" :class="['form-control', { 'is-invalid': hasTouchedNewRow && !!newRowValidationMessage }]" type="number" min="1" step="1" :disabled="isSaving" @input="emit('granularity-changed')" />
