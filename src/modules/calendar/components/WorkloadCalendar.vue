@@ -317,6 +317,7 @@ onMounted(async () => {
   border-bottom: none;
 }
 
+/* ===== 日付セル ===== */
 .calendar-date {
   width: 100%;
   height: 100%;
@@ -336,14 +337,24 @@ onMounted(async () => {
   background-color: #f8f9fa;
 }
 
+/* ===== 他の月の日付 ===== */
 .calendar-date.other-month {
   color: #adb5bd;
 }
 
-.calendar-date.other-month:hover {
+.calendar-date.other-month:hover,
+.calendar-date.other-month.weekend:hover,
+.calendar-date.other-month.holiday:hover {
   background-color: #f8f9fa;
 }
 
+.calendar-date.other-month.weekend,
+.calendar-date.other-month.holiday {
+  background-color: transparent;
+  color: #f5c2c7;
+}
+
+/* ===== 今日の日付 ===== */
 .calendar-date.today {
   position: relative;
 }
@@ -366,51 +377,21 @@ onMounted(async () => {
   background-color: #a293e9;
 }
 
-.calendar-date.weekend {
-  background-color: #fdf2f2;
-  color: #dc3545;
-}
-
-.calendar-date.weekend:hover {
-  background-color: #f5c2c7;
-}
-
-.calendar-date.other-month.weekend {
-  background-color: transparent;
-  color: #f5c2c7;
-}
-
-.calendar-date.other-month.weekend:hover {
-  background-color: #f8f9fa;
-}
-
-.calendar-date.holiday {
-  background-color: #fdf2f2;
-  color: #dc3545;
-}
-
-.calendar-date.holiday:hover {
-  background-color: #f5c2c7;
-}
-
-.calendar-date.other-month.holiday {
-  background-color: transparent;
-  color: #f5c2c7;
-}
-
-.calendar-date.other-month.holiday:hover {
-  background-color: #f8f9fa;
-}
-
+/* ===== 週末・祝日（赤い背景色グループ） ===== */
+.calendar-date.weekend,
+.calendar-date.holiday,
 .calendar-date.custom-holiday {
   background-color: #fdf2f2;
   color: #dc3545;
 }
 
+.calendar-date.weekend:hover,
+.calendar-date.holiday:hover,
 .calendar-date.custom-holiday:hover {
   background-color: #f5c2c7;
 }
 
+/* ===== 作業不可 ===== */
 .calendar-date.unavailable {
   background-color: #f8d7da;
   color: #721c24;
@@ -421,6 +402,7 @@ onMounted(async () => {
   background-color: #f5c2c7;
 }
 
+/* ===== 固有作業時間 ===== */
 .calendar-date.custom-hours {
   background-color: #d1ecf1;
   color: #0c5460;
@@ -431,6 +413,7 @@ onMounted(async () => {
   background-color: #bee5eb;
 }
 
+/* ===== 締切日（赤い背景色） ===== */
 .calendar-date.has-deadline {
   background-color: #ff6666;
   color: white;
@@ -440,14 +423,12 @@ onMounted(async () => {
   background-color: #ff4d4d;
 }
 
-.calendar-date.has-deadline .work-hours {
-  color: white;
-}
-
+.calendar-date.has-deadline .work-hours,
 .calendar-date.has-deadline .deadline-label {
   color: white;
 }
 
+/* ===== セル内要素 ===== */
 .date-number {
   font-weight: 500;
   line-height: 1;
