@@ -1,5 +1,5 @@
 <template>
-  <section class="container py-5">
+  <section class="container py-3">
     <div class="row justify-content-center">
       <div class="col-12 col-lg-8">
         <div class="card border-0 shadow-sm">

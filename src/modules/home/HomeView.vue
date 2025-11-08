@@ -7,7 +7,7 @@ const { displayName } = storeToRefs(authStore);
 </script>
 
 <template>
-  <section class="container py-5">
+  <section class="container py-3">
     <div class="mb-4">
       <h1 class="h2 fw-semibold">
         ようこそ<span v-if="displayName">、{{ displayName }}</span

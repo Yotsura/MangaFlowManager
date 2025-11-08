@@ -86,7 +86,7 @@ const clearMessages = () => {
 </script>
 
 <template>
-  <section class="auth-container py-5">
+  <section class="auth-container py-3">
     <div class="container">
       <div class="row justify-content-center">
         <div class="col-12 col-md-8 col-lg-5">

@@ -161,7 +161,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="container py-5">
+  <section class="container py-3">
     <div class="mb-4">
       <h1 class="h3 fw-semibold">カレンダー</h1>
       <p class="text-muted">制作スケジュールや作業不可時間をカレンダーで管理します。</p>

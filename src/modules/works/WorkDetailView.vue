@@ -624,7 +624,7 @@ const goBackToList = () => {
 </script>
 
 <template>
-  <section class="container py-5">
+  <section class="container py-3">
     <div v-if="!work" class="alert alert-warning" role="alert">
       指定された作品が見つかりませんでした。
       <button type="button" class="btn btn-link px-1" @click="goBackToList">作品一覧に戻る</button>

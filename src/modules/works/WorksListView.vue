@@ -658,7 +658,7 @@ if (typeof window !== 'undefined') {
 </script>
 
 <template>
-  <section class="container py-5">
+  <section class="container py-3">
     <header class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-4">
       <div>
         <h1 class="h3 fw-semibold mb-1">作品管理</h1>

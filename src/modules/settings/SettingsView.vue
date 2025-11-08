@@ -61,7 +61,7 @@ const updateHolidaysGlobally = async () => {
 </script>
 
 <template>
-  <section class="container py-5">
+  <section class="container py-3">
     <div class="mb-4">
       <h1 class="h3 fw-semibold">設定</h1>
       <p class="text-muted">作業粒度と工数設定を管理します。作業可能時間の設定はカレンダー画面で行えます。</p>
