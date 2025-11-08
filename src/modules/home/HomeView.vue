@@ -120,7 +120,7 @@ onMounted(async () => {
 
     <div class="row g-3">
       <!-- 最優先作品カード -->
-      <div v-if="mostUrgentWork" class="col-4">
+      <div v-if="mostUrgentWork" class="col-12 col-md-6 col-xl-4">
         <div class="d-flex align-items-center justify-content-between mb-2">
           <h6 class="mb-0">
             <i class="bi bi-exclamation-triangle me-2"></i>

@@ -105,10 +105,10 @@ const requiredHoursText = computed(() => formatRequiredHours(workMetrics.require
 
 <template>
   <div class="card shadow-sm h-100">
-    <div class="card-body py-3">
-      <div class="row g-2">
+    <div class="card-body py-3 py-md-3">
+      <div class="row g-2 g-md-2">
         <!-- タイトル -->
-        <div class="col-12 mb-2">
+        <div class="col-12 mb-1 mb-md-2">
           <input
             :value="title"
             @input="emit('update:title', ($event.target as HTMLInputElement).value)"
@@ -127,30 +127,30 @@ const requiredHoursText = computed(() => formatRequiredHours(workMetrics.require
         </div>
         <div class="col-6">
           <div class="small text-muted mb-1">推定工数</div>
-          <div class="fw-semibold small py-1">
+          <div class="fw-semibold small py-1 py-md-1" style="line-height: 1.3;">
             残り {{ remainingHours.toFixed(1) }}h / {{ totalHours.toFixed(1) }}h
           </div>
         </div>
         <div class="col-6">
           <div class="small text-muted mb-1">進捗率</div>
-          <div class="fw-semibold small py-1">{{ progressPercentage }}%</div>
+          <div class="fw-semibold small py-1 py-md-1">{{ progressPercentage }}%</div>
         </div>
         <div class="col-6">
           <div class="small text-muted mb-1">締切まで</div>
-          <div class="fw-semibold small py-1">{{ workMetrics.daysUntilDeadline.value }}日（{{ workMetrics.availableWorkHours.value.toFixed(1) }}h）</div>
+          <div class="fw-semibold small py-1 py-md-1" style="line-height: 1.3;">{{ workMetrics.daysUntilDeadline.value }}日（{{ workMetrics.availableWorkHours.value.toFixed(1) }}h）</div>
         </div>
         <div class="col-6">
           <div class="small text-muted mb-1">1日の必要工数</div>
-          <div class="small py-1" :class="requiredHoursClass">
+          <div class="small py-1 py-md-1" :class="requiredHoursClass">
             {{ requiredHoursText }}
           </div>
         </div>
 
         <!-- 詳細情報 - 折りたたみ可能 -->
         <div class="col-12">
-          <details class="mt-2">
+          <details class="mt-1 mt-md-2">
             <summary class="small text-muted fw-semibold" style="cursor: pointer;">詳細情報</summary>
-            <div class="row g-2 mt-2">
+            <div class="row g-2 mt-1 mt-md-2">
               <div class="col-6 col-md-4">
                 <div class="small text-muted mb-1">開始日</div>
                 <input
@@ -185,8 +185,13 @@ const requiredHoursText = computed(() => formatRequiredHours(workMetrics.require
                 </select>
               </div>
 
+              <!-- ID表示 -->
+              <div class="col-12 mt-2 pt-2 border-top">
+                <p class="text-muted small mb-0 text-center" style="font-size: 0.75rem;">ID: {{ workId }}</p>
+              </div>
+
               <!-- 削除ボタン（編集モード時のみ） -->
-              <div v-if="isEditMode" class="col-12 mt-3 pt-3 border-top">
+              <div v-if="isEditMode" class="col-12 mt-2 pt-2 border-top">
                 <button type="button" class="btn btn-sm btn-danger w-100" @click="emit('delete-work')">
                   <i class="bi bi-trash me-1"></i>作品を削除する
                 </button>
@@ -204,11 +209,6 @@ const requiredHoursText = computed(() => formatRequiredHours(workMetrics.require
         <div v-else-if="lastSaveStatus === 'success'" class="alert alert-success py-2 mb-0 small" role="alert">
           <i class="bi bi-check-circle me-1"></i>保存しました
         </div>
-      </div>
-
-      <!-- ID表示 -->
-      <div class="mt-2 pt-2 border-top">
-        <p class="text-muted small mb-0 text-center" style="font-size: 0.75rem;">ID: {{ workId }}</p>
       </div>
     </div>
   </div>

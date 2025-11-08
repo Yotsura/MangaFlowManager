@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useWorksStore } from '@/store/worksStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { formatDate, calculateStageProgress } from '../utils/workDetailUtils';
+import { calculateStageProgress } from '../utils/workDetailUtils';
 import { normalizeStageColorValue } from '../utils/stageColor';
 
 interface Props {
@@ -79,8 +79,6 @@ const stageWorkloadHours = computed(() => {
   });
 });
 
-const formattedUpdateDate = computed(() => work.value ? formatDate(work.value.updatedAt) : '');
-
 // 各工程の進捗率を計算（共通関数を使用）
 const getStageProgress = (stageIndex: number) => {
   if (!work.value || !work.value.units) {
@@ -153,10 +151,6 @@ const getStageProgress = (stageIndex: number) => {
             <span class="small text-muted text-nowrap" style="min-width: 35px;">{{ getStageProgress(index) }}%</span>
           </div>
         </div>
-      </div>
-
-      <div class="mt-3 text-muted small text-end">
-        <span class="badge text-bg-light">更新: {{ formattedUpdateDate }}</span>
       </div>
     </div>
   </div>
