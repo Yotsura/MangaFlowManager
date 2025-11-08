@@ -55,12 +55,12 @@ const emit = defineEmits<{
 <style scoped>
 .work-action-buttons {
   position: fixed;
-  bottom: 2rem;
-  right: 2rem;
+  bottom: 5rem;
+  right: 3rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  z-index: 1000;
+  z-index: 1030;
 }
 
 .work-action-buttons .btn {
@@ -79,7 +79,7 @@ const emit = defineEmits<{
 
 @media (max-width: 768px) {
   .work-action-buttons {
-    bottom: 1rem;
+    bottom: calc(65px + 1rem);
     right: 1rem;
   }
 

@@ -11,7 +11,6 @@ interface DayOption {
 }
 
 interface DayFormState extends DayOption {
-  enabled: boolean;
   hours: number;
 }
 
@@ -40,7 +39,6 @@ const toFormState = (options: DayOption[], storedHours: typeof workHours.value):
     const existing = storedHours.find((entry) => entry.day === option.key);
     return {
       ...option,
-      enabled: Boolean(existing),
       hours: existing?.hours ?? DEFAULT_HOURS,
     };
   });
@@ -80,7 +78,6 @@ watch(
     updated.forEach((row) => {
       const target = formState.find((item) => item.key === row.key);
       if (target) {
-        target.enabled = row.enabled;
         target.hours = row.hours;
       }
     });
@@ -98,18 +95,18 @@ watch(
   { deep: true },
 );
 
-const hasValidationError = computed(() => formState.some((row) => row.enabled && (row.hours <= 0 || row.hours > 24)));
+const hasValidationError = computed(() => formState.some((row) => row.hours < 0 || row.hours > 24));
 
 const canSave = computed(() => !isSaving.value && !hasValidationError.value && !isLoading.value);
 
-const validationMessage = computed(() => (hasValidationError.value ? "作業時間は0時間より大きく、24時間以下で設定してください。" : null));
+const validationMessage = computed(() => (hasValidationError.value ? "作業時間は0時間以上、24時間以下で設定してください。" : null));
 
 const handleSubmit = async () => {
   if (hasValidationError.value) {
     return;
   }
 
-  const selectedHours = formState.filter((row) => row.enabled).map((row) => ({ day: row.key, hours: row.hours }));
+  const selectedHours = formState.map((row) => ({ day: row.key, hours: row.hours }));
 
   if (!userId.value) {
     return;
@@ -145,18 +142,27 @@ defineExpose({
       <div class="list-group">
         <div v-for="row in formState" :key="row.key" class="list-group-item p-2">
           <div class="d-flex align-items-center justify-content-between">
-            <div class="form-check mb-0">
-              <input :id="`work-hours-${row.key}`" v-model="row.enabled" class="form-check-input" type="checkbox" :disabled="isLoading" />
-              <label class="form-check-label fw-medium" :for="`work-hours-${row.key}`">{{ row.label }}</label>
-            </div>
+            <label class="fw-medium mb-0" :for="`work-hours-${row.key}`">{{ row.label }}</label>
 
-            <div v-if="row.enabled" class="d-flex align-items-center gap-2">
-              <input v-model.number="row.hours" class="form-control form-control-sm" type="number" min="0.5" max="24" step="0.5" :disabled="isLoading" required />
+            <div class="d-flex align-items-center gap-2">
+              <input
+                :id="`work-hours-${row.key}`"
+                v-model.number="row.hours"
+                class="form-control form-control-sm"
+                type="number"
+                min="0"
+                max="24"
+                step="0.5"
+                :disabled="isLoading"
+                required
+              />
               <span class="text-muted small">時間</span>
             </div>
           </div>
 
-          <div v-if="row.enabled && (row.hours <= 0 || row.hours > 24)" class="text-danger small mt-1">作業時間は0.5時間以上、24時間以下で設定してください。</div>
+          <div v-if="row.hours < 0 || row.hours > 24" class="text-danger small mt-1">
+            作業時間は0時間以上、24時間以下で設定してください。
+          </div>
         </div>
       </div>
 

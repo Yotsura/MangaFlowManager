@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia';
 import WorkloadCalendar from './components/WorkloadCalendar.vue';
 import WorkHoursForm from '@/modules/settings/components/WorkHoursForm.vue';
 import UnavailableTimeModal from './components/UnavailableTimeModal.vue';
+import EditModal from '@/components/common/EditModal.vue';
 import { getHolidaysWithCabinetOfficeData } from '@/utils/dateUtils';
 import type { Holiday } from '@/utils/dateUtils';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -18,7 +19,8 @@ interface WorkHoursFormExposed {
 }
 
 const selectedDate = ref<Date | null>(null);
-const showModal = ref(false);
+const showDateModal = ref(false);
+const showWorkHoursModal = ref(false);
 const currentYear = ref(new Date().getFullYear());
 const currentMonth = ref(new Date().getMonth() + 1);
 const holidays = ref<Holiday[]>([]);
@@ -38,6 +40,10 @@ const workHoursCanSave = computed(() => workHoursRef.value?.canSave() ?? false);
 
 const saveWorkHours = () => {
   workHoursRef.value?.submit();
+};
+
+const openWorkHoursModal = () => {
+  showWorkHoursModal.value = true;
 };
 
 // 締切が設定されている作品のリスト
@@ -73,7 +79,7 @@ const updateHolidays = async () => {
 
 const onDateClick = (date: Date) => {
   selectedDate.value = date;
-  showModal.value = true;
+  showDateModal.value = true;
 };
 
 const onMonthChange = async (year: number, month: number) => {
@@ -117,13 +123,20 @@ onMounted(async () => {
 
 <template>
   <section class="container py-3">
-    <div class="mb-4">
-      <h1 class="h3 fw-semibold">カレンダー</h1>
-      <p class="text-muted">制作スケジュールや作業不可時間をカレンダーで管理します。</p>
+    <div class="mb-4 d-flex justify-content-between align-items-center">
+      <div>
+        <h1 class="h3 fw-semibold mb-1">カレンダー</h1>
+        <p class="text-muted mb-0">制作スケジュールや作業不可時間をカレンダーで管理します。</p>
+      </div>
+      <button class="btn btn-outline-secondary"
+        title="作業可能時間の設定" aria-label="作業可能時間の設定"
+        @click="openWorkHoursModal">
+        <i class="bi bi-gear"></i>
+      </button>
     </div>
 
     <div class="row g-3">
-      <div class="col-lg-8">
+      <div class="col-lg-8 order-2 order-lg-1">
         <WorkloadCalendar
           :year="currentYear"
           :month="currentMonth"
@@ -132,9 +145,9 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="col-lg-4">
+      <div class="col-lg-4 order-1 order-lg-2">
         <!-- 締切設定作品リスト -->
-        <div v-if="worksWithDeadline.length > 0" class="card mb-3">
+        <div v-if="worksWithDeadline.length > 0" class="card">
           <div class="card-header">
             <h6 class="card-title mb-0">
               <i class="bi bi-calendar-check me-2"></i>
@@ -165,28 +178,24 @@ onMounted(async () => {
             </div>
           </div>
         </div>
-
-        <!-- 作業可能時間の設定 -->
-        <div class="card">
-          <div class="card-header">
-            <div class="d-flex align-items-center justify-content-between">
-              <h6 class="card-title mb-0">
-                <i class="bi bi-clock me-2"></i>
-                作業可能時間の設定
-              </h6>
-              <button class="btn btn-primary btn-sm" type="button" :disabled="workHoursSaving || !workHoursCanSave" @click="saveWorkHours">
-                {{ workHoursSaving ? "保存中..." : "設定を保存" }}
-              </button>
-            </div>
-          </div>
-          <div class="card-body p-3">
-            <WorkHoursForm ref="workHoursRef" />
-          </div>
-        </div>
       </div>
     </div>
 
     <!-- 日付設定モーダル -->
-    <UnavailableTimeModal :date="selectedDate" :show="showModal" @update:show="showModal = $event" @close="showModal = false" />
+    <UnavailableTimeModal :date="selectedDate" :show="showDateModal" @update:show="showDateModal = $event" @close="showDateModal = false" />
+
+    <!-- 作業可能時間設定モーダル -->
+    <EditModal
+      :show="showWorkHoursModal"
+      title="作業可能時間の設定"
+      size="md"
+      :can-save="workHoursCanSave"
+      :is-saving="workHoursSaving"
+      @update:show="showWorkHoursModal = $event"
+      @save="saveWorkHours"
+      @close="showWorkHoursModal = false"
+    >
+      <WorkHoursForm ref="workHoursRef" />
+    </EditModal>
   </section>
 </template>
