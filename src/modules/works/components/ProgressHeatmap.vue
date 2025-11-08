@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { WorkUnit } from "@/store/worksStore";
+import { calculateStageProgress, collectLeafUnits, getContrastColor } from "../utils/workDetailUtils";
 
 const props = defineProps<{
   units: WorkUnit[];
@@ -10,19 +11,6 @@ const props = defineProps<{
   stageWorkloadHours?: number[]; // 各工程の工数（時間）
 }>();
 
-// 最下位レベルのユニット（stageIndexを持つもの）を再帰的に収集
-const collectLeafUnits = (units: WorkUnit[]): WorkUnit[] => {
-  const result: WorkUnit[] = [];
-  for (const unit of units) {
-    if (unit.stageIndex !== undefined) {
-      result.push(unit);
-    } else if (unit.children) {
-      result.push(...collectLeafUnits(unit.children));
-    }
-  }
-  return result;
-};
-
 const leafUnits = computed(() => collectLeafUnits(props.units));
 
 // 各工程の進捗を計算
@@ -31,18 +19,9 @@ const stageProgress = computed(() => {
     return [];
   }
 
-  const totalUnits = leafUnits.value.length;
-
   return props.stageLabels.map((label, stageIndex) => {
-    // 該当工程まで完了したユニット数を計算
-    // stageLabels[stageIndex]の工程の進捗 = その工程まで完了したユニット数
-    // 例: "ネーム済"工程(index:0)なら stageIndex >= 1 のユニット数（1つずらし）
-    const completedUnits = leafUnits.value.filter(unit => (unit.stageIndex ?? 0) >= stageIndex).length;
-    const progressPercentage = Math.round((completedUnits / totalUnits) * 100);
-
-    // デバッグログ
-    console.log(`Stage ${stageIndex} "${label}": ${completedUnits}/${totalUnits} = ${progressPercentage}%`);
-    console.log(`Units with stageIndex >= ${stageIndex + 1}:`, leafUnits.value.filter(unit => (unit.stageIndex ?? 0) >= stageIndex + 1).map(u => `Unit${u.index}(stage:${u.stageIndex})`));
+    // 共通関数を使用して進捗率を計算
+    const progressPercentage = calculateStageProgress(props.units, stageIndex);
 
     return {
       label,
@@ -52,21 +31,6 @@ const stageProgress = computed(() => {
     };
   });
 });
-
-// 背景色に対して適切なテキスト色を返す関数
-const getContrastColor = (backgroundColor: string) => {
-  // カラーコードから RGB 値を抽出
-  const hex = backgroundColor.replace('#', '');
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-
-  // 明度を計算 (0-255)
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-
-  // 明度が128より大きい場合は黒、そうでなければ白
-  return brightness > 128 ? '#000000' : '#ffffff';
-};
 </script>
 
 <template>

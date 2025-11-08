@@ -46,3 +46,42 @@ export const getRequiredHoursClass = (requiredHours: number) => {
 export const formatRequiredHours = (requiredHours: number): string => {
   return requiredHours === Infinity ? '不可能' : requiredHours.toFixed(1) + 'h';
 };
+
+/**
+ * ユニットから最下層（リーフノード）を収集
+ */
+export const collectLeafUnits = <T extends { children?: T[] }>(units: T[]): T[] => {
+  const result: T[] = [];
+  for (const unit of units) {
+    if (!unit.children || unit.children.length === 0) {
+      result.push(unit);
+    } else {
+      result.push(...collectLeafUnits(unit.children));
+    }
+  }
+  return result;
+};
+
+/**
+ * 指定された工程までの進捗率を計算
+ * @param units - 作品のユニット配列
+ * @param stageIndex - 工程のインデックス
+ * @returns 進捗率（0-100）
+ */
+export const calculateStageProgress = <T extends { children?: T[]; stageIndex?: number }>(
+  units: T[],
+  stageIndex: number
+): number => {
+  if (!units || units.length === 0) {
+    return 0;
+  }
+
+  const allLeaves = collectLeafUnits(units);
+  if (allLeaves.length === 0) {
+    return 0;
+  }
+
+  // 指定された工程以上まで完了しているユニットの数
+  const completedCount = allLeaves.filter(leaf => (leaf.stageIndex ?? 0) >= stageIndex).length;
+  return Math.round((completedCount / allLeaves.length) * 100);
+};
