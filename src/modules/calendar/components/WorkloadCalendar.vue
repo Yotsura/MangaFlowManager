@@ -5,6 +5,7 @@ import { generateCalendarDays, isSameMonth, isToday, isWeekend, isHoliday, getHo
 import type { Holiday } from '@/utils/dateUtils';
 import { useCustomDatesStore } from '@/store/customDatesStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useWorksStore } from '@/store/worksStore';
 
 interface Props {
   year?: number;
@@ -23,7 +24,9 @@ const emit = defineEmits<{
 
 const customDatesStore = useCustomDatesStore();
 const settingsStore = useSettingsStore();
+const worksStore = useWorksStore();
 const { workHours } = storeToRefs(settingsStore);
+const { works } = storeToRefs(worksStore);
 
 const currentYear = ref(props.year);
 const currentMonth = ref(props.month);
@@ -33,6 +36,16 @@ const holidaysLastUpdated = ref<number>(0);
 // カレンダーの日付配列を生成
 const calendarDays = computed(() => {
   return generateCalendarDays(currentYear.value, currentMonth.value);
+});
+
+// 週ごとにグループ化した日付配列
+const calendarWeeks = computed(() => {
+  const days = calendarDays.value;
+  const weeks: (Date | null)[][] = [];
+  for (let i = 0; i < days.length; i += 7) {
+    weeks.push(days.slice(i, i + 7));
+  }
+  return weeks;
 });
 
 // 現在の月の参照日（月判定用）
@@ -112,6 +125,11 @@ const getDateCellClass = (date: Date) => {
     }
   }
 
+  // 締め切りがある日付
+  if (getDeadlineWork(date)) {
+    classes.push('has-deadline');
+  }
+
   return classes.join(' ');
 };
 
@@ -180,6 +198,15 @@ const getWorkHoursForDate = (date: Date): number => {
   return workHoursMap.get(dayKey) ?? 0;
 };
 
+// 指定日が締切の作品を取得（最初の1作品のみ）
+const getDeadlineWork = (date: Date): string | null => {
+  const dateString = formatLocalDate(date);
+  const work = works.value.find(
+    work => work.deadline === dateString && work.status !== '完了'
+  );
+  return work ? work.title : null;
+};
+
 // 年が変わったら祝日データを更新
 watch(() => currentYear.value, async () => {
   await updateHolidays();
@@ -237,42 +264,30 @@ onMounted(async () => {
 
       <!-- 日付グリッド -->
       <div class="calendar-dates">
-        <div
-          v-for="(week, weekIndex) in Math.ceil(calendarDays.length / 7)"
-          :key="weekIndex"
-          class="row g-0 calendar-week"
-        >
-          <div
-            v-for="dayIndex in 7"
-            :key="dayIndex"
-            class="col calendar-cell"
-          >
-            <template v-if="calendarDays[weekIndex * 7 + dayIndex - 1]">
+        <div class="row g-0 calendar-week"
+          v-for="(week, weekIndex) in calendarWeeks" :key="weekIndex" >
+          <div class="col calendar-cell"
+            v-for="(date, dayIndex) in week" :key="dayIndex">
+            <template v-if="date">
               <button
-                v-if="calendarDays[weekIndex * 7 + dayIndex - 1]"
-                :class="getDateCellClass(calendarDays[weekIndex * 7 + dayIndex - 1]!)"
-                @click="onDateClick(calendarDays[weekIndex * 7 + dayIndex - 1]!)"
-                :title="getHolidayName(calendarDays[weekIndex * 7 + dayIndex - 1]!) || ''"
-              >
-                <div class="date-number">
-                  {{ calendarDays[weekIndex * 7 + dayIndex - 1]!.getDate() }}
-                </div>
+                :class="getDateCellClass(date)"
+                :title="getHolidayName(date) || ''"
+                @click="onDateClick(date)">
+                <div class="date-number">{{ date.getDate() }}</div>
                 <div class="label-area">
-                  <div
-                    v-if="getHolidayName(calendarDays[weekIndex * 7 + dayIndex - 1]!)"
-                    class="holiday-name"
-                  >
-                    {{ getHolidayName(calendarDays[weekIndex * 7 + dayIndex - 1]!) }}
+                  <div v-if="getHolidayName(date)" class="holiday-name">
+                    {{ getHolidayName(date) }}
                   </div>
-                  <div
-                    v-if="getCustomDateLabel(calendarDays[weekIndex * 7 + dayIndex - 1]!)"
-                    class="custom-label"
-                  >
-                    {{ getCustomDateLabel(calendarDays[weekIndex * 7 + dayIndex - 1]!) }}
+                  <div v-if="getCustomDateLabel(date)" class="custom-label">
+                    {{ getCustomDateLabel(date) }}
                   </div>
                 </div>
                 <div class="work-hours">
-                  {{ getWorkHoursForDate(calendarDays[weekIndex * 7 + dayIndex - 1]!).toFixed(1) }}h
+                  {{ getWorkHoursForDate(date).toFixed(1) }}h
+                </div>
+                <div class="deadline-label">
+                  <template v-if="getDeadlineWork(date)">〆</template>
+                  {{ getDeadlineWork(date) }}
                 </div>
               </button>
             </template>
@@ -325,12 +340,16 @@ onMounted(async () => {
   color: #adb5bd;
 }
 
+.calendar-date.other-month:hover {
+  background-color: #f8f9fa;
+}
+
 .calendar-date.today {
   position: relative;
 }
 
 .calendar-date.today .date-number {
-  background-color: #9b87f3;
+  background-color: #baacfc;
   color: white;
   font-weight: bold;
   border-radius: 50%;
@@ -340,14 +359,11 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   line-height: 1;
-}
-
-.calendar-date.today:hover {
-  background-color: #f8f9fa;
+  transition: background-color 0.2s ease;
 }
 
 .calendar-date.today:hover .date-number {
-  background-color: #138496;
+  background-color: #a293e9;
 }
 
 .calendar-date.weekend {
@@ -364,6 +380,10 @@ onMounted(async () => {
   color: #f5c2c7;
 }
 
+.calendar-date.other-month.weekend:hover {
+  background-color: #f8f9fa;
+}
+
 .calendar-date.holiday {
   background-color: #fdf2f2;
   color: #dc3545;
@@ -376,6 +396,10 @@ onMounted(async () => {
 .calendar-date.other-month.holiday {
   background-color: transparent;
   color: #f5c2c7;
+}
+
+.calendar-date.other-month.holiday:hover {
+  background-color: #f8f9fa;
 }
 
 .calendar-date.custom-holiday {
@@ -405,6 +429,23 @@ onMounted(async () => {
 
 .calendar-date.custom-hours:hover {
   background-color: #bee5eb;
+}
+
+.calendar-date.has-deadline {
+  background-color: #ff6666;
+  color: white;
+}
+
+.calendar-date.has-deadline:hover {
+  background-color: #ff4d4d;
+}
+
+.calendar-date.has-deadline .work-hours {
+  color: white;
+}
+
+.calendar-date.has-deadline .deadline-label {
+  color: white;
 }
 
 .date-number {
@@ -468,5 +509,18 @@ onMounted(async () => {
   font-weight: 500;
   color: #000;
   min-height: 14px;
+}
+
+.deadline-label {
+  font-size: 0.55rem;
+  line-height: 0.9;
+  text-align: center;
+  margin-top: 2px;
+  font-weight: 600;
+  color: #dc3545;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
 }
 </style>

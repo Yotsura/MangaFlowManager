@@ -29,6 +29,7 @@ const worksStore = useWorksStore();
 const authStore = useAuthStore();
 const customDatesStore = useCustomDatesStore();
 const { user } = storeToRefs(authStore);
+const { works } = storeToRefs(worksStore);
 
 // 作業可能時間設定用
 const workHoursRef = ref<WorkHoursFormExposed | null>(null);
@@ -38,6 +39,27 @@ const workHoursCanSave = computed(() => workHoursRef.value?.canSave() ?? false);
 const saveWorkHours = () => {
   workHoursRef.value?.submit();
 };
+
+// 締切が設定されている作品のリスト
+const worksWithDeadline = computed(() => {
+  return works.value
+    .filter(work => work.deadline && work.status !== '完了')
+    .map(work => {
+      const metrics = worksStore.calculateActualWorkHours(work.id);
+      return {
+        id: work.id,
+        title: work.title,
+        deadline: work.deadline,
+        progressPercentage: metrics.progressPercentage,
+        remainingHours: metrics.remainingEstimatedHours,
+        totalHours: metrics.totalEstimatedHours
+      };
+    })
+    .sort((a, b) => {
+      // 締切の近い順にソート
+      return new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime();
+    });
+});
 
 // 祝日データを更新
 const updateHolidays = async () => {
@@ -100,7 +122,7 @@ onMounted(async () => {
       <p class="text-muted">制作スケジュールや作業不可時間をカレンダーで管理します。</p>
     </div>
 
-    <div class="row">
+    <div class="row g-3">
       <div class="col-lg-8">
         <WorkloadCalendar
           :year="currentYear"
@@ -111,6 +133,39 @@ onMounted(async () => {
       </div>
 
       <div class="col-lg-4">
+        <!-- 締切設定作品リスト -->
+        <div v-if="worksWithDeadline.length > 0" class="card mb-3">
+          <div class="card-header">
+            <h6 class="card-title mb-0">
+              <i class="bi bi-calendar-check me-2"></i>
+              締切設定作品
+            </h6>
+          </div>
+          <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+              <router-link
+                v-for="work in worksWithDeadline"
+                :key="work.id"
+                :to="`/works/${work.id}`"
+                class="list-group-item list-group-item-action px-3 py-2"
+              >
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                  <div class="fw-semibold small">{{ work.title }}</div>
+                  <span class="badge bg-secondary ms-2">{{ new Date(work.deadline!).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/') }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <div class="small text-muted">
+                    進捗 {{ work.progressPercentage }}%
+                  </div>
+                  <div class="small text-muted">
+                    残り {{ work.remainingHours.toFixed(1) }}h / {{ work.totalHours.toFixed(1) }}h
+                  </div>
+                </div>
+              </router-link>
+            </div>
+          </div>
+        </div>
+
         <!-- 作業可能時間の設定 -->
         <div class="card">
           <div class="card-header">
