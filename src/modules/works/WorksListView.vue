@@ -927,7 +927,7 @@ if (typeof window !== 'undefined') {
                     'text-warning': getWorkMetrics(work).requiredDailyHours.value > 8 && getWorkMetrics(work).requiredDailyHours.value <= 12,
                     'text-success': getWorkMetrics(work).requiredDailyHours.value <= 8
                   }">
-                    {{ getWorkMetrics(work).requiredDailyHours.value === Infinity ? '不可能' : getWorkMetrics(work).requiredDailyHours.value.toFixed(2) + ' h' }}
+                    {{ getWorkMetrics(work).requiredDailyHours.value === Infinity ? '不可能' : getWorkMetrics(work).requiredDailyHours.value.toFixed(1) + ' h' }}
                   </dd>
                 </div>
               </dl>

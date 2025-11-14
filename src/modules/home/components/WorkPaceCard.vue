@@ -16,14 +16,14 @@
           </span>
         </div>
 
-        <!-- 今日の必要工数 -->
+        <!-- 1日の必要工数 -->
         <div class="text-center mb-3 pb-3 border-bottom">
           <small class="text-muted d-block mb-2">
             <i class="bi bi-clock-history me-1"></i>
-            今日の必要工数
+            1日の必要工数
           </small>
           <div class="h3 mb-0" :class="`text-${paceColor}`">
-            {{ paceCalculation.todayRequiredHours.toFixed(1) }}h
+            {{ paceCalculation.dailyRequiredHours.toFixed(1) }}h
           </div>
         </div>
 
