@@ -65,7 +65,7 @@ export interface Work {
   defaultCounts: number[]; // 各粒度レベルのデフォルト数 [上位→下位]
   primaryGranularityId: string | null;
   unitEstimatedHours: number;
-  totalEstimatedHours: number;
+  totalEstimatedHours: number; // レガシーフィールド: 新規計算では worksStore.calculateActualWorkHours() を使用すること
   units: WorkUnit[]; // 最上位粒度の配列
 
   // 作品固有の設定

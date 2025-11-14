@@ -66,38 +66,8 @@ const pageCount = computed(() => actualWorkHours.value.pageCount);
 const totalPanels = computed(() => actualWorkHours.value.totalPanels);
 const remainingHours = computed(() => workMetrics.remainingEstimatedHours.value);
 const totalHours = computed(() => actualWorkHours.value.totalEstimatedHours);
-const progressPercentage = computed(() => {
-  if (!work.value || !work.value.units || work.value.units.length === 0) return 0;
-
-  const workGranularities = work.value.workGranularities && work.value.workGranularities.length > 0
-    ? work.value.workGranularities
-    : granularities.value;
-
-  if (workGranularities.length === 0) return 0;
-
-  const stageWorkloads = work.value.workStageWorkloads && work.value.workStageWorkloads.length > 0
-    ? work.value.workStageWorkloads
-    : settingsStore.stageWorkloads;
-
-  const finalStageIndex = stageWorkloads.length - 1;
-
-  const allLeaves: typeof work.value.units = [];
-  const collectLeaves = (units: typeof work.value.units) => {
-    for (const unit of units) {
-      if (!unit.children || unit.children.length === 0) {
-        allLeaves.push(unit);
-      } else {
-        collectLeaves(unit.children);
-      }
-    }
-  };
-  collectLeaves(work.value.units);
-
-  if (allLeaves.length === 0) return 0;
-
-  const completedCount = allLeaves.filter(leaf => leaf.stageIndex === finalStageIndex).length;
-  return Math.round((completedCount / allLeaves.length) * 100);
-});
+// 進捗率は共通の計算を使用
+const progressPercentage = computed(() => actualWorkHours.value.progressPercentage);
 
 const requiredHoursClass = computed(() => getRequiredHoursClass(workMetrics.requiredDailyHours.value));
 const requiredHoursText = computed(() => formatRequiredHours(workMetrics.requiredDailyHours.value));

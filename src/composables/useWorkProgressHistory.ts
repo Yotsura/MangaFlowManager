@@ -115,6 +115,10 @@ export function useWorkProgressHistory() {
       const work = works.value.find(w => w.id === dataset.workId);
       if (!work) return null;
 
+      // 作品の総工数を共通関数から取得
+      const workMetrics = worksStore.calculateActualWorkHours(dataset.workId);
+      const totalHours = workMetrics.totalEstimatedHours || 1;
+
       // この作品の日付範囲外はnullにして線を引かない
       const data = dates.map(date => {
         // この作品の日付範囲内かチェック
@@ -132,8 +136,7 @@ export function useWorkProgressHistory() {
           }
           return point.hoursWorked;
         } else if (mode === 'cumulative-percent') {
-          // 累計進捗率モード
-          const totalHours = work.totalEstimatedHours || 1;
+          // 累計進捗率モード: 共通関数から取得した総工数で計算
           return (point.completedHours / totalHours) * 100;
         } else {
           // 累計完了工数モード（時間で表示）
