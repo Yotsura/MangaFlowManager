@@ -11,11 +11,22 @@ const emit = defineEmits<{
   'toggle-edit-mode': [];
   'cancel': [];
   'save': [];
+  'open-graph': [];
 }>();
 </script>
 
 <template>
   <div class="work-action-buttons">
+    <!-- グラフ表示ボタン -->
+    <button
+      type="button"
+      class="btn btn-outline-info rounded-circle shadow"
+      @click="emit('open-graph')"
+      title="進捗グラフを表示"
+    >
+      <i class="bi bi-graph-up"></i>
+    </button>
+
     <!-- 編集モードでない時：編集ボタンのみ -->
     <button
       v-if="!isEditMode"

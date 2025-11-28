@@ -8,6 +8,7 @@ import WorkSummaryCard from "./components/WorkSummaryCard.vue";
 import WorkStageSettingsCard from "./components/WorkStageSettingsCard.vue";
 import WorkStructureCard from "./components/WorkStructureCard.vue";
 import WorkActionButtons from "./components/WorkActionButtons.vue";
+import WorkProgressModalChart from "./components/WorkProgressModalChart.vue";
 
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -80,6 +81,7 @@ const currentStructureString = computed(() => {
   return convertWorkUnitsToStructureString(work.value.units, granularityCount);
 });const lastSaveStatus = ref<string | null>(null);
 const isEditMode = ref(false);
+const isProgressModalOpen = ref(false);
 const savingPanelIds = ref(new Set<string>());
 
 // 作品構造編集用の状態
@@ -621,6 +623,18 @@ const goBackToList = () => {
   router.push({ name: "works" });
 };
 
+const openProgressModal = () => {
+  isProgressModalOpen.value = true;
+};
+
+const closeProgressModal = () => {
+  isProgressModalOpen.value = false;
+};
+
+const progressModalTitle = computed(() => {
+  return work.value ? `${work.value.title} の進捗グラフ` : "作品進捗グラフ";
+});
+
 </script>
 
 <template>
@@ -681,10 +695,23 @@ const goBackToList = () => {
         :is-edit-mode="isEditMode"
         :can-save="canSaveWork"
         :is-saving="isSavingWork"
+        @open-graph="openProgressModal"
         @toggle-edit-mode="toggleEditMode"
         @cancel="toggleEditMode"
         @save="handleSave"
       />
+
+      <EditModal
+        :show="isProgressModalOpen"
+        :title="progressModalTitle"
+        size="xl"
+        hide-save-button
+        cancel-button-text="閉じる"
+        @close="closeProgressModal"
+        @save="closeProgressModal"
+      >
+        <WorkProgressModalChart v-if="work" :work-id="work.id" />
+      </EditModal>
 
       <!-- 工程設定編集モーダル -->
       <EditModal
