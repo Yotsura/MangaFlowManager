@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useWorksStore } from '@/store/worksStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { calculateStageProgress } from '../utils/workDetailUtils';
+import { calculateStageProgress, collectLeafUnits } from '../utils/workDetailUtils';
 import { normalizeStageColorValue } from '../utils/stageColor';
 
 interface Props {
@@ -87,6 +87,22 @@ const getStageProgress = (stageIndex: number) => {
   return calculateStageProgress(work.value.units, stageIndex);
 };
 
+const stageUnitTotals = computed(() => {
+  if (!work.value?.units || workStageWorkloads.value.length === 0) {
+    return [];
+  }
+
+  const leaves = collectLeafUnits(work.value.units);
+  const total = leaves.length;
+
+  return workStageWorkloads.value.map((_, index) => {
+    const completedCount = total > 0
+      ? leaves.filter(unit => (unit.stageIndex ?? 0) >= index).length
+      : 0;
+    return { completed: completedCount, total };
+  });
+});
+
 
 </script>
 
@@ -115,7 +131,10 @@ const getStageProgress = (stageIndex: number) => {
           <div class="d-none d-md-block">
             <div class="d-flex justify-content-between align-items-center mb-1">
               <span class="small fw-semibold">{{ label }} ({{ stageWorkloadHours[index] }}h)</span>
-              <span class="small text-muted">{{ getStageProgress(index) }}%</span>
+              <span class="small text-muted">
+                {{ getStageProgress(index) }}%
+                ({{ stageUnitTotals[index]?.completed ?? 0 }}/{{ stageUnitTotals[index]?.total ?? 0 }})
+              </span>
             </div>
             <div class="progress" style="height: 20px;">
               <div
@@ -148,7 +167,10 @@ const getStageProgress = (stageIndex: number) => {
                 aria-valuemax="100"
               ></div>
             </div>
-            <span class="small text-muted text-nowrap" style="min-width: 35px;">{{ getStageProgress(index) }}%</span>
+            <span class="small text-muted text-nowrap" style="min-width: 80px;">
+              {{ getStageProgress(index) }}%
+              ({{ stageUnitTotals[index]?.completed ?? 0 }}/{{ stageUnitTotals[index]?.total ?? 0 }})
+            </span>
           </div>
         </div>
       </div>
