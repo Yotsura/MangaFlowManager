@@ -45,6 +45,7 @@ import {
   getAllLeafUnits,
   getActualWorkDepth,
   getUnitDepthInHierarchy,
+  buildStageWorkloadMetrics,
 } from "@/utils/workStoreHelpers";
 
 // シリアライゼーション関数をインポート
@@ -922,82 +923,30 @@ export const useWorksStore = defineStore("works", {
         };
       }
 
-      // 作品固有設定または全体設定を使用
-      const workGranularities = work.workGranularities && work.workGranularities.length > 0
-        ? work.workGranularities
-        : [];
-      const workStageWorkloads = work.workStageWorkloads && work.workStageWorkloads.length > 0
-        ? work.workStageWorkloads
-        : [];
+      const settingsStore = useSettingsStore();
+      const stageMetrics = buildStageWorkloadMetrics(
+        work,
+        settingsStore.granularities,
+        settingsStore.stageWorkloads
+      );
 
-
-
-      if (work.primaryGranularityId && workStageWorkloads.length > 0 && workGranularities.length > 0) {
-        // 各段階の工数を取得（baseHoursは最低粒度での工数）
-        const lowestGranularity = workGranularities.reduce((min, current) =>
-          current.weight < min.weight ? current : min
-        );
-
-        const stageWorkloadHours = workStageWorkloads.map(stage => {
-          let baseHours = stage.baseHours;
-
-          // 後方互換性: baseHoursがない場合はentriesから計算
-          if (baseHours === null || baseHours === undefined) {
-            if (stage.entries && Array.isArray(stage.entries)) {
-              // 最低粒度のentriesを探す
-              const lowestEntry = stage.entries.find(entry => entry.granularityId === lowestGranularity.id);
-              if (lowestEntry && lowestEntry.hours !== null && lowestEntry.hours !== undefined) {
-                baseHours = lowestEntry.hours;
-              } else {
-                // 他の粒度から最低粒度の工数に逆算
-                for (const entry of stage.entries) {
-                  if (entry.hours !== null && entry.hours !== undefined) {
-                    const entryGranularity = workGranularities.find(g => g.id === entry.granularityId);
-                    if (entryGranularity) {
-                      baseHours = (entry.hours * lowestGranularity.weight) / entryGranularity.weight;
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          if (baseHours === null || baseHours === undefined) {
-            return 0;
-          }
-
-          // baseHoursは最低粒度での工数なので、そのまま使用
-          return baseHours;
-        });
-
-        // 各段階の累積工数を計算（進捗計算用）
-        const cumulativeWorkloads = stageWorkloadHours.reduce((acc, hours, index) => {
-          const prevTotal = index > 0 ? (acc[index - 1] ?? 0) : 0;
-          acc.push(prevTotal + hours);
-          return acc;
-        }, [] as number[]);
-
-        // 総工数は全段階の工数の合計（累積の最終値）
-        const totalWorkHoursPerUnit = cumulativeWorkloads[cumulativeWorkloads.length - 1] || 0;
+      if (stageMetrics) {
+        const stageCount = stageMetrics.stageWorkloadHours.length;
+        const totalWorkHoursPerUnit = stageMetrics.totalWorkHoursPerUnit;
         const totalEstimatedHours = Number((totalWorkHoursPerUnit * totalUnits).toFixed(2));
 
-        // 各ユニットの完了工数を計算
         const completedWorkHours = leafUnits.reduce((sum, unit) => {
-          const stageIndex = unit.stageIndex ?? 0;
-          // stageIndexは現在の段階を示す (0=未着手, 1=ネーム済, 2=下書済, 3=ペン入済, 4=仕上済)
-          // stageIndexが指す段階まで完了しているので、その段階の累積工数を使用
-          if (stageIndex >= stageWorkloadHours.length) {
-            // 全段階完了の場合（最終段階を超えている場合）
-            return sum + totalWorkHoursPerUnit;
-          } else if (stageIndex > 0) {
-            // stageIndexが1以上の場合、その段階の累積工数を使用
-            // 例: stageIndex=4(仕上済)なら cumulativeWorkloads[4] を使用
-            return sum + (cumulativeWorkloads[stageIndex] || 0);
-          } else {
-            // 未着手の場合 (stageIndex=0)
+          const stageIndex = Math.max(0, Math.min(unit.stageIndex ?? 0, stageCount));
+
+          if (stageIndex === 0) {
             return sum;
           }
+
+          if (stageIndex >= stageCount) {
+            return sum + totalWorkHoursPerUnit;
+          }
+
+          return sum + (stageMetrics.cumulativeWorkloads[stageIndex] || 0);
         }, 0);
 
         const completedEstimatedHours = Number(completedWorkHours.toFixed(2));
@@ -1015,34 +964,31 @@ export const useWorksStore = defineStore("works", {
           totalPanels,
           averagePanelsPerPage
         };
-      } else {
-        // 従来の計算方法（工数データがない場合）
-        // stageCountを取得
-        const settingsStore = useSettingsStore();
-        const stageCount = settingsStore.stageWorkloads.length;
-
-        // 完了ユニット数を計算
-        const completedUnits = stageCount > 0
-          ? leafUnits.filter(unit => (unit.stageIndex ?? 0) >= stageCount - 1).length
-          : 0;
-
-        const totalEstimatedHours = Number((work.totalUnits * work.unitEstimatedHours).toFixed(2));
-        const completedEstimatedHours = Number((completedUnits * work.unitEstimatedHours).toFixed(2));
-        const remainingEstimatedHours = Number((totalEstimatedHours - completedEstimatedHours).toFixed(2));
-        const progressPercentage = totalUnits > 0
-          ? Math.round((completedUnits / totalUnits) * 100)
-          : 0;
-
-        return {
-          totalEstimatedHours,
-          remainingEstimatedHours: Math.max(0, remainingEstimatedHours),
-          completedEstimatedHours,
-          progressPercentage,
-          pageCount,
-          totalPanels,
-          averagePanelsPerPage
-        };
       }
+
+      // 従来の計算方法（工数データがない場合）
+      const stageCount = settingsStore.stageWorkloads.length;
+
+      const completedUnits = stageCount > 0
+        ? leafUnits.filter(unit => (unit.stageIndex ?? 0) >= stageCount - 1).length
+        : 0;
+
+      const totalEstimatedHours = Number((work.totalUnits * work.unitEstimatedHours).toFixed(2));
+      const completedEstimatedHours = Number((completedUnits * work.unitEstimatedHours).toFixed(2));
+      const remainingEstimatedHours = Number((totalEstimatedHours - completedEstimatedHours).toFixed(2));
+      const progressPercentage = totalUnits > 0
+        ? Math.round((completedUnits / totalUnits) * 100)
+        : 0;
+
+      return {
+        totalEstimatedHours,
+        remainingEstimatedHours: Math.max(0, remainingEstimatedHours),
+        completedEstimatedHours,
+        progressPercentage,
+        pageCount,
+        totalPanels,
+        averagePanelsPerPage
+      };
     },
 
     /**
@@ -1057,6 +1003,28 @@ export const useWorksStore = defineStore("works", {
       const metrics = this.calculateActualWorkHours(workId);
       const completedHours = metrics.completedEstimatedHours;
 
+      const settingsStore = useSettingsStore();
+      const stageMetrics = buildStageWorkloadMetrics(
+        work,
+        settingsStore.granularities,
+        settingsStore.stageWorkloads
+      );
+
+      let unitStageCounts: number[] | undefined;
+
+      if (stageMetrics) {
+        const stageCount = stageMetrics.stageWorkloadHours.length;
+        const counts = new Array(stageCount + 1).fill(0);
+        const leafUnits = getAllLeafUnits(work.units);
+
+        for (const unit of leafUnits) {
+          const stageIndex = Math.max(0, Math.min(unit.stageIndex ?? 0, stageCount));
+          counts[stageIndex] += 1;
+        }
+
+        unitStageCounts = counts;
+      }
+
       // 進捗履歴を初期化（存在しない場合）
       if (!work.progressHistory) {
         work.progressHistory = [];
@@ -1065,20 +1033,19 @@ export const useWorksStore = defineStore("works", {
       // 今日の記録が既に存在するか確認
       const existingIndex = work.progressHistory.findIndex(h => h.date === today);
 
+      const historyEntryBase = {
+        date: today,
+        completedHours,
+        timestamp: Date.now(),
+        ...(unitStageCounts ? { unitStageCounts } : {})
+      } as WorkProgressHistory;
+
       if (existingIndex >= 0) {
         // 既存の記録を更新
-        work.progressHistory[existingIndex] = {
-          date: today,
-          completedHours,
-          timestamp: Date.now()
-        };
+        work.progressHistory[existingIndex] = historyEntryBase;
       } else {
         // 新しい記録を追加
-        work.progressHistory.push({
-          date: today,
-          completedHours,
-          timestamp: Date.now()
-        });
+        work.progressHistory.push(historyEntryBase);
       }
 
       // 日付順にソート

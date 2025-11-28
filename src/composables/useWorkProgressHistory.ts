@@ -1,7 +1,10 @@
 import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useWorksStore } from '@/store/worksStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { getDateRange } from '@/utils/dateUtils';
+import { buildStageWorkloadMetrics, calculateCompletedHoursFromStageCounts } from '@/utils/workStoreHelpers';
+import type { WorkProgressHistory } from '@/types/models';
 
 export type ProgressDisplayMode = 'daily' | 'cumulative-percent' | 'cumulative-units';
 
@@ -14,6 +17,8 @@ export type ProgressDisplayMode = 'daily' | 'cumulative-percent' | 'cumulative-u
 export function useWorkProgressHistory() {
   const worksStore = useWorksStore();
   const { works } = storeToRefs(worksStore);
+  const settingsStore = useSettingsStore();
+  const { granularities, stageWorkloads } = storeToRefs(settingsStore);
 
   // 表示モード
   const displayMode = ref<ProgressDisplayMode>('daily');
@@ -30,6 +35,19 @@ export function useWorkProgressHistory() {
       .filter(work => work.progressHistory && work.progressHistory.length > 0)
       .map(work => {
         const history = work.progressHistory || [];
+        const stageMetrics = buildStageWorkloadMetrics(
+          work,
+          granularities.value,
+          stageWorkloads.value
+        );
+
+        const computeCompletedHours = (entry: WorkProgressHistory): number => {
+          const hoursFromCounts = calculateCompletedHoursFromStageCounts(entry.unitStageCounts, stageMetrics);
+          if (hoursFromCounts > 0) {
+            return hoursFromCounts;
+          }
+          return entry.completedHours ?? 0;
+        };
 
         // 最初のデータから最後のデータまでの範囲
         const startDate = history[0].date;
@@ -38,26 +56,26 @@ export function useWorkProgressHistory() {
 
         // 各日付のデータを生成（reduceで前の値を参照しながら構築）
         const dataPoints = allDatesInRange.reduce((acc, date, index) => {
-          // historyから該当する日付のデータを探す
           const historyEntry = history.find(h => h.date === date);
           const previousPoint = index > 0 ? acc[index - 1] : null;
           const isFirstDay = index === 0;
 
           if (historyEntry) {
-            // データがある日
+            const currentCompletedHours = computeCompletedHours(historyEntry);
+            const previousCompleted = previousPoint ? previousPoint.completedHours : 0;
+            const diff = currentCompletedHours - previousCompleted;
+
             acc.push({
               date,
-              completedHours: historyEntry.completedHours,
-              hoursWorked: previousPoint
-                ? historyEntry.completedHours - previousPoint.completedHours
-                : 0, // 初日は日次では0（表示しない）
+              completedHours: currentCompletedHours,
+              hoursWorked: isFirstDay ? 0 : Number(diff.toFixed(2)),
               isFirstDay
             });
           } else {
-            // データがない日は前日の値を保持（進捗0）
+            const previousCompleted = previousPoint ? previousPoint.completedHours : 0;
             acc.push({
               date,
-              completedHours: previousPoint ? previousPoint.completedHours : 0,
+              completedHours: previousCompleted,
               hoursWorked: 0,
               isFirstDay
             });

@@ -25,8 +25,10 @@ export interface WorkItem {
 export interface WorkProgressHistory {
   /** 記録日（YYYY-MM-DD形式） */
   date: string;
-  /** その日の時点での作業済み工数（時間） */
-  completedHours: number;
+  /** その日の時点での作業済み工数（時間） - 旧プロパティ */
+  completedHours?: number;
+  /** ステージごとの到達ユニット数（最低粒度単位） */
+  unitStageCounts?: number[];
   /** 記録日時のタイムスタンプ */
   timestamp: number;
 }

@@ -1,4 +1,4 @@
-import type { WorkUnit } from "@/types/work";
+import type { Work, WorkGranularity, WorkStageWorkload, WorkUnit } from "@/types/work";
 import { collectLeafUnits } from "@/utils/workUtils";
 
 /**
@@ -110,4 +110,116 @@ export const getUnitDepthInHierarchy = (
     }
   }
   return -1; // 見つからない場合
+};
+
+export interface StageWorkloadMetrics {
+  stageWorkloads: WorkStageWorkload[];
+  granularities: WorkGranularity[];
+  stageWorkloadHours: number[];
+  cumulativeWorkloads: number[];
+  totalWorkHoursPerUnit: number;
+}
+
+export const buildStageWorkloadMetrics = (
+  work: Work,
+  defaultGranularities: WorkGranularity[],
+  defaultStageWorkloads: WorkStageWorkload[]
+): StageWorkloadMetrics | null => {
+  const granularities = (work.workGranularities && work.workGranularities.length > 0)
+    ? work.workGranularities
+    : defaultGranularities;
+
+  const stageWorkloads = (work.workStageWorkloads && work.workStageWorkloads.length > 0)
+    ? work.workStageWorkloads
+    : defaultStageWorkloads;
+
+  if (!work.primaryGranularityId || granularities.length === 0 || stageWorkloads.length === 0) {
+    return null;
+  }
+
+  const lowestGranularity = granularities.reduce((min, current) =>
+    current.weight < min.weight ? current : min
+  );
+
+  const stageWorkloadHours = stageWorkloads.map(stage => {
+    let baseHours = stage.baseHours;
+
+    if (baseHours === null || baseHours === undefined) {
+      if (stage.entries && Array.isArray(stage.entries)) {
+        const lowestEntry = stage.entries.find(entry =>
+          entry.granularityId === lowestGranularity.id && entry.hours !== null && entry.hours !== undefined
+        );
+
+        if (lowestEntry) {
+          baseHours = lowestEntry.hours ?? null;
+        } else {
+          for (const entry of stage.entries) {
+            if (entry.hours !== null && entry.hours !== undefined) {
+              const entryGranularity = granularities.find(g => g.id === entry.granularityId);
+              if (entryGranularity) {
+                baseHours = (entry.hours * lowestGranularity.weight) / entryGranularity.weight;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (baseHours === null || baseHours === undefined) {
+      return 0;
+    }
+
+    return baseHours;
+  });
+
+  const cumulativeWorkloads = stageWorkloadHours.reduce((acc, hours, index) => {
+    const prevTotal = index > 0 ? (acc[index - 1] ?? 0) : 0;
+    acc.push(prevTotal + hours);
+    return acc;
+  }, [] as number[]);
+
+  const totalWorkHoursPerUnit = cumulativeWorkloads[cumulativeWorkloads.length - 1] || 0;
+
+  return {
+    stageWorkloads,
+    granularities,
+    stageWorkloadHours,
+    cumulativeWorkloads,
+    totalWorkHoursPerUnit
+  };
+};
+
+export const calculateCompletedHoursFromStageCounts = (
+  unitStageCounts: number[] | undefined,
+  metrics: StageWorkloadMetrics | null
+): number => {
+  if (!unitStageCounts || !metrics) {
+    return 0;
+  }
+
+  const stageCount = metrics.stageWorkloadHours.length;
+  const totalPerUnit = metrics.totalWorkHoursPerUnit;
+
+  if (stageCount === 0) {
+    return 0;
+  }
+
+  let total = 0;
+
+  unitStageCounts.forEach((count, index) => {
+    if (!count || index === 0) {
+      return;
+    }
+
+    if (index >= stageCount) {
+      total += count * totalPerUnit;
+      return;
+    }
+
+    const cumulative = metrics.cumulativeWorkloads[index] ?? 0;
+    total += count * cumulative;
+  });
+
+  return Number(total.toFixed(2));
 };
