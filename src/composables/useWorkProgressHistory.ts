@@ -5,7 +5,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { getDateRange } from '@/utils/dateUtils';
 import { buildStageWorkloadMetrics, calculateCompletedHoursFromStageCounts } from '@/utils/workStoreHelpers';
 import { cloneStageCounts, normalizeUnitStageCounts } from '@/utils/workProgressUtils';
-import type { UnitStageCountEntry, WorkProgressHistory } from '@/types/models';
+import type { UnitStageCountEntry } from '@/types/models';
 
 export type ProgressDisplayMode = 'daily' | 'cumulative-percent' | 'cumulative-units';
 

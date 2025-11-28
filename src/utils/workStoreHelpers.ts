@@ -1,4 +1,4 @@
-import type { UnitStageCountEntry, UnitStageCounts } from "@/types/models";
+import type { UnitStageCounts } from "@/types/models";
 import type { Work, WorkGranularity, WorkStageWorkload, WorkUnit } from "@/types/work";
 import { collectLeafUnits } from "@/utils/workUtils";
 
