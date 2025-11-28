@@ -159,12 +159,19 @@ const chartData = computed(() => {
   const includeStageData = hasStageSeries.value && !!metrics;
   const stageCount = includeStageData && metrics ? metrics.stageWorkloadHours.length : 0;
   const stageSeries = includeStageData
-    ? Array.from({ length: stageCount }, () => [] as (number | null)[])
+    ? Array.from({ length: stageCount }, () => Array(points.length).fill(null) as (number | null)[])
     : [];
+
+  const filteredIndexByDate = includeStageData
+    ? new Map(points.map((point, index) => [point.date, index]))
+    : null;
 
   const stageLabelsLocal = includeStageData ? stageLabels.value : [];
   const stageColorsLocal = includeStageData ? stageColors.value : [];
   const stageIdOrderLocal = includeStageData ? stageIdOrder.value : [];
+  const stageIndexById = includeStageData
+    ? new Map(stageIdOrderLocal.map((stageId, index) => [stageId, index]))
+    : null;
   const stageCumulativeHours = includeStageData && metrics
     ? metrics.stageWorkloadHours.reduce((acc: number[], hours, idx) => {
         const normalized = Number.isFinite(hours) ? Number(hours) : 0;
@@ -179,107 +186,117 @@ const chartData = computed(() => {
   let previousStageValues: number[] | null = includeStageData ? new Array(stageCount).fill(0) : null;
   let actualStageCountsDays = 0;
 
-  const totalDataValues = points.map((point, index) => {
-    let stageValues = previousStageValues ? [...previousStageValues] : [];
+  if (includeStageData && filteredIndexByDate && stageIndexById) {
+    const computeStageStats = (entries: UnitStageCountEntry[] | undefined) => {
+      const rawCounts = new Array(stageCount + 1).fill(0);
 
-    if (includeStageData && metrics) {
-      let shouldPlotStageValues = true;
+      (entries ?? []).forEach(entry => {
+        if (!entry) {
+          return;
+        }
 
-      if (point.hasActualStageCounts) {
-        actualStageCountsDays += 1;
-        const rawCounts = new Array(stageCount + 1).fill(0);
-        const stageIndexById = new Map<number, number>();
+        const numeric = Number(entry.count);
+        if (!Number.isFinite(numeric) || numeric <= 0) {
+          return;
+        }
 
-        stageIdOrderLocal.forEach((stageId, idx) => {
-          stageIndexById.set(stageId, idx);
-        });
+        const parsed = Math.floor(numeric);
+        if (parsed <= 0) {
+          return;
+        }
 
-        (point.unitStageCounts || []).forEach(entry => {
-          if (!entry) {
-            return;
-          }
+        const stageId = typeof entry.stageId === 'number' ? entry.stageId : null;
 
-          const numeric = Number(entry.count);
-          if (!Number.isFinite(numeric) || numeric <= 0) {
-            return;
-          }
+        if (stageId === null || !stageIndexById.has(stageId)) {
+          rawCounts[stageCount] += parsed;
+          return;
+        }
 
-          const parsed = Math.floor(numeric);
-          if (parsed <= 0) {
-            return;
-          }
+        const slotIndex = stageIndexById.get(stageId);
+        if (slotIndex === undefined) {
+          rawCounts[stageCount] += parsed;
+          return;
+        }
 
-          const stageId = typeof entry.stageId === 'number' ? entry.stageId : null;
+        rawCounts[slotIndex] += parsed;
+      });
 
-          if (stageId === null) {
-            rawCounts[stageCount] += parsed;
-            return;
-          }
+      const totalUnits = rawCounts.reduce((sum, value) => sum + (Number(value) || 0), 0);
 
-          const slotIndex = stageIndexById.get(stageId);
-          if (slotIndex === undefined) {
-            rawCounts[stageCount] += parsed;
-            return;
-          }
+      const unitsReached = stageLabelsLocal.map((_, stageIdx) => {
+        const startIndex = Math.min(stageIdx, rawCounts.length - 1);
+        return rawCounts
+          .slice(startIndex, rawCounts.length)
+          .reduce((sum, value) => sum + (Number(value) || 0), 0);
+      });
 
-          rawCounts[slotIndex] += parsed;
-        });
+      const stageValues = stageLabelsLocal.map((_, stageIdx) => {
+        const unitsReachedStage = unitsReached[stageIdx] ?? 0;
+        const cumulativeHours = stageCumulativeHours[stageIdx] ?? 0;
+        return Number((unitsReachedStage * cumulativeHours).toFixed(2));
+      });
 
-        totalUnitsForStage = rawCounts.reduce((sum, value) => sum + (Number(value) || 0), 0);
+      return {
+        stageValues,
+        unitsReached,
+        totalUnits
+      };
+    };
 
-        stageUnitsReached = stageLabelsLocal.map((_, stageIdx) => {
-          const startIndex = Math.min(stageIdx, rawCounts.length - 1);
-          return rawCounts
-            .slice(startIndex, rawCounts.length)
-            .reduce((sum, value) => sum + (Number(value) || 0), 0);
-        });
-
-        stageValues = stageLabelsLocal.map((_, stageIdx) => {
-          const unitsReachedStage = stageUnitsReached[stageIdx] ?? 0;
-          const cumulativeHours = stageCumulativeHours[stageIdx] ?? 0;
-          return Number((unitsReachedStage * cumulativeHours).toFixed(2));
-        });
-      } else if (actualStageCountsDays === 0) {
-        shouldPlotStageValues = false;
-        stageSeries.forEach(series => {
-          series.push(null);
-        });
+    progressPoints.value.forEach(point => {
+      if (!previousStageValues) {
+        previousStageValues = new Array(stageCount).fill(0);
       }
 
-      if (shouldPlotStageValues) {
-        const hideStageSeriesUntilSecondDay = displayMode.value === 'daily' && actualStageCountsDays <= 1;
+      let stageValues = [...previousStageValues];
+
+      if (point.hasActualStageCounts && point.unitStageCounts.length > 0) {
+        actualStageCountsDays += 1;
+        const stats = computeStageStats(point.unitStageCounts);
+        stageValues = stats.stageValues;
+        stageUnitsReached = stats.unitsReached;
+        totalUnitsForStage = stats.totalUnits;
+      } else if (actualStageCountsDays === 0) {
+        const filteredIndex = filteredIndexByDate.get(point.date);
+        if (filteredIndex !== undefined) {
+          stageSeries.forEach(series => {
+            series[filteredIndex] = null;
+          });
+        }
+        previousStageValues = stageValues;
+        return;
+      }
+
+      const filteredIndex = filteredIndexByDate.get(point.date);
+      if (filteredIndex !== undefined) {
+        const hideStageDaily = displayMode.value === 'daily' && actualStageCountsDays <= 1;
 
         stageValues.forEach((value, stageIdx) => {
           let seriesValue: number | null;
           if (displayMode.value === 'daily') {
-            const hideStageDaily = hideStageSeriesUntilSecondDay;
-            if (index === 0) {
+            if (hideStageDaily) {
               seriesValue = null;
             } else {
               const previousValue = previousStageValues ? previousStageValues[stageIdx] ?? 0 : 0;
-              seriesValue = hideStageDaily ? null : Number((value - previousValue).toFixed(2));
+              seriesValue = Number((value - previousValue).toFixed(2));
             }
           } else if (displayMode.value === 'cumulative-percent') {
             const unitsReached = stageUnitsReached[stageIdx] ?? 0;
             const percent = totalUnitsForStage > 0 ? (unitsReached / totalUnitsForStage) * 100 : 0;
-            seriesValue = hideStageSeriesUntilSecondDay ? null : Number(percent.toFixed(1));
+            seriesValue = Number(percent.toFixed(1));
           } else {
-            seriesValue = hideStageSeriesUntilSecondDay ? null : value;
+            seriesValue = value;
           }
-          stageSeries[stageIdx].push(seriesValue);
-        });
 
-        previousStageValues = stageValues;
-      }
-    } else {
-      // 工程データが無効な場合は stageSeries に null を詰め、累計モードでも線を表示しない
-      if (includeStageData) {
-        stageSeries.forEach(series => {
-          series.push(null);
+          stageSeries[stageIdx][filteredIndex] = hideStageDaily ? null : seriesValue;
         });
       }
-    }
 
+      previousStageValues = stageValues;
+    });
+  }
+
+  const totalDataValues = points.map(point => {
     if (displayMode.value === 'daily') {
       return point.isFirstDay ? null : Number(point.hoursWorked.toFixed(2));
     }
