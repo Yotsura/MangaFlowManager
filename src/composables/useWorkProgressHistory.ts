@@ -4,7 +4,8 @@ import { useWorksStore } from '@/store/worksStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { getDateRange } from '@/utils/dateUtils';
 import { buildStageWorkloadMetrics, calculateCompletedHoursFromStageCounts } from '@/utils/workStoreHelpers';
-import type { WorkProgressHistory } from '@/types/models';
+import { cloneStageCounts, normalizeUnitStageCounts } from '@/utils/workProgressUtils';
+import type { UnitStageCountEntry, WorkProgressHistory } from '@/types/models';
 
 export type ProgressDisplayMode = 'daily' | 'cumulative-percent' | 'cumulative-units';
 
@@ -41,14 +42,6 @@ export function useWorkProgressHistory() {
           stageWorkloads.value
         );
 
-        const computeCompletedHours = (entry: WorkProgressHistory): number => {
-          const hoursFromCounts = calculateCompletedHoursFromStageCounts(entry.unitStageCounts, stageMetrics);
-          if (hoursFromCounts > 0) {
-            return hoursFromCounts;
-          }
-          return entry.completedHours ?? 0;
-        };
-
         // 最初のデータから最後のデータまでの範囲
         const startDate = history[0].date;
         const endDate = history[history.length - 1].date;
@@ -59,17 +52,39 @@ export function useWorkProgressHistory() {
           const historyEntry = history.find(h => h.date === date);
           const previousPoint = index > 0 ? acc[index - 1] : null;
           const isFirstDay = index === 0;
+          const previousStageCounts = previousPoint?.unitStageCounts ?? [];
 
           if (historyEntry) {
-            const currentCompletedHours = computeCompletedHours(historyEntry);
+            const hasStructuredStageCounts = Array.isArray(historyEntry.unitStageCounts)
+              && historyEntry.unitStageCounts.some(entry => entry && typeof entry === 'object' && 'stageId' in entry);
+            const normalizedCounts = hasStructuredStageCounts
+              ? normalizeUnitStageCounts(historyEntry.unitStageCounts, stageMetrics)
+              : [];
+            const hasActualStageCounts = normalizedCounts.length > 0;
+            const previousHadActualCounts = previousPoint?.hasActualStageCounts ?? false;
+
+            const hoursFromCounts = calculateCompletedHoursFromStageCounts(normalizedCounts, stageMetrics);
+
+            let currentCompletedHours = hoursFromCounts > 0
+              ? hoursFromCounts
+              : (historyEntry.completedHours ?? 0);
+            if (hasActualStageCounts && !previousHadActualCounts) {
+              currentCompletedHours = historyEntry.completedHours ?? currentCompletedHours;
+            }
+
             const previousCompleted = previousPoint ? previousPoint.completedHours : 0;
             const diff = currentCompletedHours - previousCompleted;
+            const stageCounts = hasActualStageCounts
+              ? cloneStageCounts(normalizedCounts)
+              : cloneStageCounts(previousStageCounts);
 
             acc.push({
               date,
               completedHours: currentCompletedHours,
               hoursWorked: isFirstDay ? 0 : Number(diff.toFixed(2)),
-              isFirstDay
+              isFirstDay,
+              unitStageCounts: stageCounts,
+              hasActualStageCounts
             });
           } else {
             const previousCompleted = previousPoint ? previousPoint.completedHours : 0;
@@ -77,11 +92,20 @@ export function useWorkProgressHistory() {
               date,
               completedHours: previousCompleted,
               hoursWorked: 0,
-              isFirstDay
+              isFirstDay,
+              unitStageCounts: cloneStageCounts(previousStageCounts),
+              hasActualStageCounts: false
             });
           }
           return acc;
-        }, [] as Array<{ date: string; completedHours: number; hoursWorked: number; isFirstDay: boolean }>);
+        }, [] as Array<{
+          date: string;
+          completedHours: number;
+          hoursWorked: number;
+          isFirstDay: boolean;
+          unitStageCounts: UnitStageCountEntry[];
+          hasActualStageCounts: boolean;
+        }>);
 
         return {
           workId: work.id,

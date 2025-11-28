@@ -1,3 +1,4 @@
+import type { UnitStageCountEntry, UnitStageCounts } from "@/types/models";
 import type { Work, WorkGranularity, WorkStageWorkload, WorkUnit } from "@/types/work";
 import { collectLeafUnits } from "@/utils/workUtils";
 
@@ -191,7 +192,7 @@ export const buildStageWorkloadMetrics = (
 };
 
 export const calculateCompletedHoursFromStageCounts = (
-  unitStageCounts: number[] | undefined,
+  unitStageCounts: UnitStageCounts | undefined,
   metrics: StageWorkloadMetrics | null
 ): number => {
   if (!unitStageCounts || !metrics) {
@@ -205,20 +206,59 @@ export const calculateCompletedHoursFromStageCounts = (
     return 0;
   }
 
+  const resolveHoursForSlot = (slotIndex: number): number => {
+    if (slotIndex >= stageCount) {
+      return totalPerUnit;
+    }
+    return metrics.cumulativeWorkloads[slotIndex] ?? 0;
+  };
+
   let total = 0;
 
-  unitStageCounts.forEach((count, index) => {
-    if (!count || index === 0) {
+  const stageIndexById = new Map<number, number>();
+  metrics.stageWorkloads.forEach((stage, index) => {
+    const numeric = Number(stage.id);
+    const stageId = Number.isFinite(numeric) ? numeric : index + 1;
+    stageIndexById.set(stageId, index);
+  });
+
+  unitStageCounts.forEach(entry => {
+    if (!entry) {
       return;
     }
 
-    if (index >= stageCount) {
+    const count = Number(entry.count);
+    if (!Number.isFinite(count) || count <= 0) {
+      return;
+    }
+
+    let stageId: number | null = null;
+    if (entry.stageId === null) {
+      stageId = null;
+    } else if (typeof entry.stageId === "number") {
+      stageId = entry.stageId;
+    } else if (typeof entry.stageId === "string") {
+      const parsedId = Number(entry.stageId);
+      stageId = Number.isFinite(parsedId) ? parsedId : null;
+    }
+
+    if (stageId === null) {
       total += count * totalPerUnit;
       return;
     }
 
-    const cumulative = metrics.cumulativeWorkloads[index] ?? 0;
-    total += count * cumulative;
+    const slotIndex = stageIndexById.get(stageId);
+
+    if (slotIndex === undefined) {
+      total += count * totalPerUnit;
+      return;
+    }
+
+    if (slotIndex === 0) {
+      return;
+    }
+
+    total += count * resolveHoursForSlot(slotIndex);
   });
 
   return Number(total.toFixed(2));

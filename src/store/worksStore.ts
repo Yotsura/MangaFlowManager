@@ -4,7 +4,7 @@ import { generateId } from "@/utils/id";
 import type { Granularity, StageWorkload } from "@/store/settingsStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { formatLocalDate } from "@/utils/dateUtils";
-import type { WorkProgressHistory } from "@/types/models";
+import type { WorkProgressHistory, UnitStageCountEntry } from "@/types/models";
 
 // 型定義をインポート
 export type {
@@ -33,6 +33,18 @@ import type {
   RemoveWorkPayload,
   SaveWorkPayload,
 } from "@/types/work";
+
+const clampStageIndex = (value: number | undefined, stageCount: number): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+  const floored = Math.floor(numeric);
+  if (floored <= 0) {
+    return 0;
+  }
+  return Math.min(floored, stageCount);
+};
 
 // ヘルパー関数をインポート
 import {
@@ -1010,19 +1022,39 @@ export const useWorksStore = defineStore("works", {
         settingsStore.stageWorkloads
       );
 
-      let unitStageCounts: number[] | undefined;
+      let unitStageCounts: UnitStageCountEntry[] | undefined;
 
       if (stageMetrics) {
         const stageCount = stageMetrics.stageWorkloadHours.length;
-        const counts = new Array(stageCount + 1).fill(0);
         const leafUnits = getAllLeafUnits(work.units);
+        const stageIdByIndex = stageMetrics.stageWorkloads.map((stage, idx) => {
+          const numeric = Number(stage.id);
+          return Number.isFinite(numeric) ? numeric : idx + 1;
+        });
+        const countsMap = new Map<number | null, number>();
 
         for (const unit of leafUnits) {
-          const stageIndex = Math.max(0, Math.min(unit.stageIndex ?? 0, stageCount));
-          counts[stageIndex] += 1;
+          const clampedStageIndex = clampStageIndex(unit.stageIndex, stageCount);
+          if (clampedStageIndex >= stageCount) {
+            countsMap.set(null, (countsMap.get(null) ?? 0) + 1);
+            continue;
+          }
+
+          const stageId = stageIdByIndex[clampedStageIndex] ?? null;
+          countsMap.set(stageId, (countsMap.get(stageId) ?? 0) + 1);
         }
 
-        unitStageCounts = counts;
+        const entries: UnitStageCountEntry[] = stageIdByIndex.map(stageId => ({
+          stageId,
+          count: countsMap.get(stageId) ?? 0,
+        }));
+
+        const completedCount = countsMap.get(null) ?? 0;
+        if (completedCount > 0 || entries.length === 0) {
+          entries.push({ stageId: null, count: completedCount });
+        }
+
+        unitStageCounts = entries;
       }
 
       // 進捗履歴を初期化（存在しない場合）
@@ -1098,6 +1130,7 @@ export const useWorksStore = defineStore("works", {
         this.markWorkDirty(work.id);
       }
     },
+
   },
 });
 

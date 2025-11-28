@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { storeToRefs } from "pinia";
-import { useAuthStore } from "@/store/authStore";
 import WorkloadSettingsEditor from "@/components/common/WorkloadSettingsEditor.vue";
 
 interface WorkloadSettingsEditorExposed {
@@ -12,52 +10,25 @@ interface WorkloadSettingsEditorExposed {
   resetChanges: () => void;
 }
 
-const authStore = useAuthStore();
-const { user } = storeToRefs(authStore);
-
 const workloadSettingsRef = ref<WorkloadSettingsEditorExposed | null>(null);
 
 const handleSettingsSaved = () => {
   console.log('設定が保存されました');
 };
 
-// 設定保存のテスト関数
-const testSettingsSave = async () => {
-  if (!user.value?.uid) {
-    console.error('ユーザーが認証されていません');
-    return;
-  }
-
-  console.log('設定保存テスト開始');
-  const testData = {
-    workHours: [{ day: 'monday', start: '09:00', end: '17:00' }]
-  };
-
-  try {
-    const path = `users/${user.value.uid}/settings/workHours`;
-    const { setDocument } = await import('@/services/firebase/firestoreService');
-    await setDocument(path, testData);
-    console.log('テスト保存成功');
-    alert('設定保存テスト成功！');
-  } catch (error) {
-    console.error('テスト保存失敗:', error);
-    alert('設定保存テスト失敗: ' + (error instanceof Error ? error.message : String(error)));
-  }
-};
-
-// 祝日データ更新テスト関数
 const updateHolidaysGlobally = async () => {
-  console.log('祝日データ更新テスト開始');
+  console.log('祝日データ更新処理を開始します');
   try {
     const { globalHolidayService } = await import('@/services/globalHolidayService');
     await globalHolidayService.forceUpdate();
-    console.log('祝日データ更新成功');
+    console.log('祝日データ更新が完了しました');
     alert('祝日データ更新完了！');
   } catch (error) {
-    console.error('祝日データ更新失敗:', error);
+    console.error('祝日データ更新でエラーが発生しました:', error);
     alert('祝日データ更新失敗: ' + (error instanceof Error ? error.message : String(error)));
   }
 };
+
 </script>
 
 <template>
@@ -98,20 +69,5 @@ const updateHolidaysGlobally = async () => {
       </div>
     </div>
 
-    <!-- デバッグセクション -->
-    <div class="row g-3 mt-3">
-      <div class="col-12">
-        <div class="card shadow-sm">
-          <div class="card-header">
-            <h6 class="mb-0">デバッグ機能</h6>
-          </div>
-          <div class="card-body">
-            <button type="button" class="btn btn-outline-warning me-2" @click="testSettingsSave">
-              設定保存テスト
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
   </section>
 </template>

@@ -12,8 +12,13 @@ import {
   Legend,
   type ChartOptions
 } from 'chart.js';
+import { storeToRefs } from 'pinia';
 import { useWorksStore } from '@/store/worksStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { useWorkProgressHistory } from '@/composables/useWorkProgressHistory';
+import { buildStageWorkloadMetrics } from '@/utils/workStoreHelpers';
+import { hexToRgba, resolveStageColors, resolveStageIdOrder, resolveStageLabels } from '@/utils/workProgressUtils';
+import type { UnitStageCountEntry } from '@/types/models';
 
 ChartJS.register(
   CategoryScale,
@@ -39,7 +44,9 @@ interface Props {
 
 const props = defineProps<Props>();
 const worksStore = useWorksStore();
+const settingsStore = useSettingsStore();
 const { progressDatasets } = useWorkProgressHistory();
+const { granularities, stageWorkloads } = storeToRefs(settingsStore);
 
 const displayMode = ref<DisplayMode>('daily');
 const startDateFilter = ref('');
@@ -57,6 +64,8 @@ type ProgressPoint = {
   completedHours: number;
   hoursWorked: number;
   isFirstDay: boolean;
+  unitStageCounts: UnitStageCountEntry[];
+  hasActualStageCounts: boolean;
 };
 
 const progressPoints = computed<ProgressPoint[]>(() => {
@@ -78,6 +87,35 @@ const filteredPoints = computed(() => {
     return true;
   });
 });
+
+const stageMetrics = computed(() => {
+  if (!work.value) {
+    return null;
+  }
+  return buildStageWorkloadMetrics(
+    work.value,
+    granularities.value,
+    stageWorkloads.value
+  );
+});
+
+const resolvedStageWorkloads = computed(() => {
+  const custom = work.value?.workStageWorkloads;
+  if (custom && custom.length > 0) {
+    return custom;
+  }
+  return stageWorkloads.value;
+});
+
+const stageLabels = computed(() => resolveStageLabels(resolvedStageWorkloads.value));
+
+const stageColors = computed(() => resolveStageColors(resolvedStageWorkloads.value));
+
+const stageIdOrder = computed(() => resolveStageIdOrder(resolvedStageWorkloads.value));
+
+const hasStageSeries = computed(() =>
+  !!stageMetrics.value && filteredPoints.value.some(point => point.hasActualStageCounts)
+);
 
 const yAxisLabel = computed(() => {
   switch (displayMode.value) {
@@ -117,35 +155,178 @@ const chartData = computed(() => {
   });
 
   const totalHours = actualMetrics.value.totalEstimatedHours || 1;
+  const metrics = stageMetrics.value;
+  const includeStageData = hasStageSeries.value && !!metrics;
+  const stageCount = includeStageData && metrics ? metrics.stageWorkloadHours.length : 0;
+  const stageSeries = includeStageData
+    ? Array.from({ length: stageCount }, () => [] as (number | null)[])
+    : [];
 
-  const dataValues = points.map(point => {
+  const stageLabelsLocal = includeStageData ? stageLabels.value : [];
+  const stageColorsLocal = includeStageData ? stageColors.value : [];
+  const stageIdOrderLocal = includeStageData ? stageIdOrder.value : [];
+  const stageCumulativeHours = includeStageData && metrics
+    ? metrics.stageWorkloadHours.reduce((acc: number[], hours, idx) => {
+        const normalized = Number.isFinite(hours) ? Number(hours) : 0;
+        const previous = idx > 0 ? acc[idx - 1] : 0;
+        acc.push(Number((previous + normalized).toFixed(4)));
+        return acc;
+      }, [] as number[])
+    : [];
+  let stageUnitsReached: number[] = [];
+  let totalUnitsForStage = 0;
+
+  let previousStageValues: number[] | null = includeStageData ? new Array(stageCount).fill(0) : null;
+  let actualStageCountsDays = 0;
+
+  const totalDataValues = points.map((point, index) => {
+    let stageValues = previousStageValues ? [...previousStageValues] : [];
+
+    if (includeStageData && metrics) {
+      let shouldPlotStageValues = true;
+
+      if (point.hasActualStageCounts) {
+        actualStageCountsDays += 1;
+        const rawCounts = new Array(stageCount + 1).fill(0);
+        const stageIndexById = new Map<number, number>();
+
+        stageIdOrderLocal.forEach((stageId, idx) => {
+          stageIndexById.set(stageId, idx);
+        });
+
+        (point.unitStageCounts || []).forEach(entry => {
+          if (!entry) {
+            return;
+          }
+
+          const numeric = Number(entry.count);
+          if (!Number.isFinite(numeric) || numeric <= 0) {
+            return;
+          }
+
+          const parsed = Math.floor(numeric);
+          if (parsed <= 0) {
+            return;
+          }
+
+          const stageId = typeof entry.stageId === 'number' ? entry.stageId : null;
+
+          if (stageId === null) {
+            rawCounts[stageCount] += parsed;
+            return;
+          }
+
+          const slotIndex = stageIndexById.get(stageId);
+          if (slotIndex === undefined) {
+            rawCounts[stageCount] += parsed;
+            return;
+          }
+
+          rawCounts[slotIndex] += parsed;
+        });
+
+        totalUnitsForStage = rawCounts.reduce((sum, value) => sum + (Number(value) || 0), 0);
+
+        stageUnitsReached = stageLabelsLocal.map((_, stageIdx) => {
+          const startIndex = Math.min(stageIdx, rawCounts.length - 1);
+          return rawCounts
+            .slice(startIndex, rawCounts.length)
+            .reduce((sum, value) => sum + (Number(value) || 0), 0);
+        });
+
+        stageValues = stageLabelsLocal.map((_, stageIdx) => {
+          const unitsReachedStage = stageUnitsReached[stageIdx] ?? 0;
+          const cumulativeHours = stageCumulativeHours[stageIdx] ?? 0;
+          return Number((unitsReachedStage * cumulativeHours).toFixed(2));
+        });
+      } else if (actualStageCountsDays === 0) {
+        shouldPlotStageValues = false;
+        stageSeries.forEach(series => {
+          series.push(null);
+        });
+      }
+
+      if (shouldPlotStageValues) {
+        const hideStageSeriesUntilSecondDay = displayMode.value === 'daily' && actualStageCountsDays <= 1;
+
+        stageValues.forEach((value, stageIdx) => {
+          let seriesValue: number | null;
+          if (displayMode.value === 'daily') {
+            const hideStageDaily = hideStageSeriesUntilSecondDay;
+            if (index === 0) {
+              seriesValue = null;
+            } else {
+              const previousValue = previousStageValues ? previousStageValues[stageIdx] ?? 0 : 0;
+              seriesValue = hideStageDaily ? null : Number((value - previousValue).toFixed(2));
+            }
+          } else if (displayMode.value === 'cumulative-percent') {
+            const unitsReached = stageUnitsReached[stageIdx] ?? 0;
+            const percent = totalUnitsForStage > 0 ? (unitsReached / totalUnitsForStage) * 100 : 0;
+            seriesValue = hideStageSeriesUntilSecondDay ? null : Number(percent.toFixed(1));
+          } else {
+            seriesValue = hideStageSeriesUntilSecondDay ? null : value;
+          }
+          stageSeries[stageIdx].push(seriesValue);
+        });
+
+        previousStageValues = stageValues;
+      }
+    } else {
+      // 工程データが無効な場合は stageSeries に null を詰め、累計モードでも線を表示しない
+      if (includeStageData) {
+        stageSeries.forEach(series => {
+          series.push(null);
+        });
+      }
+    }
+
     if (displayMode.value === 'daily') {
-      return point.isFirstDay ? null : Number(point.hoursWorked.toFixed(1));
+      return point.isFirstDay ? null : Number(point.hoursWorked.toFixed(2));
     }
     if (displayMode.value === 'cumulative-percent') {
-      return Number(((point.completedHours / totalHours) * 100).toFixed(1));
+      const percent = totalHours > 0 ? (point.completedHours / totalHours) * 100 : 0;
+      return Number(percent.toFixed(1));
     }
-    return Number(point.completedHours.toFixed(1));
+    return Number(point.completedHours.toFixed(2));
   });
 
   const hue = 210;
   const color = `hsl(${hue}, 70%, 50%)`;
 
+  const datasets = [
+    {
+      label: 'Total',
+      data: totalDataValues,
+      borderColor: color,
+      backgroundColor: `hsla(${hue}, 70%, 50%, 0.15)`,
+      borderWidth: 2,
+      tension: 0.1,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      spanGaps: false
+    }
+  ];
+
+  if (includeStageData) {
+    stageSeries.forEach((data, index) => {
+      const baseColor = stageColorsLocal[index] ?? '#0d6efd';
+      datasets.push({
+        label: stageLabelsLocal[index] ?? `Stage ${index + 1}`,
+        data,
+        borderColor: baseColor,
+        backgroundColor: hexToRgba(baseColor, 0.12),
+        borderWidth: 2,
+        tension: 0.15,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        spanGaps: false
+      });
+    });
+  }
+
   return {
     labels,
-    datasets: [
-      {
-        label: work.value?.title ?? '作品',
-        data: dataValues,
-        borderColor: color,
-        backgroundColor: `hsla(${hue}, 70%, 50%, 0.15)`,
-        borderWidth: 2,
-        tension: 0.1,
-        pointRadius: 4,
-        pointHoverRadius: 6,
-        spanGaps: false
-      }
-    ]
+    datasets
   };
 });
 
@@ -171,7 +352,8 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
           if (value === null) {
             return `${label}: データなし`;
           }
-          return `${label}: ${value.toFixed(1)}${tooltipSuffix.value}`;
+          const decimals = displayMode.value === 'cumulative-percent' ? 1 : 2;
+          return `${label}: ${value.toFixed(decimals)}${tooltipSuffix.value}`;
         }
       }
     }
