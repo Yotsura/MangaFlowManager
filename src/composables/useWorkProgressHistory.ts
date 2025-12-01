@@ -61,18 +61,17 @@ export function useWorkProgressHistory() {
               ? normalizeUnitStageCounts(historyEntry.unitStageCounts, stageMetrics)
               : [];
             const hasActualStageCounts = normalizedCounts.length > 0;
-            const previousHadActualCounts = previousPoint?.hasActualStageCounts ?? false;
 
-            const hoursFromCounts = calculateCompletedHoursFromStageCounts(normalizedCounts, stageMetrics);
-
-            let currentCompletedHours = hoursFromCounts > 0
-              ? hoursFromCounts
-              : (historyEntry.completedHours ?? 0);
-            if (hasActualStageCounts && !previousHadActualCounts) {
-              currentCompletedHours = historyEntry.completedHours ?? currentCompletedHours;
-            }
+            const rawDerivedHours = hasActualStageCounts
+              ? calculateCompletedHoursFromStageCounts(normalizedCounts, stageMetrics)
+              : 0;
+            const derivedCompletedHours = Number.isFinite(rawDerivedHours) ? rawDerivedHours : 0;
 
             const previousCompleted = previousPoint ? previousPoint.completedHours : 0;
+            const currentCompletedHours = hasActualStageCounts
+              ? derivedCompletedHours
+              : (historyEntry.completedHours ?? previousCompleted);
+
             const diff = currentCompletedHours - previousCompleted;
             const stageCounts = hasActualStageCounts
               ? cloneStageCounts(normalizedCounts)
@@ -80,7 +79,7 @@ export function useWorkProgressHistory() {
 
             acc.push({
               date,
-              completedHours: currentCompletedHours,
+              completedHours: Number(currentCompletedHours.toFixed(2)),
               hoursWorked: isFirstDay ? 0 : Number(diff.toFixed(2)),
               isFirstDay,
               unitStageCounts: stageCounts,
