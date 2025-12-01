@@ -172,13 +172,8 @@ const chartData = computed(() => {
   const stageIndexById = includeStageData
     ? new Map(stageIdOrderLocal.map((stageId, index) => [stageId, index]))
     : null;
-  const stageCumulativeHours = includeStageData && metrics
-    ? metrics.stageWorkloadHours.reduce((acc: number[], hours, idx) => {
-        const normalized = Number.isFinite(hours) ? Number(hours) : 0;
-        const previous = idx > 0 ? acc[idx - 1] : 0;
-        acc.push(Number((previous + normalized).toFixed(4)));
-        return acc;
-      }, [] as number[])
+  const stagePureHours = includeStageData && metrics
+    ? metrics.stageWorkloadHours.map(hours => (Number.isFinite(hours) ? Number(hours) : 0))
     : [];
   let stageUnitsReached: number[] = [];
   let totalUnitsForStage = 0;
@@ -232,8 +227,8 @@ const chartData = computed(() => {
 
       const stageValues = stageLabelsLocal.map((_, stageIdx) => {
         const unitsReachedStage = unitsReached[stageIdx] ?? 0;
-        const cumulativeHours = stageCumulativeHours[stageIdx] ?? 0;
-        return Number((unitsReachedStage * cumulativeHours).toFixed(2));
+        const stageHours = stagePureHours[stageIdx] ?? 0;
+        return Number((unitsReachedStage * stageHours).toFixed(2));
       });
 
       return {
