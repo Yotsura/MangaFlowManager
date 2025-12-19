@@ -5,6 +5,8 @@ import { useWorksStore } from '@/store/worksStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import PanelStyleUnitEditor from './PanelStyleUnitEditor.vue';
 import { normalizeStageColorValue } from '../utils/stageColor';
+import { normalizePageStartPosition } from '@/utils/workUtils';
+import type { PageStartPosition } from '@/types/work';
 
 interface Props {
   workId: string;
@@ -90,6 +92,18 @@ const stageWorkloadHours = computed(() => {
     return 0;
   });
 });
+
+const normalizedWorkPageStartPosition = computed<PageStartPosition | null>(() =>
+  work.value?.pageStartPosition ? normalizePageStartPosition(work.value.pageStartPosition) : null
+);
+const normalizedGlobalPageStartPosition = computed<PageStartPosition>(() =>
+  normalizePageStartPosition(settingsStore.pageStartPosition)
+);
+const pageStartPosition = computed<PageStartPosition>(() =>
+  normalizedWorkPageStartPosition.value === "left" || normalizedGlobalPageStartPosition.value === "left"
+    ? "left"
+    : "right"
+);
 </script>
 
 <template>
@@ -122,6 +136,7 @@ const stageWorkloadHours = computed(() => {
         :granularities="sortedGranularities"
         :is-edit-mode="isEditMode"
         :saving-unit-ids="savingUnitIds"
+        :page-start-position="pageStartPosition"
         @advance-stage="emit('advance-stage', $event)"
         @add-root-unit="emit('add-root-unit')"
         @add-child="emit('add-child', $event)"

@@ -3,6 +3,8 @@ import { defineStore } from "pinia";
 import { getDefaultStageColor, normalizeStageColorValue } from "@/modules/works/utils/stageColor";
 import { getDocument, setDocument } from "@/services/firebase/firestoreService";
 import { generateId } from "@/utils/id";
+import { normalizePageStartPosition } from "@/utils/workUtils";
+import type { PageStartPosition } from "@/types/work";
 
 interface WorkHourRange {
   day: string;
@@ -22,6 +24,7 @@ interface Granularity {
 
 interface GranularitiesDocument {
   granularities: Granularity[];
+  pageStartPosition?: PageStartPosition;
 }
 
 interface StageWorkloadEntry {
@@ -63,6 +66,7 @@ interface SettingsState {
   loadError: string | null;
   saveError: string | null;
   granularities: Granularity[];
+  pageStartPosition: PageStartPosition;
   granularitiesLoaded: boolean;
   loadingGranularities: boolean;
   savingGranularities: boolean;
@@ -395,6 +399,7 @@ export const useSettingsStore = defineStore("settings", {
     loadError: null,
     saveError: null,
     granularities: [],
+    pageStartPosition: "right",
     granularitiesLoaded: false,
     loadingGranularities: false,
     savingGranularities: false,
@@ -453,6 +458,9 @@ export const useSettingsStore = defineStore("settings", {
     setGranularities(items: Granularity[]) {
       this.granularities = items;
     },
+    setPageStartPosition(position: PageStartPosition) {
+      this.pageStartPosition = position;
+    },
     async fetchGranularities(userId: string) {
       if (!userId) {
         return;
@@ -464,6 +472,7 @@ export const useSettingsStore = defineStore("settings", {
       try {
         const document = await getDocument<GranularitiesDocument>(buildGranularityPath(userId));
         const { items, migrationMap } = normalizeGranularities(document?.granularities);
+        this.pageStartPosition = normalizePageStartPosition(document?.pageStartPosition);
 
         if (items.length > 0) {
           this.granularities = items;
@@ -486,7 +495,7 @@ export const useSettingsStore = defineStore("settings", {
         this.loadingGranularities = false;
       }
     },
-    async saveGranularities(userId: string, items: Granularity[]) {
+    async saveGranularities(userId: string, items: Granularity[], pageStartPosition: PageStartPosition = this.pageStartPosition) {
       if (!userId) {
         throw new Error("ユーザー情報が取得できませんでした。");
       }
@@ -507,8 +516,9 @@ export const useSettingsStore = defineStore("settings", {
           } satisfies Granularity;
         });
 
-        await setDocument(buildGranularityPath(userId), { granularities: normalizedItems });
+        await setDocument(buildGranularityPath(userId), { granularities: normalizedItems, pageStartPosition });
         this.granularities = normalizedItems;
+        this.pageStartPosition = pageStartPosition;
         this.granularitiesLoaded = true;
         this.granularityIdMigrationMap = {};
 

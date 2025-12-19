@@ -52,7 +52,7 @@
       <div v-if="hasChildren" class="children-container">
 
         <!-- 全ての子が葉ユニットの場合：レスポンシブグリッド表示 -->
-        <div v-if="allChildrenAreLeaf" class="leaf-units-grid">
+        <div v-if="allChildrenAreLeaf" :class="['leaf-units-grid', directionClass]">
           <LeafUnitButton
             v-for="child in unit.children"
             :key="child.id"
@@ -75,7 +75,7 @@
         </div>
 
         <!-- 子に中間ユニットが含まれる場合：従来のパネル表示 -->
-        <div v-else class="children-grid">
+        <div v-else :class="['children-grid', directionClass]">
           <PanelStyleUnitPanel
             v-for="child in unit.children"
             :key="child.id"
@@ -88,6 +88,7 @@
             :granularities="granularities"
             :is-edit-mode="isEditMode"
             :saving-unit-ids="savingUnitIds"
+            :page-start-position="pageStartPosition"
             @advance-stage="$emit('advance-stage', $event)"
             @add-child="$emit('add-child', $event)"
             @remove-unit="$emit('remove-unit', $event)"
@@ -117,7 +118,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { WorkUnit } from "@/store/worksStore";
+import type { PageStartPosition } from "@/types/work";
 import LeafUnitButton from './LeafUnitButton.vue';
+import { normalizePageStartPosition } from "@/utils/workUtils";
 
 interface Granularity {
   id: string;
@@ -135,6 +138,7 @@ interface Props {
   granularities?: Granularity[]; // 粒度設定（重みでソート済み）
   isEditMode: boolean;
   savingUnitIds: Set<string>;
+  pageStartPosition?: PageStartPosition;
 }
 
 interface Emits {
@@ -146,6 +150,8 @@ interface Emits {
 
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
+const normalizedPageStartPosition = computed(() => normalizePageStartPosition(props.pageStartPosition));
+const directionClass = computed(() => (normalizedPageStartPosition.value === "left" ? "" : "dir-rtl"));
 
 // 計算プロパティ
 const isLeafUnit = computed(() => {
@@ -431,6 +437,14 @@ const handleRemove = () => {
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 0.5rem;
   flex-grow: 1;
+}
+
+.dir-rtl {
+  direction: rtl;
+}
+
+.dir-rtl > * {
+  direction: ltr;
 }
 
 .add-child-panel {

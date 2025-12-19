@@ -11,7 +11,7 @@
           <div v-else class="empty-text">ユニットなし</div>
         </div>
       </div>
-      <div v-else class="units-grid">
+      <div v-else :class="['units-grid', directionClass]">
         <PanelStyleUnitPanel
           v-for="unit in units"
           :key="unit.id"
@@ -24,6 +24,7 @@
           :granularities="granularities"
           :is-edit-mode="isEditMode"
           :saving-unit-ids="savingUnitIds"
+          :page-start-position="pageStartPosition"
           @advance-stage="handleAdvanceStage"
           @add-child="handleAddChild"
           @remove-unit="handleRemoveUnit"
@@ -40,8 +41,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import PanelStyleUnitPanel from "./PanelStyleUnitPanel.vue";
 import type { WorkUnit } from "@/store/worksStore";
+import type { PageStartPosition } from "@/types/work";
+import { normalizePageStartPosition } from "@/utils/workUtils";
 
 interface Granularity {
   id: string;
@@ -58,6 +62,7 @@ interface Props {
   granularities?: Granularity[];
   isEditMode: boolean;
   savingUnitIds: Set<string>;
+  pageStartPosition?: PageStartPosition;
 }
 
 interface Emits {
@@ -68,8 +73,10 @@ interface Emits {
   (event: "update-children-count", payload: { unitId: string; count: number }): void;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
+const normalizedPageStartPosition = computed(() => normalizePageStartPosition(props.pageStartPosition));
+const directionClass = computed(() => (normalizedPageStartPosition.value === "left" ? "" : "rtl-layout"));
 
 // イベントハンドラー
 const handleAdvanceStage = (payload: { unitId: string }) => {
@@ -110,6 +117,14 @@ const handleUpdateChildrenCount = (payload: { unitId: string; count: number }) =
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 1rem;
   align-items: start;
+}
+
+.rtl-layout {
+  direction: rtl;
+}
+
+.rtl-layout > * {
+  direction: ltr;
 }
 
 .empty-state {

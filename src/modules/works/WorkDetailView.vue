@@ -13,7 +13,7 @@ import WorkProgressModalChart from "./components/WorkProgressModalChart.vue";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useCustomDatesStore } from "@/store/customDatesStore";
-import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkGranularity, type WorkStageWorkload } from "@/store/worksStore";
+import { WORK_STATUSES, useWorksStore, type WorkStatus, type WorkGranularity, type WorkStageWorkload, type PageStartPosition } from "@/store/worksStore";
 import {
   parseStructureString,
   validateStructureString,
@@ -411,6 +411,7 @@ const detailForm = reactive({
   status: WORK_STATUSES[0] as WorkStatus,
   startDate: "",
   deadline: "",
+  pageStartPosition: "right" as PageStartPosition,
 });
 
 // 作品固有設定の編集用フォーム
@@ -429,6 +430,7 @@ watch(
     detailForm.status = next.status;
     detailForm.startDate = next.startDate;
     detailForm.deadline = next.deadline;
+    detailForm.pageStartPosition = next.pageStartPosition ?? settingsStore.pageStartPosition ?? "right";
     lastSaveStatus.value = null;
 
     // 設定フォームを初期化
@@ -447,7 +449,8 @@ watch(
       worksStore.migrateWorkSettings({
         workId: next.id,
         granularities: granularities.value,
-        stageWorkloads: stageWorkloads.value
+        stageWorkloads: stageWorkloads.value,
+        pageStartPosition: settingsStore.pageStartPosition
       });
     }
   },
@@ -486,6 +489,15 @@ watch(
   (value) => {
     if (isEditMode.value && work.value && value !== work.value.deadline) {
       worksStore.updateWork(work.value.id, { deadline: value });
+    }
+  },
+);
+
+watch(
+  () => detailForm.pageStartPosition,
+  (value) => {
+    if (isEditMode.value && work.value && value !== (work.value.pageStartPosition ?? settingsStore.pageStartPosition ?? "right")) {
+      worksStore.updateWork(work.value.id, { pageStartPosition: value });
     }
   },
 );
@@ -657,10 +669,12 @@ const progressModalTitle = computed(() => {
             :is-edit-mode="isEditMode"
             :last-save-status="lastSaveStatus"
             :save-error-message="saveErrorMessage"
+            :page-start-position="detailForm.pageStartPosition"
             @update:title="detailForm.title = $event"
             @update:status="detailForm.status = $event"
             @update:start-date="detailForm.startDate = $event"
             @update:deadline="detailForm.deadline = $event"
+            @update:page-start-position="detailForm.pageStartPosition = $event"
             @delete-work="requestWorkDeletion"
           />
         </div>

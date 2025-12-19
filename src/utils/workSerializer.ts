@@ -1,6 +1,7 @@
 import type { Work, WorkDocument, WorkUnit, LegacyWork, LegacyPage, LegacyPanel } from "@/types/work";
 import { WORK_STATUSES } from "@/types/work";
 import { generateId } from "@/utils/id";
+import { normalizePageStartPosition } from "@/utils/workUtils";
 
 /**
  * ユニットを正規化
@@ -134,6 +135,7 @@ export const mapDocumentToWork = (item: WorkDocument & { id: string }): Work => 
     totalUnits,
     defaultCounts,
     primaryGranularityId: typeof item.primaryGranularityId === "string" ? item.primaryGranularityId : null,
+    pageStartPosition: normalizePageStartPosition(item.pageStartPosition),
     unitEstimatedHours,
     totalEstimatedHours,
     units,
@@ -183,6 +185,7 @@ export const serializeWork = (work: Work): WorkDocument => ({
   totalUnits: work.totalUnits,
   defaultCounts: work.defaultCounts,
   primaryGranularityId: work.primaryGranularityId,
+  pageStartPosition: work.pageStartPosition ?? "right",
   unitEstimatedHours: work.unitEstimatedHours,
   totalEstimatedHours: work.totalEstimatedHours,
   units: work.units.map(serializeWorkUnit),

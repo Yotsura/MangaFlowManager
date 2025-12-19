@@ -2,6 +2,7 @@ import type { WorkProgressHistory } from "./models";
 
 export const WORK_STATUSES = ["未着手", "作業中", "完了", "保留"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
+export type PageStartPosition = "left" | "right";
 
 export interface WorkUnit {
   id: string;
@@ -64,6 +65,7 @@ export interface Work {
   totalUnits: number;
   defaultCounts: number[]; // 各粒度レベルのデフォルト数 [上位→下位]
   primaryGranularityId: string | null;
+  pageStartPosition?: PageStartPosition; // レイアウト方向（左始まり/右始まり）
   unitEstimatedHours: number;
   totalEstimatedHours: number; // レガシーフィールド: 新規計算では worksStore.calculateActualWorkHours() を使用すること
   units: WorkUnit[]; // 最上位粒度の配列
@@ -96,6 +98,7 @@ export interface CreateWorkPayload {
   totalUnits: number;
   defaultCounts: number[]; // 各階層のデフォルト数 [上位→下位]
   primaryGranularityId: string | null;
+  pageStartPosition: PageStartPosition;
   unitEstimatedHours: number;
 
   // 作品作成時点の設定をコピー

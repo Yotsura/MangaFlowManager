@@ -5,6 +5,8 @@ import { useWorksStore, WORK_STATUSES, type WorkStatus } from '@/store/worksStor
 import { useSettingsStore } from '@/store/settingsStore';
 import { useWorkMetrics } from '@/composables/useWorkMetrics';
 import { getRequiredHoursClass, formatRequiredHours } from '../utils/workDetailUtils';
+import { getPageStartLabel, normalizePageStartPosition } from '@/utils/workUtils';
+import type { PageStartPosition } from '@/types/work';
 
 interface Props {
   workId: string;
@@ -15,6 +17,7 @@ interface Props {
   isEditMode: boolean;
   lastSaveStatus: string | null;
   saveErrorMessage: string | null;
+  pageStartPosition: PageStartPosition;
 }
 
 const props = defineProps<Props>();
@@ -24,6 +27,7 @@ const emit = defineEmits<{
   'update:status': [value: WorkStatus];
   'update:startDate': [value: string];
   'update:deadline': [value: string];
+  'update:pageStartPosition': [value: PageStartPosition];
   'delete-work': [];
 }>();
 
@@ -71,6 +75,13 @@ const progressPercentage = computed(() => actualWorkHours.value.progressPercenta
 
 const requiredHoursClass = computed(() => getRequiredHoursClass(workMetrics.requiredDailyHours.value));
 const requiredHoursText = computed(() => formatRequiredHours(workMetrics.requiredDailyHours.value));
+const normalizedPageStartPosition = computed(() => normalizePageStartPosition(props.pageStartPosition));
+const pageStartLabel = computed(() => getPageStartLabel(props.pageStartPosition));
+
+const handlePageStartToggle = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  emit('update:pageStartPosition', target.checked ? 'right' : 'left');
+};
 </script>
 
 <template>
@@ -126,64 +137,85 @@ const requiredHoursText = computed(() => formatRequiredHours(workMetrics.require
           </div>
         </div>
 
-        <!-- 詳細情報 - 折りたたみ可能 -->
-        <div class="col-12">
-          <details class="mt-1 mt-md-2">
-            <summary class="small text-muted fw-semibold" style="cursor: pointer;">詳細情報</summary>
-            <div class="row g-2 mt-1 mt-md-2">
-              <div class="col-6 col-md-4">
-                <div class="small text-muted mb-1">
-                  <i class="bi bi-calendar-event me-1"></i>開始日
-                </div>
-                <input
-                  :value="startDate"
-                  @input="emit('update:startDate', ($event.target as HTMLInputElement).value)"
-                  type="date"
-                  class="form-control form-control-sm"
-                  :max="deadline || undefined"
-                  :readonly="!isEditMode"
-                />
+        <!-- 詳細情報 - 常時表示 -->
+        <div class="col-12 mt-2 mt-md-3">
+          <div class="row g-2">
+            <div class="col-12 col-md-6">
+              <div class="small text-muted mb-1">
+                <i class="bi bi-calendar-event me-1"></i>開始日
               </div>
-              <div class="col-6 col-md-4">
-                <div class="small text-muted mb-1">
-                  <i class="bi bi-calendar-x me-1"></i>締め切り
-                </div>
-                <input
-                  :value="deadline"
-                  @input="emit('update:deadline', ($event.target as HTMLInputElement).value)"
-                  type="date"
-                  class="form-control form-control-sm"
-                  :min="startDate || undefined"
-                  :readonly="!isEditMode"
-                />
+              <input
+                :value="startDate"
+                @input="emit('update:startDate', ($event.target as HTMLInputElement).value)"
+                type="date"
+                class="form-control form-control-sm"
+                :max="deadline || undefined"
+                :readonly="!isEditMode"
+              />
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="small text-muted mb-1">
+                <i class="bi bi-calendar-x me-1"></i>締め切り
               </div>
-              <div class="col-6 col-md-4">
-                <div class="small text-muted mb-1">
-                  <i class="bi bi-flag me-1"></i>ステータス
-                </div>
-                <select
-                  :value="status"
-                  @change="emit('update:status', ($event.target as HTMLSelectElement).value as WorkStatus)"
-                  class="form-select form-select-sm"
-                  :disabled="!isEditMode"
-                >
-                  <option v-for="option in WORK_STATUSES" :key="option" :value="option">{{ option }}</option>
-                </select>
-              </div>
+              <input
+                :value="deadline"
+                @input="emit('update:deadline', ($event.target as HTMLInputElement).value)"
+                type="date"
+                class="form-control form-control-sm"
+                :min="startDate || undefined"
+                :readonly="!isEditMode"
+              />
+            </div>
+          </div>
 
-              <!-- ID表示 -->
-              <div class="col-12 mt-2 pt-2 border-top">
-                <p class="text-muted small mb-0 text-center" style="font-size: 0.75rem;">ID: {{ workId }}</p>
+          <div class="row g-2 mt-2">
+            <div class="col-12 col-md-6">
+              <div class="small text-muted mb-1">
+                <i class="bi bi-flag me-1"></i>ステータス
               </div>
+              <select
+                :value="status"
+                @change="emit('update:status', ($event.target as HTMLSelectElement).value as WorkStatus)"
+                class="form-select form-select-sm"
+                :disabled="!isEditMode"
+              >
+                <option v-for="option in WORK_STATUSES" :key="option" :value="option">{{ option }}</option>
+              </select>
+            </div>
 
-              <!-- 削除ボタン（編集モード時のみ） -->
-              <div v-if="isEditMode" class="col-12 mt-2 pt-2 border-top">
-                <button type="button" class="btn btn-sm btn-danger w-100" @click="emit('delete-work')">
-                  <i class="bi bi-trash me-1"></i>作品を削除する
-                </button>
+            <div class="col-12 col-md-6">
+              <div class="small text-muted mb-1">
+                <i class="bi bi-layout-sidebar me-1"></i>ページの開始位置
+              </div>
+              <div v-if="isEditMode" class="d-flex flex-column align-items-start gap-1 ps-0">
+                <div class="form-check form-switch d-flex align-items-center gap-2 mb-0">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    role="switch"
+                    :checked="normalizedPageStartPosition === 'right'"
+                    @change="handlePageStartToggle"
+                  />
+                  <span class="small">{{ pageStartLabel }}</span>
+                </div>
+              </div>
+              <div v-else class="small">
+                <span class="badge bg-light text-dark">{{ pageStartLabel }}</span>
               </div>
             </div>
-          </details>
+          </div>
+
+          <!-- ID表示 -->
+          <div class="mt-3 pt-2 border-top">
+            <p class="text-muted small mb-0 text-center" style="font-size: 0.75rem;">ID: {{ workId }}</p>
+          </div>
+
+          <!-- 削除ボタン（編集モード時のみ） -->
+          <div v-if="isEditMode" class="mt-2 pt-2 border-top">
+            <button type="button" class="btn btn-sm btn-danger w-100" @click="emit('delete-work')">
+              <i class="bi bi-trash me-1"></i>作品を削除する
+            </button>
+          </div>
         </div>
       </div>
 

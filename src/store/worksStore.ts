@@ -5,6 +5,7 @@ import type { Granularity, StageWorkload } from "@/store/settingsStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import type { WorkProgressHistory, UnitStageCountEntry } from "@/types/models";
+import { normalizePageStartPosition } from "@/utils/workUtils";
 
 // 型定義をインポート
 export type {
@@ -19,6 +20,7 @@ export type {
   CreateWorkPayload,
   RemoveWorkPayload,
   SaveWorkPayload,
+  PageStartPosition,
 } from "@/types/work";
 export { WORK_STATUSES } from "@/types/work";
 import type {
@@ -32,6 +34,7 @@ import type {
   CreateWorkPayload,
   RemoveWorkPayload,
   SaveWorkPayload,
+  PageStartPosition,
 } from "@/types/work";
 
 const clampStageIndex = (value: number | undefined, stageCount: number): number => {
@@ -180,6 +183,7 @@ export const useWorksStore = defineStore("works", {
       const now = new Date().toISOString();
       const totalUnits = normalizePositiveInteger(payload.totalUnits, 1);
       const defaultCounts = payload.defaultCounts.length > 0 ? payload.defaultCounts : [1];
+      const pageStartPosition = normalizePageStartPosition(payload.pageStartPosition);
 
       // 階層構造を動的に作成
       const createHierarchy = (counts: number[], depth: number = 0): WorkUnit[] => {
@@ -223,6 +227,7 @@ export const useWorksStore = defineStore("works", {
         totalUnits,
         defaultCounts, // 各階層のデフォルト数
         primaryGranularityId: payload.primaryGranularityId,
+        pageStartPosition,
         unitEstimatedHours,
         totalEstimatedHours: Number((totalUnits * unitEstimatedHours).toFixed(2)),
         units,
@@ -247,6 +252,7 @@ export const useWorksStore = defineStore("works", {
       deadline: string;
       primaryGranularityId: string;
       unitEstimatedHours: number;
+      pageStartPosition?: PageStartPosition;
       workGranularities?: WorkGranularity[];
       workStageWorkloads?: WorkStageWorkload[];
       structure: {
@@ -257,6 +263,7 @@ export const useWorksStore = defineStore("works", {
       const now = new Date().toISOString();
       const totalUnits = payload.structure.topLevelUnits.length;
       const totalLeafUnits = payload.structure.topLevelUnits.reduce((sum, unit) => sum + unit.leafCount, 0);
+      const pageStartPosition = normalizePageStartPosition(payload.pageStartPosition);
 
       // 構造に基づいて階層を作成
       let units: WorkUnit[];
@@ -301,6 +308,7 @@ export const useWorksStore = defineStore("works", {
         totalUnits,
         defaultCounts: [Math.ceil(totalLeafUnits / totalUnits)], // 平均的な下位ユニット数
         primaryGranularityId: payload.primaryGranularityId,
+        pageStartPosition,
         unitEstimatedHours,
         totalEstimatedHours: Number((totalLeafUnits * unitEstimatedHours).toFixed(2)),
         units,
@@ -316,7 +324,10 @@ export const useWorksStore = defineStore("works", {
       this.setSaveError(work.id, null);
       return work;
     },
-    updateWork(id: string, patch: Partial<Pick<Work, "title" | "status" | "startDate" | "deadline" | "unitEstimatedHours" | "workGranularities" | "workStageWorkloads">>) {
+    updateWork(
+      id: string,
+      patch: Partial<Pick<Work, "title" | "status" | "startDate" | "deadline" | "unitEstimatedHours" | "workGranularities" | "workStageWorkloads" | "pageStartPosition">>,
+    ) {
       const target = this.works.find((work) => work.id === id);
       if (!target) {
         return;
@@ -335,6 +346,10 @@ export const useWorksStore = defineStore("works", {
       }
       if (patch.deadline !== undefined) {
         target.deadline = patch.deadline;
+      }
+
+      if (patch.pageStartPosition !== undefined) {
+        target.pageStartPosition = normalizePageStartPosition(patch.pageStartPosition);
       }
 
       if (patch.unitEstimatedHours !== undefined) {
@@ -849,7 +864,8 @@ export const useWorksStore = defineStore("works", {
     async migrateWorkSettings(payload: {
       workId: string;
       granularities: Granularity[];
-      stageWorkloads: StageWorkload[]
+      stageWorkloads: StageWorkload[];
+      pageStartPosition?: PageStartPosition;
     }) {
       const work = this.getWorkById(payload.workId);
       if (!work) return;
@@ -878,6 +894,9 @@ export const useWorksStore = defineStore("works", {
       // 作品を直接更新
       work.workGranularities = workGranularities;
       work.workStageWorkloads = workStageWorkloads;
+      if (payload.pageStartPosition !== undefined) {
+        work.pageStartPosition = normalizePageStartPosition(payload.pageStartPosition);
+      }
 
       // ダーティフラグを設定
       this.markWorkDirty(payload.workId);
@@ -1012,8 +1031,8 @@ export const useWorksStore = defineStore("works", {
       if (!work) return;
 
       const today = formatLocalDate(new Date());
-      const metrics = this.calculateActualWorkHours(workId);
-      const completedHours = metrics.completedEstimatedHours;
+      // const metrics = this.calculateActualWorkHours(workId);
+      // const completedHours = metrics.completedEstimatedHours;
 
       const settingsStore = useSettingsStore();
       const stageMetrics = buildStageWorkloadMetrics(
@@ -1067,7 +1086,7 @@ export const useWorksStore = defineStore("works", {
 
       const historyEntryBase = {
         date: today,
-        completedHours,
+        // completedHours,
         timestamp: Date.now(),
         ...(unitStageCounts ? { unitStageCounts } : {})
       } as WorkProgressHistory;

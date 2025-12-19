@@ -2,6 +2,33 @@
   <div class="workload-settings-editor">
     <h5 v-if="isWorkMode" class="mb-4">作品固有設定</h5>
 
+    <!-- 保存ボタン（編集可能で、かつ作品モードでない場合のみ） -->
+    <div v-if="!readonly && !isWorkMode">
+      <div class="d-flex justify-content-end gap-2 mb-4">
+        <button class="btn btn-outline-secondary" type="button"
+          :disabled="isSaving || !hasChanges"
+          @click="resetChanges" >
+          <i class="bi bi-arrow-clockwise me-1"></i>
+          リセット
+        </button>
+        <button class="btn btn-primary" type="button"
+          :disabled="isSaving || !canSave"
+          @click="saveAll" >
+          <i class="bi bi-check-lg me-1"></i>
+          {{ isSaving ? "保存中..." : "設定を保存" }}
+        </button>
+      </div>
+
+      <!-- 変更状況表示（グローバル設定モードのみ） -->
+      <div v-if="hasChanges" class="mt-3">
+        <div class="alert alert-info d-flex align-items-center">
+          <i class="bi bi-info-circle me-2"></i>
+          <span>設定に変更があります。保存ボタンを押して変更を適用してください。</span>
+        </div>
+      </div>
+    </div>
+
+
     <div class="row g-4">
       <!-- 作業粒度設定 -->
       <div class="col-12 col-lg-6">
@@ -295,35 +322,24 @@
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 保存ボタン（編集可能で、かつ作品モードでない場合のみ） -->
-    <div v-if="!readonly && !isWorkMode" class="d-flex justify-content-end gap-2 mt-4">
-      <button
-        class="btn btn-outline-secondary"
-        type="button"
-        :disabled="isSaving || !hasChanges"
-        @click="resetChanges"
-      >
-        <i class="bi bi-arrow-clockwise me-1"></i>
-        リセット
-      </button>
-      <button
-        class="btn btn-primary"
-        type="button"
-        :disabled="isSaving || !canSave"
-        @click="saveAll"
-      >
-        <i class="bi bi-check-lg me-1"></i>
-        {{ isSaving ? "保存中..." : "設定を保存" }}
-      </button>
-    </div>
-
-    <!-- 変更状況表示（グローバル設定モードのみ） -->
-    <div v-if="!readonly && !isWorkMode && hasChanges" class="mt-3">
-      <div class="alert alert-info d-flex align-items-center">
-        <i class="bi bi-info-circle me-2"></i>
-        <span>設定に変更があります。保存ボタンを押して変更を適用してください。</span>
+      <!-- ページ開始位置設定 -->
+      <div v-if="!isWorkMode" class="col-12 col-lg-6">
+        <div class="card shadow-sm mb-3">
+          <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <h6 class="mb-1">ページの開始位置</h6>
+              <p class="text-muted small mb-0">漫画のページ・コマ配置の始まり位置を選択します。</p>
+            </div>
+            <div class="form-check form-switch m-0">
+              <input class="form-check-input" type="checkbox" role="switch"
+                :checked="normalizedPageStartPosition === 'right'"
+                :disabled="isSaving"
+                @change="handlePageStartChange(($event.target as HTMLInputElement).checked)"/>
+              <label class="form-check-label ms-2">{{ pageStartLabel }}</label>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -342,6 +358,8 @@ import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { generateId } from '@/utils/id';
 import { getDefaultStageColor, normalizeStageColorValue } from '@/modules/works/utils/stageColor';
+import { getPageStartLabel, normalizePageStartPosition } from '@/utils/workUtils';
+import type { PageStartPosition } from '@/types/work';
 
 interface Props {
   readonly?: boolean;
@@ -458,13 +476,17 @@ const stageTouched = ref(false);
 const stageSaveAttempted = ref(false);
 const colorInputRefs = new Map<number, HTMLInputElement>();
 
+const pageStartPosition = ref<PageStartPosition>('right');
+const pageStartTouched = ref(false);
+const normalizedPageStartPosition = computed(() => normalizePageStartPosition(pageStartPosition.value));
+
 // 計算プロパティ
 const granularityLoading = computed(() => loadingGranularities.value || !granularitiesLoaded.value);
 const stageLoading = computed(() => loadingStageWorkloads.value || !stageWorkloadsLoaded.value);
 const granularityLoadError = computed(() => granularitiesLoadError.value);
 const stageLoadError = computed(() => stageWorkloadsLoadError.value);
 const isSaving = computed(() => savingGranularities.value || savingStageWorkloads.value);
-const hasChanges = computed(() => granularityTouched.value || stageTouched.value);
+const hasChanges = computed(() => granularityTouched.value || stageTouched.value || pageStartTouched.value);
 const canSave = computed(() => hasChanges.value && !granularityErrors.value.size && !stageErrors.value.size);
 
 // 初期化
@@ -480,12 +502,19 @@ const ensureLoaded = async () => {
   }
 };
 
+const syncPageStartPosition = () => {
+  if (isWorkMode.value) return;
+  pageStartPosition.value = normalizePageStartPosition(settingsStore.pageStartPosition);
+  pageStartTouched.value = false;
+};
+
 onMounted(async () => {
   if (!user.value && !isWorkMode.value) {
     await authStore.ensureInitialized();
   }
   if (!isWorkMode.value) {
     await ensureLoaded();
+    syncPageStartPosition();
   }
 });
 
@@ -494,6 +523,12 @@ watch(userId, async (next, prev) => {
     await ensureLoaded();
   }
 });
+
+watch(() => settingsStore.pageStartPosition, () => {
+  if (!isWorkMode.value) {
+    syncPageStartPosition();
+  }
+}, { immediate: true });
 
 // 作業粒度の同期
 const syncGranularities = () => {
@@ -692,6 +727,13 @@ const stageErrors = computed(() => {
 const getStageError = (id: number) => stageErrors.value.get(id);
 const getEntryError = (stageId: number, granularityId: string) =>
   stageErrors.value.get(stageId)?.entryErrors.get(granularityId);
+
+const pageStartLabel = computed(() => getPageStartLabel(pageStartPosition.value));
+
+const handlePageStartChange = (checked: boolean) => {
+  pageStartPosition.value = checked ? 'right' : 'left';
+  pageStartTouched.value = true;
+};
 
 // ユーティリティ関数
 const getGranularityLabel = (granularityId: string) => {
@@ -944,8 +986,10 @@ const resetStageColors = () => {
 const resetChanges = () => {
   syncGranularities();
   syncStages();
+  syncPageStartPosition();
   granularityTouched.value = false;
   stageTouched.value = false;
+  pageStartTouched.value = false;
 };
 
 const saveAll = async () => {
@@ -976,14 +1020,14 @@ const saveAll = async () => {
     const promises: Promise<void>[] = [];
 
     // 作業粒度を保存
-    if (granularityTouched.value) {
+    if (granularityTouched.value || pageStartTouched.value) {
       const granularityPayload = editableGranularities.value.map(g => ({
         id: g.id,
         label: g.label.trim(),
         weight: Number(g.weight),
         defaultCount: Number(g.defaultCount),
       }));
-      promises.push(settingsStore.saveGranularities(userId.value, granularityPayload));
+      promises.push(settingsStore.saveGranularities(userId.value, granularityPayload, pageStartPosition.value));
     }
 
     // 作業工数を保存
@@ -1010,6 +1054,7 @@ const saveAll = async () => {
       await Promise.all(promises);
       granularityTouched.value = false;
       stageTouched.value = false;
+      pageStartTouched.value = false;
       emit('settings-saved');
     }
   } catch (error) {

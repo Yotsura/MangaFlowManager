@@ -8,6 +8,7 @@ import { useSettingsStore } from "@/store/settingsStore";
 import { useWorksStore, WORK_STATUSES, type Work, type WorkStatus } from "@/store/worksStore";
 import { useWorkMetrics } from "@/composables/useWorkMetrics";
 import { useCustomDatesStore } from "@/store/customDatesStore";
+import { normalizePageStartPosition } from "@/utils/workUtils";
 import {
   parseStructureString as parseStructure,
   validateStructureString as validateStructure,
@@ -27,6 +28,7 @@ const { granularities, granularitiesLoaded, loadingGranularities, stageWorkloads
 const { works, loadingWorks, loadError, worksLoaded } = storeToRefs(worksStore);
 
 const userId = computed(() => user.value?.uid ?? null);
+const normalizedPageStartPosition = computed(() => normalizePageStartPosition(settingsStore.pageStartPosition));
 
 const creationForm = reactive({
   title: "",
@@ -113,17 +115,12 @@ const stageCount = computed(() => stageLabels.value.length);
 
 const unitEstimatedHours = computed(() => {
   const primary = topGranularity.value;
-  if (!primary) {
-    return 0;
-  }
-
-  // stageWorkloadsが存在し、配列であることを確認
-  if (!stageWorkloads.value || !Array.isArray(stageWorkloads.value)) {
+  if (!primary || !Array.isArray(stageWorkloads.value) || stageWorkloads.value.length === 0) {
     return 0;
   }
 
   return stageWorkloads.value.reduce((total, stage) => {
-    // 新しい baseHours ベースの構造に対応
+    // baseHoursが未設定ならスキップ
     if (stage.baseHours === null || stage.baseHours === undefined) {
       return total;
     }
@@ -135,13 +132,11 @@ const unitEstimatedHours = computed(() => {
 
     // primary粒度での工数を計算
     if (primary.id === lowestGranularity.id) {
-      // primaryが最低粒度の場合、baseHoursをそのまま使用
       return total + stage.baseHours;
-    } else {
-      // primaryが最低粒度より上位の場合、比重を使って変換
-      const ratio = primary.weight / lowestGranularity.weight;
-      return total + (stage.baseHours * ratio);
     }
+
+    const ratio = primary.weight / lowestGranularity.weight;
+    return total + (stage.baseHours * ratio);
   }, 0);
 });
 
@@ -209,7 +204,11 @@ const copyCurrentSettings = () => {
     baseHours: stage.baseHours
   }));
 
-  return { workGranularities, workStageWorkloads };
+  return {
+    workGranularities,
+    workStageWorkloads,
+    pageStartPosition: normalizedPageStartPosition.value
+  };
 };
 
 // 構造解析は外部ユーティリティを使用
@@ -428,7 +427,7 @@ const handleCreate = () => {
   isSubmitting.value = true;
 
   try {
-    const { workGranularities, workStageWorkloads } = copyCurrentSettings();
+    const { workGranularities, workStageWorkloads, pageStartPosition } = copyCurrentSettings();
 
     // 文字列構造が入力されている場合の処理
     if (creationForm.structureString.trim()) {
@@ -495,6 +494,7 @@ const handleCreate = () => {
           unitEstimatedHours: unitEstimatedHours.value,
           workGranularities,
           workStageWorkloads,
+          pageStartPosition,
           structure: {
             topLevelUnits: structureData,
             hierarchicalUnits: workStructure.hierarchicalStructureData
@@ -517,6 +517,7 @@ const handleCreate = () => {
           unitEstimatedHours: unitEstimatedHours.value,
           workGranularities,
           workStageWorkloads,
+          pageStartPosition,
         });
 
         // 作成後に作業段階を適用
@@ -558,6 +559,7 @@ const handleCreate = () => {
         unitEstimatedHours: unitEstimatedHours.value,
         workGranularities,
         workStageWorkloads,
+        pageStartPosition,
       });
 
       router.push({ name: "work-detail", params: { id: work.id } });

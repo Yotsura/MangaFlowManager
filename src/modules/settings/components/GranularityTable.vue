@@ -5,6 +5,7 @@ import { storeToRefs } from "pinia";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { generateId } from "@/utils/id";
+import { normalizePageStartPosition } from "@/utils/workUtils";
 
 type FieldError = Partial<Record<"label" | "weight" | "defaultCount", string>>;
 
@@ -259,7 +260,11 @@ const handleSave = async () => {
   }));
 
   try {
-    await settingsStore.saveGranularities(userId.value, payload);
+    await settingsStore.saveGranularities(
+      userId.value,
+      payload,
+      normalizePageStartPosition(settingsStore.pageStartPosition)
+    );
     saved.value = true;
     saveAttempted.value = false;
     touched.value = false;
