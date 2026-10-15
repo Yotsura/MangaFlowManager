@@ -18,6 +18,7 @@ interface WorkHourRange {
 interface WorkPaceCalculation {
   totalWorkableHours: number;
   remainingWorkableHours: number;
+  workloadPercentage: number;
   todayRequiredHours: number;
   daysUntilDeadline: number;
   workableDaysUntilDeadline: number;
@@ -45,6 +46,7 @@ export function calculateWorkPace(
     return {
       totalWorkableHours: 0,
       remainingWorkableHours: 0,
+      workloadPercentage: totalRemainingHours > 0 ? 200 : 0,
       todayRequiredHours: totalRemainingHours > 0 ? Infinity : 0,
       daysUntilDeadline: 0,
       workableDaysUntilDeadline: 0,
@@ -174,6 +176,9 @@ export function calculateWorkPace(
   // 締切日を含めた日数を計算（23日→25日は3日）
   const daysUntilDeadline = Math.ceil((endOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   const progressRatio = remainingWorkableHours > 0 ? totalRemainingHours / remainingWorkableHours : 0;
+  const workloadPercentage = remainingWorkableHours === 0 && totalRemainingHours > 0
+    ? 200
+    : progressRatio * 100;
 
   let paceStatus: 'ahead' | 'on_track' | 'behind' | 'critical' = 'on_track';
 
@@ -190,6 +195,7 @@ export function calculateWorkPace(
   return {
     totalWorkableHours,
     remainingWorkableHours,
+    workloadPercentage,
     todayRequiredHours,
     daysUntilDeadline,
     workableDaysUntilDeadline: workableDaysCount,

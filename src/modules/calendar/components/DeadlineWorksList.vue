@@ -7,7 +7,7 @@
  * - 作品タイトル
  * - 締切までの残り日数と作業可能時間
  * - 締切日（日本語形式）
- * - 進捗率
+ * - 進捗率と負荷率
  * - 残り推定工数と総工数
  *
  * @see useDeadlineWorks - 締切作品データの取得と計算を行うcomposable
@@ -43,8 +43,9 @@ const { worksWithDeadline } = useDeadlineWorks();
             </div>
           </div>
           <div class="d-flex justify-content-between align-items-center">
-            <div class="small text-muted">
-              進捗 {{ work.progressPercentage }}%
+            <div class="d-flex align-items-center gap-3 small text-muted">
+              <span>進捗 {{ work.progressPercentage }}%</span>
+              <span>負荷率 {{ work.workloadPercentage.toFixed(0) }}%</span>
             </div>
             <div class="small text-muted">
               残り {{ work.remainingHours.toFixed(1) }}h / {{ work.totalHours.toFixed(1) }}h

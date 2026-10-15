@@ -27,7 +27,8 @@ export function useDeadlineWorks() {
           remainingHours: metrics.remainingEstimatedHours,
           totalHours: metrics.totalEstimatedHours,
           daysUntilDeadline: workMetrics.daysUntilDeadline.value,
-          availableWorkHours: workMetrics.availableWorkHours.value
+          availableWorkHours: workMetrics.availableWorkHours.value,
+          workloadPercentage: workMetrics.workPaceCalculation.value?.workloadPercentage ?? 0
         };
       })
       .sort((a, b) => {

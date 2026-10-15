@@ -5,6 +5,7 @@ import { useWorksStore, WORK_STATUSES, type WorkStatus } from '@/store/worksStor
 import { useSettingsStore } from '@/store/settingsStore';
 import { useWorkMetrics } from '@/composables/useWorkMetrics';
 import { getRequiredHoursClass, formatRequiredHours } from '../utils/workDetailUtils';
+import { getPaceStatusColor } from '@/utils/workloadUtils';
 import { getPageStartLabel, normalizePageStartPosition } from '@/utils/workUtils';
 import type { PageStartPosition } from '@/types/work';
 
@@ -78,6 +79,14 @@ const requiredHoursClass = computed(() => getRequiredHoursClass(
   workMetrics.workPaceCalculation.value?.paceStatus
 ));
 const requiredHoursText = computed(() => formatRequiredHours(workMetrics.todayRequiredHours.value));
+const workloadPercentage = computed(() => {
+  const paceCalculation = workMetrics.workPaceCalculation.value;
+  return paceCalculation?.workloadPercentage ?? 0;
+});
+const workloadColor = computed(() => {
+  const paceStatus = workMetrics.workPaceCalculation.value?.paceStatus;
+  return paceStatus ? getPaceStatusColor(paceStatus) : 'secondary';
+});
 const normalizedPageStartPosition = computed(() => normalizePageStartPosition(props.pageStartPosition));
 const pageStartLabel = computed(() => getPageStartLabel(props.pageStartPosition));
 
@@ -137,6 +146,28 @@ const handlePageStartToggle = (event: Event) => {
           </div>
           <div class="small py-1 py-md-1" :class="requiredHoursClass">
             {{ requiredHoursText }}
+          </div>
+        </div>
+        <div v-if="deadline && workMetrics.workPaceCalculation.value" class="col-12">
+          <div class="pt-2 pb-2 mb-2 border-bottom">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <small class="text-muted">
+                <i class="bi bi-speedometer2 me-1"></i>
+                作業負荷
+              </small>
+              <small class="text-muted">{{ workloadPercentage.toFixed(0) }}%</small>
+            </div>
+            <div class="progress" style="height: 8px;">
+              <div
+                class="progress-bar"
+                :class="`bg-${workloadColor}`"
+                :style="{ width: Math.min(workloadPercentage, 100) + '%' }"
+              ></div>
+            </div>
+            <div v-if="workloadPercentage > 100" class="text-danger small mt-2">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              作業時間が不足しています
+            </div>
           </div>
         </div>
         <div class="col-6">

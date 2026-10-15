@@ -16,6 +16,7 @@ import {
   type TopLevelUnit
 } from "@/utils/structureParser";
 import { formatRequiredHours, getRequiredHoursClass } from "./utils/workDetailUtils";
+import { getPaceStatusColor } from "@/utils/workloadUtils";
 
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
@@ -623,13 +624,17 @@ const getWorkMetrics = (work: Work) => {
   return useWorkMetrics(workRef);
 };
 
-const getWorkRequiredHoursDisplay = (work: Work) => {
+const getWorkPaceDisplay = (work: Work) => {
   const metrics = getWorkMetrics(work);
   const requiredHours = metrics.todayRequiredHours.value;
+  const paceCalculation = metrics.workPaceCalculation.value;
+  const workloadPercentage = paceCalculation?.workloadPercentage ?? 0;
 
   return {
-    text: formatRequiredHours(requiredHours),
-    class: getRequiredHoursClass(requiredHours, metrics.workPaceCalculation.value?.paceStatus)
+    requiredHoursText: formatRequiredHours(requiredHours),
+    requiredHoursClass: getRequiredHoursClass(requiredHours, paceCalculation?.paceStatus),
+    workloadPercentage,
+    workloadColor: paceCalculation ? getPaceStatusColor(paceCalculation.paceStatus) : 'secondary'
   };
 };
 
@@ -933,12 +938,28 @@ if (typeof window !== 'undefined') {
                   <dt class="text-muted">残り作業可能時間</dt>
                   <dd class="mb-0 fw-semibold">{{ getWorkMetrics(work).availableWorkHours.value.toFixed(1) }} h</dd>
                 </div>
-                <div class="col-12">
-                  <dt class="text-muted">今日の作業目安</dt>
-                  <dd class="mb-0 fw-semibold" :class="getWorkRequiredHoursDisplay(work).class">
-                    {{ getWorkRequiredHoursDisplay(work).text }}
-                  </dd>
-                </div>
+                <template v-for="paceDisplay in [getWorkPaceDisplay(work)]" :key="paceDisplay.workloadPercentage">
+                  <div class="col-6">
+                    <dt class="text-muted">今日の作業目安</dt>
+                    <dd class="mb-0 fw-semibold" :class="paceDisplay.requiredHoursClass">
+                      {{ paceDisplay.requiredHoursText }}
+                    </dd>
+                  </div>
+                  <div v-if="work.deadline" class="col-6">
+                    <dt class="text-muted">作業負荷</dt>
+                    <dd class="mb-1 fw-semibold text-muted">{{ paceDisplay.workloadPercentage.toFixed(0) }}%</dd>
+                    <div class="progress" style="height: 8px;">
+                      <div
+                        class="progress-bar"
+                        :class="`bg-${paceDisplay.workloadColor}`"
+                        :style="{ width: Math.min(paceDisplay.workloadPercentage, 100) + '%' }"
+                      ></div>
+                    </div>
+                    <div v-if="paceDisplay.workloadPercentage > 100" class="text-danger small mt-2">
+                      作業時間が不足しています
+                    </div>
+                  </div>
+                </template>
               </dl>
 
               <button type="button" class="btn btn-outline-primary mt-auto" @click="navigateToDetail(work.id)">詳細を開く</button>

@@ -70,16 +70,16 @@
               <i class="bi bi-speedometer2 me-1"></i>
               作業負荷
             </small>
-            <small class="text-muted">{{ workloadPercentage.toFixed(0) }}%</small>
+            <small class="text-muted">{{ paceCalculation.workloadPercentage.toFixed(0) }}%</small>
           </div>
           <div class="progress" style="height: 8px;">
             <div
               class="progress-bar"
               :class="`bg-${paceColor}`"
-              :style="{ width: Math.min(workloadPercentage, 100) + '%' }"
+              :style="{ width: Math.min(paceCalculation.workloadPercentage, 100) + '%' }"
             ></div>
           </div>
-          <div v-if="workloadPercentage > 100" class="text-danger small mt-2">
+          <div v-if="paceCalculation.workloadPercentage > 100" class="text-danger small mt-2">
             <i class="bi bi-exclamation-triangle me-1"></i>
             作業時間が不足しています
           </div>
@@ -109,14 +109,6 @@ const router = useRouter();
 
 const paceColor = computed(() => getPaceStatusColor(props.paceCalculation.paceStatus));
 const paceMessage = computed(() => getPaceStatusMessage(props.paceCalculation.paceStatus));
-
-// 作業負荷の割合（必要時間 / 利用可能時間 * 100）
-const workloadPercentage = computed(() => {
-  if (props.paceCalculation.remainingWorkableHours === 0) {
-    return props.totalRemainingHours > 0 ? 200 : 0;
-  }
-  return (props.totalRemainingHours / props.paceCalculation.remainingWorkableHours) * 100;
-});
 
 // 作品を開く
 const openWork = () => {
