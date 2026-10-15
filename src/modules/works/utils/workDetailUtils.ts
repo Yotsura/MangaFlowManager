@@ -34,7 +34,7 @@ export const formatDate = (value: string): string => {
  */
 export const getRequiredHoursClass = (
   requiredHours: number,
-  paceStatus?: 'ahead' | 'on_track' | 'behind' | 'critical'
+  paceStatus?: 'well_ahead' | 'ahead' | 'on_track' | 'behind' | 'critical'
 ) => {
   return {
     'text-danger': requiredHours === Infinity || requiredHours > 12 || paceStatus === 'critical',

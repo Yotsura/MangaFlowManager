@@ -23,7 +23,7 @@ interface WorkPaceCalculation {
   daysUntilDeadline: number;
   workableDaysUntilDeadline: number;
   isOnSchedule: boolean;
-  paceStatus: 'ahead' | 'on_track' | 'behind' | 'critical';
+  paceStatus: 'well_ahead' | 'ahead' | 'on_track' | 'behind' | 'critical';
 }
 
 /**
@@ -179,17 +179,22 @@ export function calculateWorkPace(
   const workloadPercentage = remainingWorkableHours === 0 && totalRemainingHours > 0
     ? 200
     : progressRatio * 100;
+  const roundedWorkloadPercentage = Math.round(workloadPercentage);
 
-  let paceStatus: 'ahead' | 'on_track' | 'behind' | 'critical' = 'on_track';
+  let paceStatus: WorkPaceCalculation['paceStatus'] = 'on_track';
 
   if (remainingWorkableHours === 0 && totalRemainingHours > 0) {
     paceStatus = 'critical';
-  } else if (progressRatio > 1.2) {
+  } else if (roundedWorkloadPercentage > 100) {
     paceStatus = 'critical';
-  } else if (progressRatio > 1.0) {
+  } else if (roundedWorkloadPercentage > 90) {
     paceStatus = 'behind';
-  } else if (progressRatio < 0.8) {
+  } else if (roundedWorkloadPercentage > 70) {
+    paceStatus = 'on_track';
+  } else if (roundedWorkloadPercentage > 50) {
     paceStatus = 'ahead';
+  } else {
+    paceStatus = 'well_ahead';
   }
 
   return {
@@ -209,16 +214,18 @@ export function calculateWorkPace(
  */
 export function getPaceStatusColor(status: WorkPaceCalculation['paceStatus']): string {
   switch (status) {
+    case 'well_ahead':
+      return 'rgb(144, 255, 144)';
     case 'ahead':
-      return 'success';
+      return 'rgb(77, 255, 77)';
     case 'on_track':
-      return 'primary';
+      return 'rgb(136, 196, 77)';
     case 'behind':
-      return 'warning';
+      return 'rgb(196, 136, 77)';
     case 'critical':
-      return 'danger';
+      return 'rgb(255, 77, 77)';
     default:
-      return 'secondary';
+      return 'rgb(108, 117, 125)';
   }
 }
 
@@ -227,12 +234,14 @@ export function getPaceStatusColor(status: WorkPaceCalculation['paceStatus']): s
  */
 export function getPaceStatusMessage(status: WorkPaceCalculation['paceStatus']): string {
   switch (status) {
+    case 'well_ahead':
+      return '大幅に予定より進んでいます';
     case 'ahead':
       return '予定より進んでいます';
     case 'on_track':
       return '順調に進んでいます';
     case 'behind':
-      return '遅れ気味です';
+      return '要注意：遅れ気味です';
     case 'critical':
       return '要注意：大幅な遅れです';
     default:

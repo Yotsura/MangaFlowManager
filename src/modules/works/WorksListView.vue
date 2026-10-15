@@ -951,8 +951,7 @@ if (typeof window !== 'undefined') {
                     <div class="progress" style="height: 8px;">
                       <div
                         class="progress-bar"
-                        :class="`bg-${paceDisplay.workloadColor}`"
-                        :style="{ width: Math.min(paceDisplay.workloadPercentage, 100) + '%' }"
+                        :style="{ width: Math.min(paceDisplay.workloadPercentage, 100) + '%', backgroundColor: paceDisplay.workloadColor }"
                       ></div>
                     </div>
                     <div v-if="paceDisplay.workloadPercentage > 100" class="text-danger small mt-2">

@@ -160,8 +160,7 @@ const handlePageStartToggle = (event: Event) => {
             <div class="progress" style="height: 8px;">
               <div
                 class="progress-bar"
-                :class="`bg-${workloadColor}`"
-                :style="{ width: Math.min(workloadPercentage, 100) + '%' }"
+                :style="{ width: Math.min(workloadPercentage, 100) + '%', backgroundColor: workloadColor }"
               ></div>
             </div>
             <div v-if="workloadPercentage > 100" class="text-danger small mt-2">

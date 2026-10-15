@@ -11,7 +11,7 @@
             </div>
             <h6 class="mb-0 fw-bold">{{ workTitle }}</h6>
           </div>
-          <span :class="`badge bg-${paceColor}`">
+          <span class="badge text-dark" :style="{ backgroundColor: paceColor }">
             {{ paceMessage }}
           </span>
         </div>
@@ -22,7 +22,7 @@
             <i class="bi bi-clock-history me-1"></i>
             今日の作業目安
           </small>
-          <div class="h3 mb-0" :class="`text-${paceColor}`">
+          <div class="h3 mb-0" :style="{ color: paceColor }">
             {{ paceCalculation.todayRequiredHours === Infinity ? '不可能' : paceCalculation.todayRequiredHours.toFixed(1) + 'h' }}
           </div>
         </div>
@@ -75,8 +75,7 @@
           <div class="progress" style="height: 8px;">
             <div
               class="progress-bar"
-              :class="`bg-${paceColor}`"
-              :style="{ width: Math.min(paceCalculation.workloadPercentage, 100) + '%' }"
+              :style="{ width: Math.min(paceCalculation.workloadPercentage, 100) + '%', backgroundColor: paceColor }"
             ></div>
           </div>
           <div v-if="paceCalculation.workloadPercentage > 100" class="text-danger small mt-2">
