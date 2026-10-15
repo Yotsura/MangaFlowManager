@@ -2,17 +2,14 @@ import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useWorksStore } from '@/store/worksStore';
-import { useCustomDatesStore } from '@/store/customDatesStore';
-import { calculateWorkPace } from '@/utils/workloadUtils';
-import type { Holiday } from '@/utils/dateUtils';
+import { useWorkMetrics } from '@/composables/useWorkMetrics';
 
 /**
  * 最も緊急度の高い作品を取得するcomposable
  */
-export function useUrgentWork(holidays: Holiday[]) {
+export function useUrgentWork() {
   const settingsStore = useSettingsStore();
   const worksStore = useWorksStore();
-  const customDatesStore = useCustomDatesStore();
 
   const { workHours } = storeToRefs(settingsStore);
   const { works } = storeToRefs(worksStore);
@@ -30,27 +27,26 @@ export function useUrgentWork(holidays: Holiday[]) {
           return null;
         }
 
-        const metrics = worksStore.calculateActualWorkHours(work.id);
-        const totalRemainingHours = metrics.remainingEstimatedHours;
+        const workRef = computed(() => work);
+        const metrics = useWorkMetrics(workRef);
+        const totalRemainingHours = metrics.remainingEstimatedHours.value;
 
         if (totalRemainingHours <= 0) {
           return null;
         }
 
-        const paceCalculation = calculateWorkPace(
-          new Date(work.deadline),
-          totalRemainingHours,
-          metrics.progressPercentage / 100,
-          workHours.value,
-          holidays,
-          customDatesStore.customDates
-        );
+        const paceCalculation = metrics.workPaceCalculation.value;
+        if (!paceCalculation) {
+          return null;
+        }
+
+        const workProgress = worksStore.calculateActualWorkHours(work.id);
 
         return {
           work,
           totalRemainingHours,
-          totalEstimatedHours: metrics.totalEstimatedHours,
-          progressPercentage: metrics.progressPercentage,
+          totalEstimatedHours: workProgress.totalEstimatedHours,
+          progressPercentage: workProgress.progressPercentage,
           paceCalculation
         };
       })

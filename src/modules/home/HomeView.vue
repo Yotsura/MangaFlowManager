@@ -7,7 +7,6 @@ import { useWorksStore } from '@/store/worksStore';
 import { useCustomDatesStore } from '@/store/customDatesStore';
 import WorkPaceCard from './components/WorkPaceCard.vue';
 import WorkProgressChart from './components/WorkProgressChart.vue';
-import { useHolidays } from '@/composables/useHolidays';
 import { useUrgentWork } from './composables/useUrgentWork';
 import { useTestDataGenerator } from './composables/useTestDataGenerator';
 
@@ -18,11 +17,8 @@ const customDatesStore = useCustomDatesStore();
 
 const { displayName, user } = storeToRefs(authStore);
 
-// 祝日データを管理
-const { holidays } = useHolidays();
-
 // 最優先作品を計算
-const { mostUrgentWork } = useUrgentWork(holidays.value);
+const { mostUrgentWork } = useUrgentWork();
 
 // テストデータ生成機能
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

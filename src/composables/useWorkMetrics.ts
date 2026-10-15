@@ -43,11 +43,6 @@ export const useWorkMetrics = (work: ComputedRef<Work | undefined>) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 締切が過去の場合はnull
-    if (deadlineDate < today) {
-      return null;
-    }
-
     // 作業時間設定を取得
     const workHours = settingsStore.workHours || [];
 
@@ -106,6 +101,7 @@ export const useWorkMetrics = (work: ComputedRef<Work | undefined>) => {
 
   return {
     remainingEstimatedHours,
+    workPaceCalculation,
     availableWorkHours,
     requiredDailyHours,
     daysUntilDeadline,
