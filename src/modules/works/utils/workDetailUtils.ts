@@ -32,11 +32,14 @@ export const formatDate = (value: string): string => {
 /**
  * 必要工数の危険度に応じたCSSクラスを返す
  */
-export const getRequiredHoursClass = (requiredHours: number) => {
+export const getRequiredHoursClass = (
+  requiredHours: number,
+  paceStatus?: 'ahead' | 'on_track' | 'behind' | 'critical'
+) => {
   return {
-    'text-danger': requiredHours === Infinity || requiredHours > 12,
-    'text-warning': requiredHours > 8 && requiredHours <= 12,
-    'text-success': requiredHours <= 8
+    'text-danger': requiredHours === Infinity || requiredHours > 12 || paceStatus === 'critical',
+    'text-warning': (requiredHours > 8 && requiredHours <= 12) || paceStatus === 'behind',
+    'text-success': requiredHours <= 8 && paceStatus !== 'behind' && paceStatus !== 'critical'
   };
 };
 

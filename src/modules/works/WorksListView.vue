@@ -15,6 +15,7 @@ import {
   convertToWorkStructure,
   type TopLevelUnit
 } from "@/utils/structureParser";
+import { formatRequiredHours, getRequiredHoursClass } from "./utils/workDetailUtils";
 
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
@@ -622,6 +623,16 @@ const getWorkMetrics = (work: Work) => {
   return useWorkMetrics(workRef);
 };
 
+const getWorkRequiredHoursDisplay = (work: Work) => {
+  const metrics = getWorkMetrics(work);
+  const requiredHours = metrics.todayRequiredHours.value;
+
+  return {
+    text: formatRequiredHours(requiredHours),
+    class: getRequiredHoursClass(requiredHours, metrics.workPaceCalculation.value?.paceStatus)
+  };
+};
+
 const navigateToDetail = (id: string) => {
   router.push({ name: "work-detail", params: { id } });
 };
@@ -923,13 +934,9 @@ if (typeof window !== 'undefined') {
                   <dd class="mb-0 fw-semibold">{{ getWorkMetrics(work).availableWorkHours.value.toFixed(1) }} h</dd>
                 </div>
                 <div class="col-12">
-                  <dt class="text-muted">1日の必要工数</dt>
-                  <dd class="mb-0 fw-semibold" :class="{
-                    'text-danger': getWorkMetrics(work).requiredDailyHours.value === Infinity || getWorkMetrics(work).requiredDailyHours.value > 12,
-                    'text-warning': getWorkMetrics(work).requiredDailyHours.value > 8 && getWorkMetrics(work).requiredDailyHours.value <= 12,
-                    'text-success': getWorkMetrics(work).requiredDailyHours.value <= 8
-                  }">
-                    {{ getWorkMetrics(work).requiredDailyHours.value === Infinity ? '不可能' : getWorkMetrics(work).requiredDailyHours.value.toFixed(1) + ' h' }}
+                  <dt class="text-muted">今日の作業目安</dt>
+                  <dd class="mb-0 fw-semibold" :class="getWorkRequiredHoursDisplay(work).class">
+                    {{ getWorkRequiredHoursDisplay(work).text }}
                   </dd>
                 </div>
               </dl>

@@ -73,8 +73,11 @@ const totalHours = computed(() => actualWorkHours.value.totalEstimatedHours);
 // 進捗率は共通の計算を使用
 const progressPercentage = computed(() => actualWorkHours.value.progressPercentage);
 
-const requiredHoursClass = computed(() => getRequiredHoursClass(workMetrics.requiredDailyHours.value));
-const requiredHoursText = computed(() => formatRequiredHours(workMetrics.requiredDailyHours.value));
+const requiredHoursClass = computed(() => getRequiredHoursClass(
+  workMetrics.todayRequiredHours.value,
+  workMetrics.workPaceCalculation.value?.paceStatus
+));
+const requiredHoursText = computed(() => formatRequiredHours(workMetrics.todayRequiredHours.value));
 const normalizedPageStartPosition = computed(() => normalizePageStartPosition(props.pageStartPosition));
 const pageStartLabel = computed(() => getPageStartLabel(props.pageStartPosition));
 
@@ -130,7 +133,7 @@ const handlePageStartToggle = (event: Event) => {
         </div>
         <div class="col-6">
           <div class="small text-muted mb-1">
-            <i class="bi bi-clock-history me-1"></i>1日の必要工数
+            <i class="bi bi-clock-history me-1"></i>今日の作業目安
           </div>
           <div class="small py-1 py-md-1" :class="requiredHoursClass">
             {{ requiredHoursText }}

@@ -78,14 +78,13 @@ export const useWorkMetrics = (work: ComputedRef<Work | undefined>) => {
    * 締切までの1日あたりの必要工数
    * calculateWorkPaceの結果を使用（共通計算）
    */
-  const requiredDailyHours = computed(() => {
+  const todayRequiredHours = computed(() => {
     const paceCalc = workPaceCalculation.value;
     if (!paceCalc) {
       return 0;
     }
 
-    // calculateWorkPaceで計算されたdailyRequiredHoursを使用
-    return paceCalc.dailyRequiredHours;
+    return paceCalc.todayRequiredHours;
   });
 
   /**
@@ -103,7 +102,7 @@ export const useWorkMetrics = (work: ComputedRef<Work | undefined>) => {
     remainingEstimatedHours,
     workPaceCalculation,
     availableWorkHours,
-    requiredDailyHours,
+    todayRequiredHours,
     daysUntilDeadline,
   };
 };

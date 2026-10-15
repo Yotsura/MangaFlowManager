@@ -18,7 +18,6 @@ interface WorkHourRange {
 interface WorkPaceCalculation {
   totalWorkableHours: number;
   remainingWorkableHours: number;
-  dailyRequiredHours: number;
   todayRequiredHours: number;
   daysUntilDeadline: number;
   workableDaysUntilDeadline: number;
@@ -46,8 +45,7 @@ export function calculateWorkPace(
     return {
       totalWorkableHours: 0,
       remainingWorkableHours: 0,
-      dailyRequiredHours: 0,
-      todayRequiredHours: 0,
+      todayRequiredHours: totalRemainingHours > 0 ? Infinity : 0,
       daysUntilDeadline: 0,
       workableDaysUntilDeadline: 0,
       isOnSchedule: false,
@@ -167,9 +165,10 @@ export function calculateWorkPace(
     }
   }
 
-  // 必要な進捗計算
-  const dailyRequiredHours = workableDaysCount > 0 ? totalRemainingHours / workableDaysCount : 0;
-  const todayRequiredHours = Math.min(dailyRequiredHours, todayWorkableHours);
+  // 残り工数を残り作業可能時間に比例配分し、今日の作業可能時間分を算出
+  const todayRequiredHours = remainingWorkableHours > 0
+    ? (totalRemainingHours / remainingWorkableHours) * todayWorkableHours
+    : totalRemainingHours > 0 ? Infinity : 0;
 
   // 進捗状況判定
   // 締切日を含めた日数を計算（23日→25日は3日）
@@ -191,7 +190,6 @@ export function calculateWorkPace(
   return {
     totalWorkableHours,
     remainingWorkableHours,
-    dailyRequiredHours,
     todayRequiredHours,
     daysUntilDeadline,
     workableDaysUntilDeadline: workableDaysCount,
